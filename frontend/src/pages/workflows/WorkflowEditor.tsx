@@ -147,8 +147,11 @@ export default function WorkflowEditor() {
             <Background color="var(--border)" gap={20} size={1} /><Controls /><MiniMap style={{ background: 'var(--bg-surface)' }} />
           </ReactFlow>
         </div>
-        {selected && !resultPopup && <PropertyPanel node={selected} catalog={catalog} onUpdateConfig={c => updateCfg(selected.id, c)}
-          onUpdateLabel={l => updateLabel(selected.id, l)} onDelete={delSelected} onClose={() => setSelected(null)} />}
+        {selected && !resultPopup && <PropertyPanel node={selected} catalog={catalog}
+          execData={execStatus[selected.id]}
+          upstreamOutput={edges.reduce((acc: any, e) => acc || (e.target === selected.id ? execStatus[e.source]?.output : null), null)}
+          onUpdateConfig={c => updateCfg(selected.id, c)} onUpdateLabel={l => updateLabel(selected.id, l)}
+          onDelete={delSelected} onClose={() => setSelected(null)} />}
 
         {/* Result popup */}
         {resultPopup && (

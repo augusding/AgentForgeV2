@@ -49,6 +49,12 @@ function WfNodeComponent({ data, selected }: NodeProps) {
           <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>{def.displayName}</div>)}
       </div>
 
+      {/* Item count badge */}
+      {execState?.output && (() => { const o = execState.output
+        const c = Array.isArray(o?.items) ? o.items.length : Array.isArray(o?.data) ? o.data.length : null
+        return c != null ? <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded-full text-[8px] font-medium text-white" style={{ background: baseClr }}>{c} items</div> : null
+      })()}
+
       {Array.from({ length: outs }).map((_, i) => (
         <Handle key={i} type="source" position={Position.Right} id={`out-${i}`}
           style={{ width: 8, height: 8, background: baseClr, border: '2px solid var(--bg)',

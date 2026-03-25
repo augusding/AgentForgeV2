@@ -35,4 +35,5 @@ export interface NodeTypeDef {
 export interface NodeParamDef {
   name: string; type: string; displayName: string; default?: any; description?: string
   options?: Array<{ name: string; value: string }>
+  displayOptions?: { show?: Record<string, any> }
 }

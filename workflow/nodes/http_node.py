@@ -55,8 +55,10 @@ def register_http(registry: NodeRegistry) -> None:
                         {"name": "PUT", "value": "PUT"}, {"name": "DELETE", "value": "DELETE"}]},
             {"name": "url", "type": "string", "displayName": "URL", "default": ""},
             {"name": "headers", "type": "json", "displayName": "请求头", "default": "{}"},
-            {"name": "body", "type": "json", "displayName": "请求体", "default": ""},
+            {"name": "body", "type": "json", "displayName": "请求体", "default": "",
+             "displayOptions": {"show": {"method": ["POST", "PUT"]}}},
             {"name": "bodyType", "type": "options", "displayName": "Body 类型", "default": "json",
-             "options": [{"name": "JSON", "value": "json"}, {"name": "文本", "value": "text"}]},
+             "options": [{"name": "JSON", "value": "json"}, {"name": "文本", "value": "text"}],
+             "displayOptions": {"show": {"method": ["POST", "PUT"]}}},
             {"name": "timeout", "type": "number", "displayName": "超时(秒)", "default": 30},
         ], executor=_http_executor))

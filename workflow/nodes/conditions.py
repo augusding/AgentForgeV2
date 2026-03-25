@@ -83,8 +83,10 @@ def register_conditions(registry: NodeRegistry) -> None:
         parameters=[
             {"name": "mode", "type": "options", "displayName": "模式", "default": "rules",
              "options": [{"name": "规则", "value": "rules"}, {"name": "表达式", "value": "expression"}]},
-            {"name": "conditions", "type": "filter", "displayName": "条件规则", "default": "{}"},
-            {"name": "expression", "type": "string", "displayName": "条件表达式", "default": "True"},
+            {"name": "conditions", "type": "filter", "displayName": "条件规则", "default": "{}",
+             "displayOptions": {"show": {"mode": ["rules"]}}},
+            {"name": "expression", "type": "string", "displayName": "条件表达式", "default": "True",
+             "displayOptions": {"show": {"mode": ["expression"]}}},
         ], executor=_if_executor))
     registry.register(NodeTypeInfo(
         name="switch", display_name="多路分发", group="logic", icon="split",
