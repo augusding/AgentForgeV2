@@ -212,6 +212,42 @@ async def _stub_obj(request): return _json({})
 async def _stub_ok(request): return _json({"status": "ok"})
 
 
+async def handle_analytics_daily(request):
+    """GET /api/v1/analytics/daily"""
+    import datetime
+    return _json({
+        "date": datetime.date.today().isoformat(),
+        "total_sessions": 0, "total_tokens": 0, "total_messages": 0,
+        "by_capability": {},
+    })
+
+
+async def handle_analytics_quality(request):
+    """GET /api/v1/analytics/quality"""
+    return _json({
+        "days": 7, "total_completions": 0,
+        "feedback_up": 0, "feedback_down": 0, "positive_rate": 0,
+        "copy_count": 0, "download_count": 0, "regenerate_count": 0,
+        "adoption_rate": 0, "rag_queries": 0, "rag_avg_score": 0,
+        "knowledge_hit_rate": 0, "quality_score": 0,
+    })
+
+
+async def handle_insights_v2(request):
+    """GET /api/v1/workstation/insights-v2"""
+    return _json({"items": [], "counts": {"risk": 0, "opportunity": 0, "alert": 0}, "total": 0})
+
+
+async def handle_risks(request):
+    """GET /api/v1/workstation/risks"""
+    return _json({"risks": [], "count": 0, "critical": 0, "high": 0})
+
+
+async def handle_patterns(request):
+    """GET /api/v1/workstation/patterns"""
+    return _json({"total": 0, "patterns": {}})
+
+
 async def handle_notifications_list(request):
     """GET /api/v1/notifications"""
     return _json([])
@@ -255,22 +291,32 @@ def register(app: web.Application) -> None:
     r.add_patch("/api/v1/notifications/{notif_id}/read", handle_notification_read)
     r.add_post("/api/v1/notifications/read-all", _stub_ok)
 
+    # Workstation 结构化 stub（前端期望特定格式）
+    r.add_get("/api/v1/workstation/insights-v2", handle_insights_v2)
+    r.add_get("/api/v1/workstation/patterns", handle_patterns)
+    r.add_get("/api/v1/workstation/risks", handle_risks)
+
     # 其他 stub（避免前端 404）
     for path in (
         "/api/v1/heartbeats", "/api/v1/knowledge", "/api/v1/knowledge/connectors",
         "/api/v1/knowledge/connector-types", "/api/v1/users", "/api/v1/templates",
         "/api/v1/scenarios", "/api/v1/custom-tools/templates",
         "/api/v1/skills/my", "/api/v1/skills/suggestions",
-        "/api/v1/playbook/rules",
-        "/api/v1/workstation/insights-v2", "/api/v1/workstation/patterns",
-        "/api/v1/workstation/risks", "/api/v1/approvals",
+        "/api/v1/playbook/rules", "/api/v1/approvals",
         "/api/v1/marketplace/builtin", "/api/v1/marketplace/installed",
-        "/api/v1/analytics/insights",
     ):
         r.add_get(path, _stub_list)
-    for path in ("/api/v1/learning/overview", "/api/v1/analytics/weekly"):
-        r.add_get(path, _stub_obj)
+    r.add_get("/api/v1/learning/overview", _stub_obj)
     r.add_post("/api/v1/llm/test-key", _stub_ok)
+
+    # Analytics（前端 Dashboard 页面需要）
+    r.add_get("/api/v1/analytics/daily", handle_analytics_daily)
+    r.add_get("/api/v1/analytics/weekly", _stub_list)
+    r.add_get("/api/v1/analytics/quality", handle_analytics_quality)
+    r.add_get("/api/v1/analytics/quality/trend", _stub_list)
+    r.add_get("/api/v1/analytics/insights", _stub_list)
+    r.add_post("/api/v1/analytics/signal", _stub_ok)
+    r.add_get("/api/v1/analytics/session/{session_id}", _stub_obj)
 
     # Work Items / Daily Context（真实数据）
     r.add_get("/api/v1/work-items", handle_work_items_list)

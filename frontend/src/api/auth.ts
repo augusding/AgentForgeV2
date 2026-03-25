@@ -1,30 +1,21 @@
 import client from './client'
 
-/** 发送短信验证码 */
-export async function sendSmsCode(phone: string, purpose: string = 'register') {
-  return client.post('/auth/send-code', { phone, purpose }) as Promise<{
-    success: boolean
-    expires_in: number
-    message: string
-  }>
+export async function login(username: string, password: string) {
+  return client.post('/auth/login', { username, password }) as Promise<{ token: string; user: any }>
 }
 
-/** 用户注册 */
-export async function registerUser(data: {
-  username: string
-  phone: string
-  code: string
-  password: string
-}) {
-  return client.post('/auth/register', data) as Promise<{
-    user: {
-      id: string
-      username: string
-      role: string
-      plan: string
-      trial_expires_at?: string
-      trial_remaining_days?: number
-    }
-    token: string
-  }>
+export async function register(username: string, password: string, displayName?: string) {
+  return client.post('/auth/register', { username, password, display_name: displayName || username }) as Promise<any>
+}
+
+export async function getMe() {
+  return client.get('/auth/me') as Promise<any>
+}
+
+export async function changePassword(oldPassword: string, newPassword: string) {
+  return client.post('/auth/change-password', { old_password: oldPassword, new_password: newPassword }) as Promise<any>
+}
+
+export async function logout() {
+  return client.post('/auth/logout') as Promise<any>
 }

@@ -1,78 +1,54 @@
-import { useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import TopBar from './TopBar'
-import Sidebar from './Sidebar'
-import StatusBar from './StatusBar'
-import ChangePasswordDialog from '../components/ChangePasswordDialog'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { useApprovalNotify } from '../hooks/useApprovalNotify'
-import { useAgentStore } from '../stores/useAgentStore'
-import { useConfigStore } from '../stores/useConfigStore'
-import { useStatsStore } from '../stores/useStatsStore'
-import { useApprovalStore } from '../stores/useApprovalStore'
-import { useNotificationStore } from '../stores/useNotificationStore'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { MessageSquare, LayoutDashboard, BookOpen, Zap, Settings, LogOut } from 'lucide-react'
 import { useAuthStore } from '../stores/useAuthStore'
-import { useThemeStore } from '../stores/useThemeStore'
-import TrialBanner from '../components/TrialBanner'
+import { ErrorBoundary } from '../components/ErrorBoundary'
+
+const NAV = [
+  { path: '/', label: '工位', icon: LayoutDashboard },
+  { path: '/chat', label: 'AI 对话', icon: MessageSquare },
+  { path: '/knowledge', label: '知识库', icon: BookOpen },
+  { path: '/workflows', label: '工作流', icon: Zap },
+  { path: '/settings', label: '设置', icon: Settings },
+]
 
 export default function MainLayout() {
-  const { connected } = useWebSocket()
-  const { pendingCount } = useApprovalNotify()
-  const loadAgents = useAgentStore(s => s.load)
-  const loadConfig = useConfigStore(s => s.load)
-  const loadStats = useStatsStore(s => s.load)
-  const loadApprovals = useApprovalStore(s => s.load)
-  const loadNotifications = useNotificationStore(s => s.load)
-  const user = useAuthStore(s => s.user)
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
 
-  const initTheme = useThemeStore(s => s.init)
-
-  // Load initial data
-  useEffect(() => {
-    initTheme()
-    loadAgents()
-    loadConfig()
-    loadStats()
-    loadApprovals()
-    loadNotifications()
-  }, [])
-
-  const location = useLocation()
-  // Use first path segment as transition key so sub-routes don't re-animate
-  const pageKey = '/' + (location.pathname.split('/')[1] || '')
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
+  }
 
   return (
-    <div className="h-screen flex flex-col bg-bg overflow-hidden">
-      <TrialBanner />
-      <TopBar />
-
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar approvalCount={pendingCount} />
-        <main className="flex-1 overflow-y-auto p-3 md:p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pageKey}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
+    <div className="h-screen flex" style={{ background: 'var(--bg)' }}>
+      <aside className="w-[200px] flex flex-col border-r" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+        <div className="p-4 text-lg font-bold" style={{ color: 'var(--accent)' }}>AgentForge</div>
+        <nav className="flex-1 px-2 space-y-1">
+          {NAV.map(({ path, label, icon: Icon }) => (
+            <NavLink
+              key={path} to={path} end={path === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                }`
+              }
+              style={({ isActive }) => isActive ? { background: 'var(--bg-hover)' } : {}}
             >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
-
-      <StatusBar
-        engineRunning={true}
-        wsConnected={connected}
-      />
-
-      {/* V8: 强制修改默认密码 */}
-      {user?.must_change_password && (
-        <ChangePasswordDialog forced />
-      )}
+              <Icon size={18} /> {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{user?.username || '用户'}</div>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs hover:text-[var(--error)] transition-colors" style={{ color: 'var(--text-muted)' }}>
+            <LogOut size={14} /> 退出登录
+          </button>
+        </div>
+      </aside>
+      <main className="flex-1 overflow-auto">
+        <ErrorBoundary><Outlet /></ErrorBoundary>
+      </main>
     </div>
   )
 }

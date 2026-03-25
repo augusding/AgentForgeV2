@@ -27,8 +27,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['recharts'],
-          'vendor-motion': ['framer-motion'],
           'vendor-utils': ['zustand', 'axios', 'dayjs', 'react-hot-toast', 'react-markdown'],
         },
       },
