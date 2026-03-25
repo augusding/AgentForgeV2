@@ -159,7 +159,7 @@ class ForgeEngine:
                 position_id=msg.position_id, instruction=msg.content,
             )
 
-        rag_results = self._search_rag(msg.content, position)
+        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         context = self._context_builder.build(
             position=position, mission=mission, history=history,
@@ -213,7 +213,7 @@ class ForgeEngine:
                      "position_id": msg.position_id},
             attachments=msg.attachments,
         )
-        rag_results = self._search_rag(msg.content, position)
+        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         context = self._context_builder.build(
             position=position, mission=mission, history=history,
@@ -227,6 +227,8 @@ class ForgeEngine:
         async for chunk in runtime.execute_stream(mission, context):
             if chunk.get("type") == "text":
                 full_content += chunk.get("text", "")
+            if chunk.get("type") == "done":
+                chunk["session_id"] = session_id
             yield chunk
 
         if full_content:
@@ -234,12 +236,13 @@ class ForgeEngine:
 
     # ── 内部辅助 ─────────────────────────────────────────
 
-    def _search_rag(self, query: str, position: PositionConfig) -> list[dict]:
+    def _search_rag(self, query: str, position: PositionConfig, org_id: str = "") -> list[dict]:
         """RAG 检索（同步，KnowledgeBase.search 本身是同步的）。"""
         if self._knowledge_base and position.knowledge_scope:
             return self._knowledge_base.search(
                 query=query,
                 top_k=self.config.knowledge.get("retrieval_top_k", 3),
+                org_id=org_id,
             )
         return []
 

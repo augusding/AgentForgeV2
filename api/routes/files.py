@@ -25,7 +25,10 @@ async def handle_upload(request: web.Request) -> web.Response:
     字段: file (文件), target ("knowledge" | "chat"), doc_id (可选)
     """
     engine = request.app["engine"]
-    upload_dir = engine.root_dir / "data" / "uploads"
+    user = request.get("user") or {}
+    u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+    o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
+    upload_dir = engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     reader = await request.multipart()
@@ -89,7 +92,10 @@ async def handle_upload(request: web.Request) -> web.Response:
 async def handle_list_files(request: web.Request) -> web.Response:
     """GET /api/v1/files — 列出已上传的文件"""
     engine = request.app["engine"]
-    upload_dir = engine.root_dir / "data" / "uploads"
+    user = request.get("user") or {}
+    u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+    o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
+    upload_dir = engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id
     if not upload_dir.exists():
         return _json({"files": []})
 

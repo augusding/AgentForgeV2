@@ -87,6 +87,7 @@ class KnowledgeBase:
         content: str,
         metadata: dict | None = None,
         is_markdown: bool = False,
+        org_id: str = "",
     ) -> int:
         """
         添加文档到知识库。
@@ -98,6 +99,8 @@ class KnowledgeBase:
 
         meta = metadata or {}
         meta["doc_id"] = doc_id
+        if org_id:
+            meta["org_id"] = org_id
 
         # 分块
         if is_markdown:
@@ -139,6 +142,7 @@ class KnowledgeBase:
         self,
         query: str,
         top_k: int = 3,
+        org_id: str = "",
         filter_metadata: dict | None = None,
     ) -> list[dict]:
         """
@@ -154,8 +158,13 @@ class KnowledgeBase:
             "query_embeddings": [query_vector],
             "n_results": top_k,
         }
+        where_clause: dict[str, Any] = {}
+        if org_id:
+            where_clause["org_id"] = org_id
         if filter_metadata:
-            kwargs["where"] = filter_metadata
+            where_clause.update(filter_metadata)
+        if where_clause:
+            kwargs["where"] = where_clause
 
         try:
             results = self._collection.query(**kwargs)
@@ -181,12 +190,15 @@ class KnowledgeBase:
 
         return output
 
-    def delete_document(self, doc_id: str) -> None:
+    def delete_document(self, doc_id: str, org_id: str = "") -> None:
         """删除文档的所有分块。"""
         if not self._collection:
             return
         try:
-            self._collection.delete(where={"doc_id": doc_id})
+            where: dict[str, Any] = {"doc_id": doc_id}
+            if org_id:
+                where["org_id"] = org_id
+            self._collection.delete(where=where)
             logger.info("文档已删除: %s", doc_id)
         except Exception as e:
             logger.error("删除文档失败: %s", e)

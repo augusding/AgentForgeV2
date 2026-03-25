@@ -35,19 +35,23 @@ async def handle_sessions_list(request: web.Request) -> web.Response:
 async def handle_session_history(request: web.Request) -> web.Response:
     """GET /api/v1/sessions/{session_id}/messages"""
     engine = request.app["engine"]
+    user = request.get("user") or {}
+    user_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     session_id = request.match_info["session_id"]
     limit = int(request.query.get("limit", "50"))
 
-    messages = await engine.session_store.get_history(session_id, limit=limit)
+    messages = await engine.session_store.get_history_secure(session_id, user_id, limit=limit)
     return _json({"messages": messages})
 
 
 async def handle_session_delete(request: web.Request) -> web.Response:
     """DELETE /api/v1/sessions/{session_id}"""
     engine = request.app["engine"]
+    user = request.get("user") or {}
+    user_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     session_id = request.match_info["session_id"]
-    await engine.session_store.delete_session(session_id)
-    return _json({"status": "deleted"})
+    ok = await engine.session_store.delete_session_secure(session_id, user_id)
+    return _json({"status": "deleted" if ok else "not_found"})
 
 
 def register(app: web.Application) -> None:

@@ -124,6 +124,32 @@ class SessionStore(BaseStore):
         history = await self.get_history(session_id, limit=limit)
         return [{"role": m["role"], "content": m["content"]} for m in history if m["role"] in ("user", "assistant")]
 
+    async def get_session_secure(self, session_id: str, user_id: str) -> dict | None:
+        """获取会话（验证归属）。"""
+        await self.ensure_tables()
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def get_history_secure(self, session_id: str, user_id: str, limit: int = 50) -> list[dict]:
+        """获取历史（验证归属）。"""
+        session = await self.get_session_secure(session_id, user_id)
+        if not session:
+            return []
+        return await self.get_history(session_id, limit)
+
+    async def delete_session_secure(self, session_id: str, user_id: str) -> bool:
+        """删除会话（验证归属）。"""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            if cursor.rowcount:
+                await db.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            await db.commit()
+            return (cursor.rowcount or 0) > 0
+
     async def count_messages(self, session_id: str) -> int:
         await self.ensure_tables()
         async with self._db() as db:

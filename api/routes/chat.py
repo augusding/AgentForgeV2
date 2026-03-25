@@ -137,10 +137,12 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
                 mission_id = chunk.get("mission_id", "")
                 tokens_used = chunk.get("tokens_used", 0)
                 model_used = chunk.get("model", "")
+                stream_session_id = chunk.get("session_id", "")
 
         duration_ms = int((time.time() - start_time) * 1000)
         await send_sse("done", {
             "mission_id": mission_id,
+            "session_id": stream_session_id,
             "agent_id": msg.position_id,
             "agent_name": position.display_name if position else "",
             "model": model_used,

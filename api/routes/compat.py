@@ -38,8 +38,10 @@ async def handle_chat_sessions_list(request):
 async def handle_chat_session_messages(request):
     """GET /api/v1/chat/sessions/{session_id}/messages"""
     engine = request.app["engine"]
+    user = request.get("user") or {}
+    user_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     session_id = request.match_info["session_id"]
-    messages = await engine.session_store.get_history(session_id, limit=100)
+    messages = await engine.session_store.get_history_secure(session_id, user_id, limit=100)
     return _json([{
         "id": m.get("id", ""), "role": m["role"], "content": m["content"],
         "agent_id": "", "agent_name": "", "created_at": m.get("created_at", 0),
@@ -50,7 +52,9 @@ async def handle_chat_session_messages(request):
 async def handle_chat_session_delete(request):
     """DELETE /api/v1/chat/sessions/{session_id}"""
     engine = request.app["engine"]
-    await engine.session_store.delete_session(request.match_info["session_id"])
+    user = request.get("user") or {}
+    user_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+    await engine.session_store.delete_session_secure(request.match_info["session_id"], user_id)
     return _json({"status": "deleted"})
 
 

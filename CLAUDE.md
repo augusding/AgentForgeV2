@@ -54,3 +54,24 @@
 - 异步方法统一用 `async def`
 - 配置统一从 `core/config/loader.py` 加载
 - 错误处理: 业务错误用自定义 Exception，不要 bare except
+
+## 数据隔离规则（强制）
+
+### 模型
+- 一个 user_id 对应一个用户，属于一个组织(org_id)，绑定一个岗位(position_id)
+- 数据隔离主键：(user_id, org_id)
+- position_id 是用户属性，不参与隔离（但某些数据按 position_id 分区查询）
+
+### 规则
+- 所有数据表必须有 org_id 和 user_id 字段
+- 所有查询必须包含 WHERE user_id=? AND org_id=? 条件
+- 知识库通过 metadata 中 org_id 过滤（同组织共享，不按用户隔离）
+- 文件按 data/uploads/{org_id}/{user_id}/ 目录隔离
+- 会话的读取和删除必须验证 user_id 归属
+- JWT payload 必须包含 sub(user_id)、org_id、org_role
+
+### 新功能检查清单
+- [ ] 新表有 org_id + user_id？
+- [ ] 查询按 org_id + user_id 过滤？
+- [ ] API handler 从 JWT 提取了 org_id？
+- [ ] 文件存到了隔离目录？
