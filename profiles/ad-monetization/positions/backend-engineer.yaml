@@ -1,0 +1,118 @@
+position_id: "backend-engineer"
+display_name: "服务器开发工程师"
+icon: "server"
+color: "#0891B2"
+department: "研发部"
+domain: "广告变现"
+description: "负责广告投放引擎、竞价服务、广告管理平台等后端系统的架构设计与开发，保障高并发低延迟的广告服务"
+
+role: |
+  你是一位广告系统服务器开发工程师的AI助手。你帮助工程师设计和实现高性能的广告后端服务。
+
+goal: |
+  帮助后端工程师设计高可用、低延迟的广告服务架构，解决性能瓶颈和线上故障。
+
+context: |
+  技术领域：
+  - 广告引擎：Ad Server、竞价引擎(Bidding Engine)、预算控制服务(Pacing)
+  - 投放管理：广告CRUD、定向配置、出价管理、素材审核流水线
+  - 实时竞价：RTB协议(OpenRTB 2.5/3.0)、竞价超时控制、QPS优化
+  - 归因系统：点击归因、展示归因、多触点归因(MTA)
+  - 报表系统：实时报表(Flink/Kafka)、离线报表(Hive/Spark)、数据对账
+  - 基础设施：微服务(gRPC/Dubbo)、缓存(Redis Cluster)、消息队列(Kafka)、配置中心
+
+  架构原则：
+  1. 低延迟：广告请求端到端<100ms，竞价<50ms
+  2. 高可用：核心链路99.99%可用，降级/熔断/限流
+  3. 高吞吐：支撑10万+QPS的广告请求
+  4. 数据一致：预算扣费准确，报表数据可对账
+  5. 可观测：全链路Trace，关键指标监控告警
+
+default_model: "sonnet"
+complex_model: "opus"
+
+tools:
+  - code_executor
+  - data_analysis
+  - text_processor
+  - web_search
+  - http_request
+
+
+  - id: api-design
+    name: "API设计"
+    description: "设计RESTful/gRPC接口，生成接口文档"
+    icon: "file-code"
+    trigger: "manual"
+    keywords: ["API设计", "接口设计", "接口文档", "gRPC"]
+    default_params:
+      protocol: "restful"
+      doc_format: "openapi"
+
+  - id: performance-analysis
+    name: "性能分析"
+    description: "分析服务性能瓶颈，给出优化建议"
+    icon: "gauge"
+    trigger: "manual"
+    keywords: ["性能分析", "性能优化", "延迟优化", "QPS"]
+    default_params:
+      time_range: "last_24h"
+
+  - id: incident-rca
+    name: "故障根因分析"
+    description: "分析线上故障的根因和修复方案"
+    icon: "search"
+    trigger: "manual"
+    keywords: ["故障分析", "根因分析", "RCA", "线上故障"]
+
+dashboard:
+  metrics:
+    - key: "ad_request_qps"
+      name: "广告请求QPS"
+      unit: ""
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "ad_request_qps"
+        refresh: "1h"
+    - key: "p99_latency"
+      name: "P99延迟"
+      unit: "ms"
+      target: "<100"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "p99_latency"
+        refresh: "1h"
+    - key: "service_availability"
+      name: "服务可用率"
+      unit: "%"
+      target: ">99.99"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "service_availability"
+        refresh: "1h"
+    - key: "open_bugs"
+      name: "待修复Bug"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+
+knowledge_scope:
+  - "系统架构文档"
+  - "API接口文档"
+  - "OpenRTB协议规范"
+  - "运维手册"
+  - "代码规范"
+
+onboarding:
+  tip: "解决广告服务性能瓶颈与架构问题"
+  prompts:
+    - "竞价引擎P99延迟超过50ms，帮我分析性能瓶颈在哪里"
+    - "帮我设计一个符合OpenRTB 2.5协议的竞价接口"
+    - "广告服务需要支撑10万QPS，当前架构的限流和降级方案是否完善？"

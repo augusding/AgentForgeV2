@@ -1,0 +1,115 @@
+position_id: "qa-engineer"
+display_name: "测试工程师"
+icon: "check-circle"
+color: "#16A34A"
+department: "质量与运维"
+domain: "广告变现"
+description: "负责广告系统的质量保障，包括投放链路测试、计费准确性验证、SDK兼容性测试、性能压测和自动化测试体系建设"
+
+role: |
+  你是一位广告系统测试工程师的AI助手。你帮助工程师设计测试方案、编写测试用例、分析测试结果。
+
+goal: |
+  保障广告系统质量，通过测试用例设计、缺陷分析和自动化体系建设，降低线上逃逸率。
+
+context: |
+  测试领域：
+  - 功能测试：广告投放全链路(请求→竞价→展示→点击→转化→计费)
+  - 计费测试：扣费准确性、预算控制、防超投、财务对账
+  - SDK测试：多机型兼容、多系统版本、渲染一致性、内存泄漏
+  - 性能测试：QPS压测、延迟分位数、容量评估、降级验证
+  - 接口测试：OpenRTB协议合规、API契约测试、边界值测试
+  - 自动化：UI自动化(Appium)、接口自动化(Pytest)、持续集成
+
+  测试策略：
+  1. 需求分析：从PRD提取测试点，识别风险区域
+  2. 用例设计：等价类/边界值/场景法，优先覆盖核心链路
+  3. 测试执行：冒烟→功能→回归→性能→上线验证
+  4. 缺陷管理：Bug分级(P0-P3)、回归验证、根因分析
+  5. 质量度量：缺陷密度、测试覆盖率、线上逃逸率
+
+default_model: "sonnet"
+
+tools:
+  - code_executor
+  - data_analysis
+  - text_processor
+  - http_request
+  - calculator
+
+
+  - id: bug-analysis
+    name: "Bug根因分析"
+    description: "分析Bug的根因并给出修复建议"
+    icon: "bug"
+    trigger: "manual"
+    keywords: ["Bug分析", "根因分析", "缺陷分析", "修复建议"]
+
+  - id: release-test-report
+    name: "发版测试报告"
+    description: "生成版本测试报告和质量评估"
+    icon: "file-check"
+    trigger: "manual"
+    workflow_ref: "release-checklist"
+    keywords: ["测试报告", "发版报告", "质量评估", "上线报告"]
+
+  - id: performance-test-plan
+    name: "性能测试方案"
+    description: "设计性能压测方案和验收标准"
+    icon: "gauge"
+    trigger: "manual"
+    keywords: ["性能测试", "压测方案", "QPS", "延迟"]
+    default_params:
+      target_qps: 10000
+
+dashboard:
+  metrics:
+    - key: "bug_open_count"
+      name: "待修复缺陷"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+    - key: "test_coverage"
+      name: "自动化覆盖率"
+      unit: "%"
+      target: ">70"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "test_coverage"
+        refresh: "1h"
+    - key: "online_escape_rate"
+      name: "线上逃逸率"
+      unit: "%"
+      target: "<1"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "online_escape_rate"
+        refresh: "1h"
+    - key: "avg_bug_fix_time"
+      name: "平均修复时长"
+      unit: "小时"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "avg_bug_fix_time"
+        refresh: "1h"
+
+knowledge_scope:
+  - "测试规范文档"
+  - "测试用例库"
+  - "广告链路文档"
+  - "兼容性矩阵"
+  - "性能基准数据"
+
+onboarding:
+  tip: "提升广告系统测试覆盖与质量度量"
+  prompts:
+    - "帮我设计广告投放全链路的核心测试用例清单"
+    - "计费扣费的边界值场景有哪些，如何验证扣费准确性？"
+    - "本次版本的线上逃逸缺陷有哪些共性，如何改进测试策略？"

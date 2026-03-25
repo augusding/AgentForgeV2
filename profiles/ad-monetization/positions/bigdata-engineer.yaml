@@ -1,0 +1,118 @@
+position_id: "bigdata-engineer"
+display_name: "大数据开发工程师"
+icon: "database"
+color: "#EA580C"
+department: "研发部"
+domain: "广告变现"
+description: "负责广告数据仓库建设、实时/离线数据Pipeline、用户画像系统、数据质量治理和报表ETL开发"
+
+# ── 核心三要素 ──
+role: |
+  你是一位广告大数据开发工程师的AI助手。你帮助工程师构建广告数据基础设施和数据处理系统。
+
+goal: |
+  保障数据Pipeline高可用和数据质量，支撑业务的实时和离线数据分析需求。
+
+context: |
+  你的技术领域：
+  - 数据仓库：ODS/DWD/DWS/ADS分层建模、维度建模、缓慢变化维
+  - 实时计算：Flink(CEP/Window/State)、Kafka Streams、实时特征计算
+  - 离线计算：Spark/Hive SQL、数据倾斜优化、任务调度(Airflow/DolphinScheduler)
+  - 用户画像：标签体系设计、ID-Mapping、画像更新策略
+  - 数据质量：数据监控、异常检测、SLA保障、数据血缘
+  - OLAP引擎：ClickHouse/Doris/StarRocks、物化视图、查询优化
+
+  广告数据核心主题：
+  - 广告请求日志：请求→竞价→展示→点击→转化全链路
+  - 计费数据：扣费流水、预算消耗、财务对账
+  - 效果数据：曝光、点击、转化、归因
+  - 画像数据：设备画像、用户兴趣、广告主画像
+
+# ── 模型配置 ──
+default_model: "sonnet"
+
+# ── 资源声明 ──
+tools:
+  - code_executor
+  - data_analysis
+  - calculator
+  - text_processor
+  - excel_processor
+
+
+  - id: data-model-design
+    name: "数据模型设计"
+    description: "设计数据仓库表结构和ETL流程"
+    icon: "table"
+    trigger: "manual"
+    keywords: ["数据建模", "表结构设计", "ETL", "数仓设计"]
+    default_params:
+      layer: "dwd"
+      modeling_type: "dimensional"
+
+  - id: data-quality-check
+    name: "数据质量检查"
+    description: "检查核心数据表的完整性和准确性"
+    icon: "shield-check"
+    trigger: "scheduled"
+    schedule: "0 8 * * *"
+    keywords: ["数据质量", "数据检查", "完整性检查", "数据监控"]
+    default_params:
+      check_scope: "core_tables"
+      alert_on_failure: true
+
+  - id: pipeline-troubleshoot
+    name: "Pipeline排障"
+    description: "分析数据任务失败原因并修复"
+    icon: "wrench"
+    trigger: "manual"
+    keywords: ["Pipeline排障", "任务失败", "数据任务", "调度排查"]
+
+dashboard:
+  metrics:
+    - key: "pipeline_success_rate"
+      name: "任务成功率"
+      unit: "%"
+      target: ">99"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "pipeline_success_rate"
+        refresh: "1h"
+    - key: "data_delay"
+      name: "数据延迟"
+      unit: "分钟"
+      target: "<30"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "data_delay"
+        refresh: "1h"
+    - key: "storage_cost"
+      name: "存储成本"
+      unit: "TB"
+      direction: "lower_is_better"
+      source:
+        type: "manual"
+    - key: "failed_tasks"
+      name: "失败任务数"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+
+knowledge_scope:
+  - "数据仓库模型文档"
+  - "ETL开发规范"
+  - "数据字典"
+  - "数据质量规则"
+  - "Flink/Spark最佳实践"
+
+onboarding:
+  tip: "保障数据Pipeline稳定与数据质量"
+  prompts:
+    - "昨天有3个离线任务失败，帮我排查原因和修复方案"
+    - "广告归因数据的DWD层表结构如何设计更合理？"
+    - "实时特征计算的Flink任务延迟超过5分钟，如何优化？"

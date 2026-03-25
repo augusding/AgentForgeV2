@@ -1,0 +1,209 @@
+name: "report-todo-track"
+description: "定期检查汇报后待办事项的执行进度，超期催办，到期验收"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "TODO跟踪"
+    - "待办跟踪"
+    - "催办"
+    - "进度检查"
+    - "验收"
+    - "待办状态"
+  semantic: "检查汇报后待办事项的执行进度和完成情况"
+
+parameters:
+  - name: business_line
+    type: text
+    label: "业务线（留空则检查所有）"
+    required: false
+    default: ""
+  - name: check_date
+    type: text
+    label: "检查日期"
+    required: true
+    default: "2025-01-01"
+  - name: progress_updates
+    type: textarea
+    label: "进展更新信息（可选，粘贴各责任人反馈的进展）"
+    required: false
+
+nodes:
+  # ── 第1步：检索所有未关闭TODO ──
+  - id: retrieve-open-todos
+    type: task
+    instruction: |
+      请从知识库中检索所有状态为"待开始"或"进行中"的待办事项。
+
+      检查日期: {{ check_date }}
+      业务线筛选: {{ business_line }}（如为空则检索所有业务线）
+
+      请汇总输出：
+      1. 所有未关闭的TODO列表，包含：编号、事项、责任人、截止日期、优先级、当前状态
+      2. 按状态分类统计：待开始X条、进行中X条
+      3. 按时间紧急度分类：
+         - 已超期（截止日期 < {{ check_date }}）
+         - 即将到期（截止日期在3天内）
+         - 正常推进（截止日期在3天以上）
+
+      如果有进展更新信息，也请纳入分析：
+      {{ progress_updates }}
+    output: open_todos
+
+  # ── 第2步：AI评估完成情况 ──
+  - id: assess-progress
+    type: task
+    depends_on:
+      - retrieve-open-todos
+    instruction: |
+      你是待办跟踪专家。请基于检索结果评估各项TODO的执行情况。
+
+      未关闭TODO列表:
+      {{ open_todos }}
+
+      进展更新（如有）:
+      {{ progress_updates }}
+
+      请输出以下分析：
+
+      ## 一、超期事项（需立即关注）
+
+      | 编号 | 事项 | 责任人 | 原定截止 | 超期天数 | 建议行动 |
+      |------|------|--------|---------|---------|---------|
+      | ... | ... | ... | ... | X天 | 催办/升级/调整截止日期 |
+
+      ## 二、即将到期（3天内）
+
+      | 编号 | 事项 | 责任人 | 截止日期 | 预计能否按时完成 | 风险点 |
+      |------|------|--------|---------|----------------|--------|
+
+      ## 三、待验收事项
+      （如果有进展更新表明已完成的事项，列出待验收清单）
+
+      | 编号 | 事项 | 责任人 | 完成情况描述 | 是否达到验收标准 | 建议 |
+      |------|------|--------|------------|----------------|------|
+
+      ## 四、正常推进事项
+      （简要概述即可）
+
+      ## 五、整体健康度评估
+      - 待办总数: X
+      - 完成率: X%
+      - 超期率: X%
+      - 健康度评级: 健康(超期率<10%) / 一般(10-30%) / 预警(>30%)
+      - 风险提示: [如有系统性风险，如某个责任人负载过重、某类TODO普遍延迟等]
+    output: progress_assessment
+
+  # ── 第3步：条件判断 - 是否有超期或待验收 ──
+  - id: check-urgency
+    type: condition
+    depends_on:
+      - assess-progress
+    expression: "'超期' in assess_progress or '待验收' in assess_progress"
+    on_true: handle-urgent
+    on_false: generate-weekly-summary
+
+  # ── 第4步A：处理紧急事项 ──
+  - id: handle-urgent
+    type: task
+    depends_on:
+      - assess-progress
+    instruction: |
+      请基于进度评估结果，生成紧急处理方案：
+
+      {{ assess-progress }}
+
+      ### 超期事项催办通知
+      对每个超期事项，生成催办通知：
+
+      ---
+      **[催办] 待办事项超期提醒**
+
+      @[责任人]，以下待办事项已超期，请尽快处理：
+
+      **事项**: [TODO描述]
+      **原定截止**: YYYY-MM-DD
+      **已超期**: X天
+      **要求**: 请在[建议新截止日期]前完成，并回复当前进展和预计完成时间。
+
+      如需调整截止日期或变更方案，请说明原因。
+      ---
+
+      ### 待验收事项审批请求
+      对每个待验收事项，生成验收审批请求：
+
+      ---
+      **[验收] 待办事项完成确认**
+
+      **事项**: [TODO描述]
+      **责任人**: [谁完成的]
+      **验收标准**: [原定标准]
+      **完成情况**: [责任人反馈的完成描述]
+      **建议**: 通过/需补充/不通过
+      ---
+    output: urgent_actions
+
+  # ── 第4步B（或第5步）：生成周报摘要 ──
+  - id: generate-weekly-summary
+    type: task
+    depends_on:
+      - assess-progress
+    instruction: |
+      请生成TODO跟踪周报摘要，发送给管理者。
+
+      进度评估:
+      {{ assess-progress }}
+
+      紧急处理（如有）:
+      {{ handle-urgent }}
+
+      请生成以下格式的周报：
+
+      ---
+      # 待办事项跟踪周报
+
+      **检查日期**: {{ check_date }}
+      **覆盖范围**: {{ business_line }}
+
+      ## 概览仪表盘
+
+      | 指标 | 数值 | 趋势 |
+      |------|------|------|
+      | 待办总数 | X | - |
+      | 本周新增 | X | - |
+      | 本周关闭 | X | - |
+      | 完成率 | X% | 上升/下降/持平 |
+      | 超期数 | X | 上升/下降/持平 |
+      | 健康度 | 评级 | - |
+
+      ## 需要关注
+
+      ### 超期事项（已催办）
+      1. [事项] - @[责任人] - 超期X天 - [处理状态]
+
+      ### 即将到期（本周内）
+      1. [事项] - @[责任人] - 截止: YYYY-MM-DD
+
+      ### 待验收
+      1. [事项] - @[责任人] - 待管理者确认
+
+      ## 本周进展亮点
+      - [完成的重要事项]
+
+      ## 风险与建议
+      - [系统性风险或改进建议]
+
+      ---
+
+      请同时更新知识库中对应的待办事项文档，将已确认完成的标记为"已关闭"，
+      将超期的标记为"超期"，将催办日期记录到跟踪日志中。
+    output: weekly_summary
+
+metadata:
+  category: "汇报管理"
+  author: "report-manager"
+  tags:
+    - "TODO跟踪"
+    - "催办"
+    - "验收"
+    - "周报"

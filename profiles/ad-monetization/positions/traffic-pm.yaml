@@ -1,0 +1,121 @@
+position_id: "traffic-pm"
+display_name: "流量产品经理"
+icon: "activity"
+color: "#059669"
+department: "产品部"
+domain: "广告变现"
+description: "负责广告流量的规划与管理，包括广告位设计、流量分配策略、变现效率优化和用户体验平衡"
+
+role: |
+  你是一位流量产品经理的AI助手。你帮助产品经理规划广告位、设计流量分配策略、分析变现效率。
+
+goal: |
+  在用户体验约束下最大化广告变现效率，通过广告位优化、流量分配和A/B实验提升eCPM和ARPU。
+
+context: |
+  领域知识：
+  - 广告位类型：开屏(Splash)、信息流(Native Feed)、插屏(Interstitial)、Banner、激励视频(Rewarded Video)、搜索广告
+  - 流量分配：Waterfall 瀑布流 vs Header Bidding 头部竞价
+  - 变现指标：eCPM、填充率(Fill Rate)、展示率(Show Rate)、ARPU
+  - 用户体验：频控(Frequency Cap)、广告密度、广告加载时长
+  - 系统级流量：负一屏、全局搜索、应用商店、浏览器、锁屏、通知栏
+
+  流量产品设计原则：
+  1. 用户体验红线：广告不能影响核心功能使用
+  2. eCPM最大化：在体验约束下追求收入最优
+  3. 数据验证：每个变更都要经过A/B实验验证
+  4. 场景化设计：根据用户场景选择最合适的广告形态
+
+default_model: "sonnet"
+
+tools:
+  - data_analysis
+  - calculator
+  - excel_processor
+  - web_search
+  - text_processor
+
+
+  - id: frequency-cap-review
+    name: "频控策略评估"
+    description: "评估当前频控策略对收入和体验的影响"
+    icon: "clock"
+    trigger: "manual"
+    keywords: ["频控", "频控策略", "频控评估", "广告频次"]
+
+  - id: waterfall-optimization
+    name: "Waterfall优化"
+    description: "分析广告源优先级，优化瀑布流配置"
+    icon: "layers"
+    trigger: "manual"
+    keywords: ["Waterfall", "瀑布流优化", "广告源优化", "竞价优化"]
+
+  - id: new-ad-slot-design
+    name: "新广告位设计"
+    description: "设计新广告位的形态、规则和预期收益"
+    icon: "plus-square"
+    trigger: "manual"
+    keywords: ["新广告位", "广告位设计", "广告位规划", "新增广告位"]
+
+dashboard:
+  metrics:
+    - key: "overall_ecpm"
+      name: "整体eCPM"
+      unit: "元"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "overall_ecpm"
+        refresh: "1h"
+    - key: "fill_rate"
+      name: "填充率"
+      unit: "%"
+      target: ">85"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "fill_rate"
+        refresh: "1h"
+    - key: "daily_impressions"
+      name: "日展示量"
+      unit: "万"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "daily_impressions"
+        refresh: "1h"
+    - key: "arpu"
+      name: "ARPU"
+      unit: "元"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "arpu"
+        refresh: "1h"
+    - key: "ad_load_time"
+      name: "广告加载时长"
+      unit: "ms"
+      target: "<500"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "ad_load_time"
+        refresh: "1h"
+
+knowledge_scope:
+  - "广告位设计规范"
+  - "流量分配策略文档"
+  - "A/B实验方法论"
+  - "行业eCPM基准数据"
+
+onboarding:
+  tip: "辅助广告位规划和流量分配决策"
+  prompts:
+    - "信息流广告位的eCPM和ARPU表现如何，有提升空间吗？"
+    - "新增一个激励视频广告位，帮我评估预期收益和频控方案"
+    - "Waterfall和Header Bidding各自的优劣势是什么，当前适合切换吗？"

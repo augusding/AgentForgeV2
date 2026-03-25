@@ -1,0 +1,251 @@
+name: "pm-release-checklist"
+description: "版本发布全流程管控：变更收集 → 风险扫描 → Checklist生成 → 逐项确认 → 发布决策 → 发布后验证计划"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "发版checklist"
+    - "发布检查"
+    - "上线检查"
+    - "版本发布"
+    - "发版准备"
+    - "上线准备"
+  semantic: "准备版本发布的检查清单和发布流程管控"
+
+parameters:
+  - name: version
+    type: text
+    label: "版本号（如 v3.2.1）"
+    required: true
+  - name: release_date
+    type: text
+    label: "计划发布日期（YYYY-MM-DD）"
+    required: true
+  - name: release_window
+    type: select
+    label: "发布窗口"
+    options: ["工作日上午(10:00-12:00)", "工作日下午(14:00-16:00)", "周末低峰(06:00-08:00)"]
+    default: "工作日下午(14:00-16:00)"
+  - name: change_list
+    type: textarea
+    label: "本版本变更内容（需求列表/MR列表/变更描述）"
+    required: true
+  - name: rollback_plan
+    type: textarea
+    label: "已有的回滚方案（可选，无则AI辅助生成）"
+    required: false
+
+nodes:
+  # ── 第1步：变更分析 ──
+  - id: analyze-changes
+    type: task
+    instruction: |
+      你是发布管理专家。请分析本次发版的变更内容。
+
+      版本: {{ version }}
+      计划发布日期: {{ release_date }}
+      发布窗口: {{ release_window }}
+
+      变更内容:
+      {{ change_list }}
+
+      请输出：
+
+      ## 变更分类统计
+      | 类型 | 数量 | 具体项 |
+      |------|------|-------|
+      | 新功能 | X | ... |
+      | 优化/改进 | X | ... |
+      | Bug修复 | X | ... |
+      | 配置变更 | X | ... |
+      | 数据库变更 | X | ... |
+      | 依赖升级 | X | ... |
+
+      ## 变更影响范围
+      - 涉及的模块/服务：
+      - 涉及的接口变更（是否需要前后端同步发）：
+      - 是否涉及数据迁移：
+      - 是否涉及配置变更（需运维配合）：
+      - 是否有灰度发布要求：
+
+      ## 变更复杂度评级
+      - 低风险（纯前端/配置/文案）
+      - 中风险（后端逻辑变更/接口变更）
+      - 高风险（数据库变更/核心链路改动/第三方依赖升级）
+    output: change_analysis
+
+  # ── 第2步（并行A）：发布风险扫描 ──
+  - id: risk-scan
+    type: task
+    depends_on:
+      - analyze-changes
+    instruction: |
+      请对本次发布进行风险扫描。
+
+      变更分析: {{ analyze-changes }}
+      发布窗口: {{ release_window }}
+      发布日期: {{ release_date }}
+
+      请检查以下风险维度：
+
+      ### 时间风险
+      - 发布日期是否临近节假日/大促/重要活动？
+      - 发布窗口选择是否合理（避开流量高峰）？
+      - 发布后是否有足够人力值班观察？
+
+      ### 技术风险
+      - 是否存在数据库变更需要锁表（影响线上服务）？
+      - 是否有不可逆的数据迁移？
+      - 多个服务是否有发布顺序要求？
+      - 是否有缓存需要预热/清除？
+
+      ### 业务风险
+      - 变更是否影响计费/结算等资金链路？
+      - 是否影响广告投放效果（可能引起客户投诉）？
+      - 是否影响数据上报（影响报表和决策）？
+
+      ### 协同风险
+      - 是否依赖其他团队同步发布？
+      - 是否需要提前通知下游（客户/运营/商务）？
+
+      输出风险评估矩阵：
+      | 风险项 | 等级(P0-P3) | 描述 | 止损措施 |
+
+      **综合风险等级**: [低/中/高/极高]
+      **发布建议**: [可正常发布 / 建议推迟 / 需降级发布]
+    output: risk_result
+
+  # ── 第2步（并行B）：生成回滚方案 ──
+  - id: rollback-plan
+    type: task
+    depends_on:
+      - analyze-changes
+    instruction: |
+      请生成或完善本次发布的回滚方案。
+
+      变更分析: {{ analyze-changes }}
+      已有回滚方案: {{ rollback_plan }}
+
+      如果已有方案，请审核其完整性并补充缺失项。
+      如果没有方案，请从零生成。
+
+      回滚方案需包含：
+
+      ## 回滚触发条件
+      明确什么情况下触发回滚（如：核心接口错误率>1%、P0报警持续5分钟、资金链路异常等）
+
+      ## 回滚步骤
+      按服务/模块分别列出回滚操作，需标注：
+      | 步骤 | 操作 | 执行人 | 预估耗时 | 注意事项 |
+      （特别注意数据库变更的回滚，如果不可回滚需标注）
+
+      ## 回滚验证
+      回滚后如何验证服务已恢复正常：
+      - 核心接口可用性检查
+      - 关键业务流程验证
+      - 监控指标恢复确认
+
+      ## 回滚预估耗时
+      从触发到完全恢复的预计时间
+    output: rollback_result
+
+  # ── 第3步：生成发布Checklist ──
+  - id: generate-checklist
+    type: task
+    depends_on:
+      - risk-scan
+      - rollback-plan
+    instruction: |
+      请生成完整的发布Checklist。
+
+      变更分析: {{ analyze-changes }}
+      风险评估: {{ risk-scan }}
+      回滚方案: {{ rollback-plan }}
+
+      按时间线生成三阶段Checklist：
+
+      ## 发布前（T-1天）
+      - [ ] 代码冻结，所有MR已合并
+      - [ ] 测试报告已出具，无P0/P1遗留Bug
+      - [ ] 变更内容与需求单一一对应，无遗漏
+      - [ ] 数据库变更脚本已Review
+      - [ ] 配置变更已准备（列出具体配置项）
+      - [ ] 回滚方案已确认
+      - [ ] 值班人员已安排
+      - [ ] 下游已通知（列出需通知的团队/人员）
+      （根据变更分析补充其他必要检查项）
+
+      ## 发布中（T日）
+      - [ ] 确认发布窗口内无冲突发布
+      - [ ] 按顺序执行发布（列出发布顺序）
+      - [ ] 数据库变更执行（如有）
+      - [ ] 配置变更生效确认
+      - [ ] 冒烟测试通过
+      - [ ] 核心监控指标正常
+      （根据变更内容补充具体验证项）
+
+      ## 发布后（T+1天）
+      - [ ] 过夜监控无异常
+      - [ ] 次日流量高峰期观察
+      - [ ] 数据报表核对（T+1数据）
+      - [ ] 变更公告发布
+      - [ ] 发布复盘记录
+
+      每个检查项标注负责人角色（研发/测试/运维/PM）
+    output: checklist
+
+  # ── 第4步：发布决策确认 ──
+  - id: release-decision
+    type: approval
+    depends_on:
+      - generate-checklist
+    input_prompt: |
+      以上是完整的发布方案，包含：
+      1. 变更分析与风险评估
+      2. 回滚方案
+      3. 发布Checklist
+
+      请确认是否批准发布。
+      如果需要调整，请在反馈中说明。
+
+  # ── 第5步：生成发布后验证计划 ──
+  - id: post-release-plan
+    type: task
+    depends_on:
+      - release-decision
+    instruction: |
+      发布已批准。请生成发布后的监控验证计划。
+
+      变更分析: {{ analyze-changes }}
+      风险评估: {{ risk-scan }}
+      发布日期: {{ release_date }}
+
+      生成：
+      ---
+      # {{ version }} 发布后验证计划
+
+      ## 关键监控指标
+      | 指标 | 正常范围 | 告警阈值 | 监控面板 |
+      （根据变更内容列出需要重点关注的监控指标）
+
+      ## 验证时间线
+      | 时间点 | 验证内容 | 负责人 |
+      | 发布后15分钟 | 冒烟测试 + 核心接口可用性 | 研发 |
+      | 发布后1小时 | 业务指标趋势 | PM |
+      | 发布后4小时 | 全量功能回归 | 测试 |
+      | T+1上午 | 过夜数据核对 | PM + 数据 |
+      | T+3 | 业务指标周同比对比 | PM |
+
+      ## 应急联系人
+      | 角色 | 姓名 | 联系方式 |
+      ---
+    output: post_release
+
+metadata:
+  category: "项目管理"
+  position: "project-manager"
+  tags:
+    - "发版管理"
+    - "发布检查"
+    - "Checklist"
+    - "风险管控"

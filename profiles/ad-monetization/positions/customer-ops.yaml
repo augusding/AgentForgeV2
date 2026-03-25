@@ -1,0 +1,122 @@
+position_id: "customer-ops"
+display_name: "客户运营"
+icon: "headphones"
+color: "#7C3AED"
+department: "运营部"
+domain: "广告变现"
+description: "负责广告主和代理商的客户服务，包括KA客户管理、投放咨询、问题处理、客户满意度提升"
+
+# ── 核心三要素 ──
+role: |
+  你是一位广告客户运营的AI助手。你帮助运营人员服务广告主、解决投放问题、提升客户满意度。
+
+goal: |
+  提升客户满意度和续投率，快速响应和解决客户问题，推动KA客户持续增长。
+
+context: |
+  你的工作领域：
+  - KA客户管理：大客户专属服务、季度规划、预算沟通、效果保障
+  - 投放咨询：定向建议、出价策略、素材优化、预算分配
+  - 问题处理：投放异常排查、审核拒绝申诉、计费争议、技术对接
+  - 客户分层：KA/中腰部/长尾客户差异化服务策略
+  - 行业运营：按行业(游戏/电商/金融/教育等)提供专属解决方案
+  - 满意度管理：NPS调研、投诉处理、服务质量评估
+
+  服务标准：
+  1. 响应时效：KA客户<30分钟，普通客户<2小时
+  2. 问题解决率：首次解决率>80%
+  3. 主动服务：定期回访、投放建议、行业洞察分享
+  4. 客户成功：帮助客户达成投放目标，提升复投率
+
+# ── 模型配置 ──
+default_model: "sonnet"
+
+# ── 资源声明 ──
+tools:
+  - text_processor
+  - data_analysis
+  - excel_processor
+  - web_search
+  - calculator
+  - email_sender
+
+
+  - id: campaign-diagnosis
+    name: "投放效果诊断"
+    description: "诊断广告主投放效果不佳的原因"
+    icon: "stethoscope"
+    trigger: "manual"
+    keywords: ["投放诊断", "效果不佳", "投放优化", "ROI"]
+
+  - id: ka-review
+    name: "KA客户回顾"
+    description: "准备KA客户季度回顾的数据和建议"
+    icon: "crown"
+    trigger: "manual"
+    keywords: ["KA回顾", "季度回顾", "大客户", "客户分析"]
+    default_params:
+      period: "last_quarter"
+
+  - id: satisfaction-survey
+    name: "满意度分析"
+    description: "分析NPS调研结果和改进方向"
+    icon: "smile"
+    trigger: "manual"
+    keywords: ["满意度", "NPS", "客户反馈", "服务质量"]
+
+dashboard:
+  metrics:
+    - key: "open_tickets"
+      name: "待处理工单"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+    - key: "avg_response_time"
+      name: "平均响应时长"
+      unit: "分钟"
+      target: "<60"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "avg_response_time"
+        refresh: "1h"
+    - key: "first_resolve_rate"
+      name: "首次解决率"
+      unit: "%"
+      target: ">80"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "first_resolve_rate"
+        refresh: "1h"
+    - key: "nps_score"
+      name: "NPS分数"
+      unit: ""
+      target: ">40"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "ka_retention"
+      name: "KA续投率"
+      unit: "%"
+      target: ">90"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+
+knowledge_scope:
+  - "客服话术库"
+  - "常见问题FAQ"
+  - "行业解决方案"
+  - "审核规则文档"
+  - "平台操作手册"
+
+onboarding:
+  tip: "快速响应客户问题并提升续投率"
+  prompts:
+    - "某KA客户投放ROI下降，帮我诊断原因并准备优化方案"
+    - "帮我准备本季度KA客户回顾的数据和续投建议"
+    - "客户反馈审核拒绝率太高，帮我整理常见拒绝原因和解决方案"

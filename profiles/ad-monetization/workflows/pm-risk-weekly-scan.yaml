@@ -1,0 +1,224 @@
+name: "pm-risk-weekly-scan"
+description: "项目风险周扫描：多项目进度采集 → 风险自动识别 → 依赖阻塞检测 → 资源冲突分析 → 分级预警报告 → 升级建议"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "风险扫描"
+    - "项目风险"
+    - "周风险"
+    - "进度检查"
+    - "风险周报"
+    - "项目健康度"
+  semantic: "对在管项目进行风险扫描和健康度检查"
+
+parameters:
+  - name: scan_date
+    type: text
+    label: "扫描日期（YYYY-MM-DD）"
+    required: true
+  - name: project_status
+    type: textarea
+    label: "各项目当前状态（每个项目：名称、阶段、进度%、截止日、阻塞项、本周进展）"
+    required: true
+  - name: resource_info
+    type: textarea
+    label: "资源信息（人员分配、请假信息、借调情况）"
+    required: true
+  - name: external_changes
+    type: textarea
+    label: "外部变化（需求变更、客户反馈、上级指示、市场变化等，可选）"
+    required: false
+
+nodes:
+  # ── 第1步：项目状态结构化 ──
+  - id: parse-status
+    type: task
+    instruction: |
+      请将各项目状态信息结构化。
+
+      扫描日期: {{ scan_date }}
+
+      项目状态原始信息:
+      {{ project_status }}
+
+      请输出：
+
+      ## 在管项目总览
+      | 项目 | 当前阶段 | 计划进度 | 实际进度 | 偏差 | 截止日 | 剩余天数 | 健康度 |
+      （健康度：绿=正常 / 黄=关注 / 红=告警）
+
+      健康度判定规则：
+      - 绿色：实际进度 >= 计划进度 - 5%，且无阻塞项
+      - 黄色：进度偏差 5%-15%，或有非关键路径阻塞
+      - 红色：进度偏差 >15%，或有关键路径阻塞，或剩余时间不足以完成剩余工作
+
+      ## 各项目本周进展摘要
+      按项目逐个列出本周完成的关键事项
+    output: status_parsed
+
+  # ── 第2步（并行A）：进度风险检测 ──
+  - id: progress-risk
+    type: task
+    depends_on:
+      - parse-status
+    instruction: |
+      请对每个黄色/红色项目进行进度风险深度分析。
+
+      项目总览: {{ parse-status }}
+
+      对每个非绿色项目分析：
+
+      ### [项目名]
+
+      #### 进度偏差分析
+      - 偏差的主要原因是什么（需求变更/估算偏差/资源不足/技术障碍/外部等待）？
+      - 偏差是在扩大还是收敛？（对比上周数据趋势）
+      - 按当前速度，预计实际完成日期是？比计划延迟几天？
+
+      #### 关键路径检查
+      - 当前关键路径上的任务是什么？
+      - 关键路径上是否有阻塞？
+      - 关键路径的剩余工期是否超过剩余日历天数？
+
+      #### 赶工可能性
+      - 是否可以通过加人/并行化/缩小范围来追回进度？
+      - 赶工的代价是什么（质量风险/团队疲劳/其他项目影响）？
+
+      不分析绿色项目，节省篇幅。
+    output: progress_risks
+
+  # ── 第2步（并行B）：资源冲突分析 ──
+  - id: resource-conflict
+    type: task
+    depends_on:
+      - parse-status
+    instruction: |
+      请分析多项目间的资源冲突。
+
+      项目总览: {{ parse-status }}
+      资源信息: {{ resource_info }}
+
+      请检查：
+
+      ## 资源分配热力图
+      | 人员 | 项目A(%) | 项目B(%) | 项目C(%) | 合计 | 状态 |
+      （合计>100% 标记为过载，>120% 标记为严重过载）
+
+      ## 过载人员分析
+      对每个过载人员：
+      - 涉及的项目及各自优先级
+      - 建议：哪个项目可以让步？是否可以找人分担？
+      - 过载持续时间预估
+
+      ## 请假/借调影响
+      - 哪些人的请假/借调会影响项目进度？
+      - 影响的具体项目和任务是什么？
+      - 是否有backup人选？
+
+      ## 未来2周资源瓶颈预测
+      基于各项目后续阶段的资源需求，预判哪些时间点会出现资源瓶颈
+    output: resource_risks
+
+  # ── 第2步（并行C）：外部变化影响评估 ──
+  - id: external-impact
+    type: task
+    depends_on:
+      - parse-status
+    instruction: |
+      请评估外部变化对在管项目的影响。
+
+      项目总览: {{ parse-status }}
+      外部变化: {{ external_changes }}
+
+      对每个外部变化评估：
+
+      ## 变化影响矩阵
+      | 外部变化 | 影响的项目 | 影响程度(高/中/低) | 影响维度(范围/排期/资源/质量) | 应对建议 |
+
+      如果没有明显外部变化，分析以下潜在风险：
+      - 是否有未确认的需求变更在酝酿中？
+      - 客户/运营侧是否有即将到来的活动/大促可能影响排期？
+      - 行业政策/平台规则变化是否需要关注？
+      - 上下游团队是否有发版/变更计划可能产生连锁影响？
+    output: external_risks
+
+  # ── 第3步：风险汇总 & 分级预警 ──
+  - id: risk-summary
+    type: task
+    depends_on:
+      - progress-risk
+      - resource-conflict
+      - external-impact
+    instruction: |
+      请汇总所有风险，生成分级预警报告。
+
+      进度风险: {{ progress-risk }}
+      资源风险: {{ resource-conflict }}
+      外部风险: {{ external-impact }}
+
+      ## 风险预警清单（按严重度排列）
+
+      ### P0 — 需立即处理（本周内）
+      | 风险 | 类型 | 涉及项目 | 建议行动 | 需要谁介入 |
+
+      ### P1 — 需密切关注（1-2周内可能恶化）
+      | 风险 | 类型 | 涉及项目 | 预防措施 | 检查点 |
+
+      ### P2 — 记录观察
+      | 风险 | 类型 | 涉及项目 | 备注 |
+
+      ## 升级建议
+      哪些风险需要升级至上级？
+      | 升级事项 | 原因 | 需要的决策/支持 | 建议升级至 |
+
+      ## 上周风险追踪
+      如果知识库中有上周的风险扫描记录，对比：
+      - 上周P0风险是否已解决？
+      - 上周P1风险是否恶化为P0？
+      - 是否有新增风险？
+    output: risk_summary
+
+  # ── 第4步：生成风险周报 ──
+  - id: generate-risk-report
+    type: task
+    depends_on:
+      - risk-summary
+    instruction: |
+      请生成正式的项目风险周报。
+
+      项目总览: {{ parse-status }}
+      风险汇总: {{ risk-summary }}
+
+      生成：
+      ---
+      # 项目风险周报
+      **扫描日期**: {{ scan_date }}
+      **在管项目**: X个（绿X / 黄X / 红X）
+
+      ## 一、项目健康度总览
+      [项目状态表，红色/黄色项目加粗]
+
+      ## 二、本周TOP风险
+      [P0 + P1风险清单及行动计划]
+
+      ## 三、资源热点
+      [过载人员及应对方案]
+
+      ## 四、需上级关注事项
+      [升级事项及所需决策]
+
+      ## 五、下周关键节点
+      列出下周各项目的关键里程碑和检查点：
+      | 日期 | 项目 | 事项 | 风险等级 |
+      ---
+    output: risk_report
+
+metadata:
+  category: "项目管理"
+  position: "project-manager"
+  tags:
+    - "风险管理"
+    - "项目健康度"
+    - "周报"
+    - "资源管理"

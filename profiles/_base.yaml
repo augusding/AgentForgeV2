@@ -1,0 +1,27 @@
+# AgentForge V3 — 所有行业共享的基础配置
+
+base:
+  default_llm:
+    default_model: "sonnet"
+    complex_model: "opus"
+    temperature: 0.7
+
+  default_memory:
+    max_short_term: 20
+    retrieval_top_k: 3
+    auto_summarize_after: 50
+
+  default_capabilities:
+    can_delegate: false
+    permission_level: 1
+
+  output_format: |
+    请用中文回答。结构化输出时使用 Markdown 格式。
+    如果任务涉及数据，请给出具体数字和依据。
+
+  quality_rules:
+    min_output_length: 10
+    refuse_patterns:
+      - "我无法"
+      - "对不起我不能"
+      - "作为AI"

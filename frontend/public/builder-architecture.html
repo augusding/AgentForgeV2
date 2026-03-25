@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1400">
+<title>AgentForge Profile Builder — 两阶段生成架构交互图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #0f1117;
+    color: #e1e4e8;
+    padding: 40px 60px 80px;
+    min-width: 1300px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    color: #8b949e;
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  /* ── Section Headers ── */
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 48px 0 20px;
+    padding-left: 14px;
+    border-left: 3px solid #58a6ff;
+    color: #c9d1d9;
+  }
+  .section-title span {
+    color: #8b949e;
+    font-weight: 400;
+    font-size: 13px;
+    margin-left: 10px;
+  }
+
+  /* ── Flow Container ── */
+  .flow-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  /* ── Phase Boxes ── */
+  .phase-box {
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 28px 32px;
+    background: #161b22;
+    position: relative;
+  }
+  .phase-box.phase-0 { border-color: #3fb95040; }
+  .phase-box.phase-1 { border-color: #58a6ff40; }
+  .phase-box.phase-2 { border-color: #bc8cff40; }
+
+  .phase-label {
+    position: absolute;
+    top: -12px;
+    left: 24px;
+    padding: 2px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .phase-0 .phase-label { background: #238636; color: #fff; }
+  .phase-1 .phase-label { background: #1f6feb; color: #fff; }
+  .phase-2 .phase-label { background: #8b5cf6; color: #fff; }
+
+  .phase-desc {
+    color: #8b949e;
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  /* ── Horizontal Flow Row ── */
+  .h-flow {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: nowrap;
+  }
+
+  /* ── Cards ── */
+  .card {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px 18px;
+    background: #0d1117;
+    min-width: 180px;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .card-title .icon { font-size: 16px; }
+  .card ul {
+    list-style: none;
+    font-size: 12px;
+    color: #8b949e;
+    line-height: 1.8;
+  }
+  .card ul li::before {
+    content: "•";
+    color: #484f58;
+    margin-right: 6px;
+  }
+  .card.input { border-color: #3fb95040; }
+  .card.intel { border-color: #58a6ff40; }
+  .card.output { border-color: #bc8cff40; }
+  .card.agent { border-color: #f0883e40; }
+  .card.squad { border-color: #3fb95040; }
+  .card.workflow { border-color: #d2a8ff40; }
+  .card.profile { border-color: #58a6ff40; }
+
+  .card .tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+  }
+  .tag.green  { background: #23863620; color: #3fb950; border: 1px solid #23863640; }
+  .tag.blue   { background: #1f6feb20; color: #58a6ff; border: 1px solid #1f6feb40; }
+  .tag.purple { background: #8b5cf620; color: #bc8cff; border: 1px solid #8b5cf640; }
+  .tag.orange { background: #f0883e20; color: #f0883e; border: 1px solid #f0883e40; }
+  .tag.pink   { background: #f778ba20; color: #f778ba; border: 1px solid #f778ba40; }
+
+  /* ── Arrow ── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #484f58;
+    font-size: 20px;
+    min-width: 36px;
+    padding-top: 24px;
+  }
+  .arrow.down {
+    padding: 0;
+    font-size: 24px;
+    justify-content: center;
+    width: 100%;
+    padding: 4px 0;
+  }
+  .arrow-label {
+    font-size: 11px;
+    color: #58a6ff;
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  /* ── Big Intel Card ── */
+  .intel-card {
+    border: 1px solid #58a6ff30;
+    border-radius: 10px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #161b2280, #1f6feb08);
+    flex: 1;
+  }
+  .intel-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 14px;
+  }
+  .intel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .intel-item {
+    background: #0d111780;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .intel-item h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: #c9d1d9;
+    margin-bottom: 6px;
+  }
+  .intel-item p {
+    font-size: 11px;
+    color: #8b949e;
+    line-height: 1.6;
+  }
+  .intel-item code {
+    font-size: 10px;
+    background: #30363d;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #e6edf3;
+  }
+
+  /* ── Phase 2 Grid ── */
+  .gen-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .gen-box {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 18px 20px;
+    background: #0d1117;
+  }
+  .gen-box h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .gen-box .gen-desc {
+    font-size: 11px;
+    color: #8b949e;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .gen-box.agent-box h4 { color: #f0883e; }
+  .gen-box.squad-box h4 { color: #3fb950; }
+  .gen-box.workflow-box h4 { color: #d2a8ff; }
+  .gen-box.profile-box h4 { color: #58a6ff; }
+
+  .data-flow {
+    font-size: 11px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    padding: 10px 12px;
+    line-height: 1.7;
+    color: #8b949e;
+  }
+  .data-flow .from {
+    color: #58a6ff;
+    font-weight: 500;
+  }
+  .data-flow .field {
+    color: #7ee787;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 11px;
+  }
+  .data-flow .yields {
+    color: #f0883e;
+    font-weight: 500;
+  }
+
+  /* ── Cross Reference ── */
+  .xref-section {
+    margin-top: 48px;
+  }
+  .xref-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 16px;
+  }
+  .xref-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    font-weight: 600;
+  }
+  .xref-table td {
+    padding: 10px 14px;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    vertical-align: top;
+  }
+  .xref-table tr:hover td { background: #161b2280; }
+
+  /* ── Example callout ── */
+  .example-box {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-left: 3px solid #58a6ff;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #8b949e;
+    line-height: 1.7;
+  }
+  .example-box strong { color: #c9d1d9; }
+  .example-box .hl { color: #7ee787; }
+  .example-box .hl2 { color: #f0883e; }
+  .example-box .hl3 { color: #d2a8ff; }
+
+  /* ── Comparison ── */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+  }
+  .compare-box {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    background: #161b22;
+  }
+  .compare-box h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .compare-box.old h4 { color: #f85149; }
+  .compare-box.new h4 { color: #3fb950; }
+  .compare-box pre {
+    font-size: 11px;
+    line-height: 1.6;
+    color: #8b949e;
+    white-space: pre-wrap;
+  }
+  .compare-box .dim { opacity: 0.4; }
+  .compare-box .new-line { color: #7ee787; }
+
+  .legend {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+  .legend-dot.green { border-color: #3fb950; }
+  .legend-dot.blue { border-color: #58a6ff; }
+  .legend-dot.purple { border-color: #bc8cff; }
+  .legend-dot.orange { border-color: #f0883e; }
+</style>
+</head>
+<body>
+
+<h1>Profile Builder — 两阶段生成架构</h1>
+<p class="subtitle">Industry Intelligence-Driven Agent Team Generation</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot green"></div> 用户输入 / Squad</div>
+  <div class="legend-item"><div class="legend-dot blue"></div> 行业情报 / Profile</div>
+  <div class="legend-item"><div class="legend-dot orange"></div> Agent</div>
+  <div class="legend-item"><div class="legend-dot purple"></div> Workflow</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 1: 总览流程 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section-title">1. 总体架构流程 <span>从用户输入到完整团队配置</span></div>
+
+<div class="flow-container">
+
+  <!-- Phase 0: User Input -->
+  <div class="phase-box phase-0">
+    <div class="phase-label">PHASE 0 — 信息采集</div>
+    <p class="phase-desc">通过面试官 Agent 采集业务信息，或从上传文档中提取结构化数据</p>
+    <div class="h-flow">
+      <div class="card input" style="flex:1">
+        <span class="tag green">用户提供</span>
+        <div class="card-title"><span class="icon">🏢</span> 基础信息</div>
+        <ul>
+          <li>行业名称 (industry)</li>
+          <li>公司描述 (industry_description)</li>
+          <li>行业术语 (glossary)</li>
+        </ul>
+      </div>
+      <div class="card input" style="flex:1">
+        <span class="tag green">用户提供</span>
+        <div class="card-title"><span class="icon">👥</span> 岗位信息</div>
+        <ul>
+          <li>岗位名称、职责、日常工作</li>
+          <li>技能要求、业务经验/窍门</li>
+          <li>协作关系、汇报对象</li>
+          <li>决策权限</li>
+        </ul>
+      </div>
+      <div class="card input" style="flex:1">
+        <span class="tag green">用户提供</span>
+        <div class="card-title"><span class="icon">🔄</span> 流程信息</div>
+        <ul>
+          <li>核心业务流程列表</li>
+          <li>审批规则</li>
+          <li>合规要求</li>
+          <li>沟通风格偏好</li>
+        </ul>
+      </div>
+      <div class="card input" style="flex:1">
+        <span class="tag green">可选</span>
+        <div class="card-title"><span class="icon">📄</span> 上传文档</div>
+        <ul>
+          <li>SOP 手册</li>
+          <li>岗位说明书</li>
+          <li>业务流程文档</li>
+          <li>行业规范文件</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Arrow Down -->
+  <div style="text-align:center; padding: 4px 0;">
+    <div style="color:#484f58; font-size:28px;">⬇</div>
+    <div class="arrow-label">IntakeData 结构化数据</div>
+  </div>
+
+  <!-- Phase 1: Industry Intelligence -->
+  <div class="phase-box phase-1">
+    <div class="phase-label">PHASE 1 — 行业情报生成 (NEW)</div>
+    <p class="phase-desc">
+      <strong style="color:#58a6ff">核心创新：</strong>
+      基于用户提供的行业名称 + 描述，LLM 自动生成一份结构化的行业知识包。
+      不依赖预建模板，<strong style="color:#c9d1d9">任何行业都能动态生成</strong>。
+    </p>
+
+    <div class="h-flow" style="align-items:stretch">
+      <!-- LLM Call -->
+      <div class="card" style="min-width:160px; border-color:#58a6ff40; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+        <span class="tag blue">LLM 调用</span>
+        <div style="font-size:32px; margin:8px 0;">🧠</div>
+        <div style="font-size:13px; font-weight:600; color:#58a6ff;">行业情报生成器</div>
+        <div style="font-size:11px; color:#8b949e; margin-top:6px;">Sonnet · temp=0.4</div>
+        <div style="font-size:11px; color:#8b949e;">~1500 tokens 输出</div>
+      </div>
+
+      <div class="arrow" style="padding-top:0; align-self:center;">→</div>
+
+      <!-- Intelligence Output -->
+      <div class="intel-card">
+        <h3>📋 行业知识包 (IndustryIntelligence)</h3>
+        <div class="intel-grid">
+          <div class="intel-item">
+            <h4>📖 行业术语 glossary</h4>
+            <p>自动补全行业专业术语<br>即使用户未提供也能生成<br>例: <code>CBCT</code> <code>椅旁时间</code></p>
+          </div>
+          <div class="intel-item">
+            <h4>👥 典型团队 typical_team</h4>
+            <p>该行业的标准岗位配置<br>每个岗位的核心职责<br>行业专属知识要求</p>
+          </div>
+          <div class="intel-item">
+            <h4>📐 方法论 methodologies</h4>
+            <p>行业标准框架和方法论<br>例: <code>SOAP病历法</code><br><code>RICE评分</code> <code>ADDIE模型</code></p>
+          </div>
+          <div class="intel-item">
+            <h4>📊 核心KPI kpis</h4>
+            <p>行业关键绩效指标<br>计算公式 + 基准值<br>例: <code>初诊到店率 >60%</code></p>
+          </div>
+          <div class="intel-item">
+            <h4>🚫 合规红线 compliance</h4>
+            <p>行业法规和合规要求<br>不可逾越的底线<br>Agent boundaries 的数据源</p>
+          </div>
+          <div class="intel-item">
+            <h4>🏗️ 团队编组 typical_squads</h4>
+            <p>行业典型部门结构<br>lead + members 推荐<br>Squad 生成的参考骨架</p>
+          </div>
+          <div class="intel-item">
+            <h4>🔄 典型流程 typical_workflows</h4>
+            <p>行业标准业务流程<br>步骤 + 关键节点<br>Workflow 生成的参考框架</p>
+          </div>
+          <div class="intel-item">
+            <h4>⚡ 子行业标识 sub_industry</h4>
+            <p>精准到细分领域<br>例: 不是"电商"<br>而是"跨境电商-亚马逊-3C"</p>
+          </div>
+          <div class="intel-item">
+            <h4>🎯 行业原则 principles</h4>
+            <p>行业核心经营原则<br>Profile DNA 的数据源<br>影响所有 Agent 的价值观</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="example-box" style="margin-top:16px;">
+      <strong>💡 用户确认环节（可选）：</strong>
+      知识包生成后可展示给用户："<span class="hl">这是我对您所在行业的理解，有需要调整的吗？</span>"
+      用户确认/修正后再进入阶段 2，确保行业知识的准确性。
+    </div>
+  </div>
+
+  <!-- Arrow Down -->
+  <div style="text-align:center; padding: 4px 0;">
+    <div style="color:#484f58; font-size:28px;">⬇</div>
+    <div class="arrow-label">IndustryIntelligence 作为共享上下文注入所有生成步骤</div>
+  </div>
+
+  <!-- Phase 2: Generation -->
+  <div class="phase-box phase-2">
+    <div class="phase-label">PHASE 2 — 配置生成（4 个并行生成器）</div>
+    <p class="phase-desc">
+      行业知识包作为 <strong style="color:#bc8cff">共享上下文</strong> 注入每个生成器的 Prompt，
+      确保 Agent/Squad/Workflow/Profile 之间的专业知识一致性。
+    </p>
+
+    <div class="gen-grid">
+      <!-- Agent Generation -->
+      <div class="gen-box agent-box">
+        <h4>🤖 Agent 生成器</h4>
+        <p class="gen-desc">为每个岗位生成 V4 四层架构 YAML</p>
+        <div class="data-flow">
+          <strong>输入来源：</strong><br>
+          <span class="from">IntakeData</span> → <span class="field">roles[].name/responsibilities/experience_tips</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">glossary</span> 注入行业术语<br>
+          <span class="from">IndustryIntel</span> → <span class="field">methodologies</span> → Agent <span class="yields">rules.methodology</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">compliance</span> → Agent <span class="yields">soul.boundaries</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">typical_team[].industry_knowledge</span> → Agent <span class="yields">soul.beliefs</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">kpis</span> → Agent <span class="yields">soul.vibe</span> (关注什么指标)<br>
+          <br>
+          <strong>输出：</strong><br>
+          <span class="yields">agents/*.yaml</span> — 每个 Agent 的完整 V4 配置
+        </div>
+      </div>
+
+      <!-- Squad Generation -->
+      <div class="gen-box squad-box">
+        <h4>👥 Squad 生成器</h4>
+        <p class="gen-desc">将 Agent 组织成业务小队</p>
+        <div class="data-flow">
+          <strong>输入来源：</strong><br>
+          <span class="from">Agent 列表</span> → 所有已生成的 <span class="field">agent_id</span><br>
+          <span class="from">IntakeData</span> → <span class="field">roles[].collaborates_with / reports_to</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">typical_squads</span> 提供行业参考编组<br>
+          <span class="from">IndustryIntel</span> → <span class="field">kpis</span> → Squad <span class="yields">kpi</span> 字段<br>
+          <br>
+          <strong>输出：</strong><br>
+          <span class="yields">squads.yaml</span> — squad_id / name / lead / members / kpi<br>
+          <br>
+          <strong>内部关联：</strong><br>
+          Squad.<span class="field">lead</span> / <span class="field">members[]</span> 引用 Agent.<span class="field">agent_id</span><br>
+          Agent.<span class="field">squad</span> 反向引用 Squad.<span class="field">squad_id</span>
+        </div>
+      </div>
+
+      <!-- Workflow Generation -->
+      <div class="gen-box workflow-box">
+        <h4>🔄 Workflow 生成器</h4>
+        <p class="gen-desc">将业务流程转化为可执行工作流</p>
+        <div class="data-flow">
+          <strong>输入来源：</strong><br>
+          <span class="from">IntakeData</span> → <span class="field">core_workflows[].name/steps/exceptions</span><br>
+          <span class="from">Agent 列表</span> → 可分配的 <span class="field">agent_id</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">typical_workflows</span> 提供流程参考<br>
+          <span class="from">IndustryIntel</span> → <span class="field">compliance</span> → 审核步骤 <span class="yields">type: "gate"</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">methodologies</span> → step <span class="yields">instruction</span> 专业化<br>
+          <br>
+          <strong>输出：</strong><br>
+          <span class="yields">workflows/*.yaml</span> — 每个流程的步骤定义<br>
+          <br>
+          <strong>内部关联：</strong><br>
+          Step.<span class="field">agent</span> 引用 Agent.<span class="field">agent_id</span><br>
+          Profile.<span class="field">sop_triggers</span> 引用 Workflow.<span class="field">name</span>
+        </div>
+      </div>
+
+      <!-- Profile Generation -->
+      <div class="gen-box profile-box">
+        <h4>🧬 Profile 生成器</h4>
+        <p class="gen-desc">生成行业 DNA 顶层配置</p>
+        <div class="data-flow">
+          <strong>输入来源：</strong><br>
+          <span class="from">IntakeData</span> → <span class="field">company_name / communication_style</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">glossary</span> → Profile <span class="yields">glossary</span> (合并补全)<br>
+          <span class="from">IndustryIntel</span> → <span class="field">principles</span> → Profile <span class="yields">principles</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">kpis</span> → Profile <span class="yields">kpi_definitions</span><br>
+          <span class="from">IndustryIntel</span> → <span class="field">compliance</span> → Profile <span class="yields">principles</span> 合规条目<br>
+          <span class="from">Workflow 列表</span> → Profile <span class="yields">sop_triggers</span><br>
+          <br>
+          <strong>输出：</strong><br>
+          <span class="yields">profile.yaml</span> — 行业标识 / 术语 / 原则 / KPI / 触发器
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 2: 数据内部关联 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section-title">2. 四大产出物的数据关联关系 <span>Agent ↔ Squad ↔ Workflow ↔ Profile 如何互相引用</span></div>
+
+<table class="xref-table">
+  <thead>
+    <tr>
+      <th style="width:140px">产出物</th>
+      <th style="width:240px">核心字段</th>
+      <th>引用 / 被引用</th>
+      <th>行业知识包注入点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="color:#f0883e; font-weight:600;">🤖 Agent YAML</td>
+      <td>
+        <code>agent_id</code><br>
+        <code>soul.{essence, beliefs, vibe, boundaries}</code><br>
+        <code>rules.{methodology, collaboration}</code><br>
+        <code>config.delegation.can_access[]</code><br>
+        <code>capabilities.tools[]</code>
+      </td>
+      <td>
+        <span style="color:#3fb950">→ 被 Squad.members[] 引用</span><br>
+        <span style="color:#d2a8ff">→ 被 Workflow.step.agent 引用</span><br>
+        <span style="color:#f0883e">→ can_access[] 引用其他 agent_id</span><br>
+        <span style="color:#f0883e">→ collaboration 描述与其他 Agent 的协作方式</span>
+      </td>
+      <td>
+        <span style="color:#58a6ff">glossary</span> → beliefs/methodology 中使用行业术语<br>
+        <span style="color:#58a6ff">methodologies</span> → methodology 引用行业框架<br>
+        <span style="color:#58a6ff">compliance</span> → boundaries 设定合规红线<br>
+        <span style="color:#58a6ff">typical_team[].industry_knowledge</span> → beliefs 注入行业认知
+      </td>
+    </tr>
+    <tr>
+      <td style="color:#3fb950; font-weight:600;">👥 Squad YAML</td>
+      <td>
+        <code>squad_id</code><br>
+        <code>name</code><br>
+        <code>lead</code> (agent_id)<br>
+        <code>members[]</code> (agent_id[])<br>
+        <code>kpi</code>
+      </td>
+      <td>
+        <span style="color:#f0883e">→ lead/members 引用 Agent.agent_id</span><br>
+        <span style="color:#f0883e">← Agent.squad 反向引用 squad_id</span><br>
+        <span style="color:#58a6ff">← Profile 可能引用 squad 结构</span>
+      </td>
+      <td>
+        <span style="color:#58a6ff">typical_squads</span> → 提供行业标准部门结构<br>
+        <span style="color:#58a6ff">kpis</span> → 每个 squad 的 KPI 对齐行业指标
+      </td>
+    </tr>
+    <tr>
+      <td style="color:#d2a8ff; font-weight:600;">🔄 Workflow YAML</td>
+      <td>
+        <code>name</code><br>
+        <code>trigger</code> (关键词)<br>
+        <code>steps[].{id, agent, instruction, type}</code><br>
+        <code>steps[].input_from</code><br>
+        <code>steps[].output</code>
+      </td>
+      <td>
+        <span style="color:#f0883e">→ step.agent 引用 Agent.agent_id</span><br>
+        <span style="color:#58a6ff">← Profile.sop_triggers 引用 workflow name</span><br>
+        <span style="color:#d2a8ff">→ step.input_from 引用上一步的 output</span>
+      </td>
+      <td>
+        <span style="color:#58a6ff">typical_workflows</span> → 提供行业标准流程骨架<br>
+        <span style="color:#58a6ff">compliance</span> → 关键步骤插入 gate 审核<br>
+        <span style="color:#58a6ff">methodologies</span> → instruction 使用行业方法论
+      </td>
+    </tr>
+    <tr>
+      <td style="color:#58a6ff; font-weight:600;">🧬 Profile YAML</td>
+      <td>
+        <code>industry</code><br>
+        <code>glossary</code> (术语表)<br>
+        <code>principles[]</code><br>
+        <code>sop_triggers{}</code><br>
+        <code>kpi_definitions[]</code><br>
+        <code>llm_preference{}</code>
+      </td>
+      <td>
+        <span style="color:#d2a8ff">→ sop_triggers 引用 Workflow.name</span><br>
+        <span style="color:#f0883e">→ principles 影响所有 Agent 的行为准则</span><br>
+        <span style="color:#3fb950">→ kpi 与 Squad.kpi 保持一致</span>
+      </td>
+      <td>
+        <span style="color:#58a6ff">glossary</span> → 合并用户提供 + 自动补全<br>
+        <span style="color:#58a6ff">principles</span> → 直接采用<br>
+        <span style="color:#58a6ff">kpis</span> → kpi_definitions 数据源<br>
+        <span style="color:#58a6ff">compliance</span> → 加入 principles
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 3: 行业知识包如何影响每层 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section-title">3. 行业知识包对 Agent V4 四层架构的注入映射 <span>每个字段如何变得"行业化"</span></div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+    <h4 style="color:#f0883e; font-size:14px; margin-bottom:12px;">Layer 1: Soul（灵魂）— "是谁"</h4>
+    <div class="data-flow">
+      <strong>essence</strong> (核心定位):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">typical_team[i].core_duty</span> → 定义角色在<strong>该行业</strong>的定位<br>
+      <br>
+      <strong>beliefs</strong> (核心信条):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">typical_team[i].industry_knowledge</span> → 注入行业认知<br>
+      <span class="from">IndustryIntel</span>.<span class="field">methodologies[]</span> → 信条引用行业框架<br>
+      <span class="from">IntakeData</span>.<span class="field">experience_tips</span> → 客户真实业务经验<br>
+      <br>
+      <strong>vibe</strong> (工作风格):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">kpis[]</span> → 关注什么指标就较真什么<br>
+      <br>
+      <strong>boundaries</strong> (边界):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">compliance[]</span> → 行业合规红线作为"我不做什么"
+    </div>
+  </div>
+
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+    <h4 style="color:#f0883e; font-size:14px; margin-bottom:12px;">Layer 2: Rules（规则）— "怎么做"</h4>
+    <div class="data-flow">
+      <strong>methodology</strong> (工作方法论):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">methodologies[]</span> → 直接引用行业标准框架<br>
+      例: 口腔 → <span class="hl">"SOAP病历法"</span>，金融 → <span class="hl">"KYC/AML框架"</span><br>
+      <span class="from">IntakeData</span>.<span class="field">daily_tasks</span> → 结合客户实际工作流程<br>
+      <br>
+      <strong>collaboration</strong> (协作接口):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">typical_team[]</span> → 知道行业中谁和谁协作<br>
+      <span class="from">IntakeData</span>.<span class="field">collaborates_with</span> → 客户实际组织关系<br>
+      <br>
+      <strong>authority</strong> (审批权限):<br>
+      <span class="from">IndustryIntel</span>.<span class="field">compliance[]</span> → 哪些操作必须审批<br>
+      <span class="from">IntakeData</span>.<span class="field">decision_authority</span> → 客户定义的权限边界
+    </div>
+  </div>
+
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+    <h4 style="color:#f0883e; font-size:14px; margin-bottom:12px;">Layer 3: Identity（身份）— 展示层</h4>
+    <div class="data-flow">
+      <strong>display_name / role_tag</strong>:<br>
+      <span class="from">IndustryIntel</span>.<span class="field">typical_team[i].role</span> → 使用行业通用称呼<br>
+      例: 口腔用"<span class="hl">种植医生</span>"而非"<span style="text-decoration:line-through; opacity:0.5">操作员</span>"<br>
+      <br>
+      <strong>avatar_emoji / color</strong>:<br>
+      由 LLM 根据角色特征自动选择，与行业知识关联不大
+    </div>
+  </div>
+
+  <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+    <h4 style="color:#f0883e; font-size:14px; margin-bottom:12px;">Layer 4: Config（配置）— 技术层</h4>
+    <div class="data-flow">
+      <strong>skills[]</strong>:<br>
+      <span class="from">IndustryIntel</span>.<span class="field">methodologies[]</span> → 技能对应行业方法论<br>
+      <span class="from">IntakeData</span>.<span class="field">skills_required</span> → 客户要求的技能<br>
+      <br>
+      <strong>delegation.can_access[]</strong>:<br>
+      <span class="from">IndustryIntel</span>.<span class="field">typical_squads[]</span> → 同组 Agent 可互访<br>
+      <br>
+      <strong>capabilities.tools[]</strong>:<br>
+      根据角色职责从已注册工具中匹配<br>
+      <br>
+      <strong>llm.temperature</strong>:<br>
+      创意岗 (内容/设计) → 0.7，分析岗 (数据/风控) → 0.3
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 4: 对比新旧方案 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section-title">4. 新旧方案生成效果对比 <span>以"口腔诊所"行业的种植医生为例</span></div>
+
+<div class="compare">
+  <div class="compare-box old">
+    <h4>❌ 旧方案（无行业情报）</h4>
+    <pre>
+agent_id: "implant-doctor"
+soul:
+  essence: |
+    <span class="dim">我是一名专业的医生，负责种植牙的方案设计
+    和手术执行。对患者负责，追求高质量的治疗效果。</span>
+  beliefs:
+    <span class="dim">- "患者安全是第一位的"
+    - "持续学习，跟进最新技术"
+    - "团队协作很重要"</span>
+  boundaries:
+    <span class="dim">- "不做超出能力范围的手术"</span>
+rules:
+  methodology: |
+    <span class="dim">1. 患者检查
+    2. 制定方案
+    3. 执行手术
+    4. 术后跟踪</span>
+
+<span style="color:#f85149; font-size:11px;">▲ 通用、空洞、缺乏行业深度
+  beliefs 像鸡汤，methodology 像流水账
+  任何行业的任何医生都能套用</span>
+    </pre>
+  </div>
+  <div class="compare-box new">
+    <h4>✅ 新方案（行业情报驱动）</h4>
+    <pre>
+agent_id: "implant-doctor"
+soul:
+  essence: |
+    <span class="new-line">种植不是拧螺丝，是在活体骨组织里做精密工程。
+    每一颗种植体的角度、深度、扭矩都影响十年后的效果。</span>
+  beliefs:
+    <span class="new-line">- "CBCT是种植的眼睛，没有三维影像的种植方案是盲人手术"
+    - "骨量不足时宁可先做GBR再延期种植，不冒即刻种植的风险"
+    - "椅旁时间不是越短越好，该慢的步骤一步都不能省"
+    - "数字化导板能把种植精度从毫米级提升到亚毫米级"</span>
+  boundaries:
+    <span class="new-line">- "全身系统性疾病未控制的患者，必须转诊不得手术"
+    - "超出执业许可范围的正颌手术，转三甲口腔医院"</span>
+rules:
+  methodology: |
+    <span class="new-line">种植全流程：
+    1. 初诊评估：全口CBCT + 口内扫描 + 全身健康筛查
+    2. 方案设计：3D种植规划软件，确定植体型号/角度/深度
+    3. 导板制作：数字化种植导板，术前验证就位精度
+    4. 一期手术：翻瓣/不翻瓣 + 植体植入 + 扭矩值记录
+    5. 愈合期管理：3-6个月随访，骨结合评估
+    6. 二期修复：取模/口扫 + 基台选择 + 冠修复
+    7. 长期维护：每年复查CBCT，定期洁治</span>
+
+<span style="color:#3fb950; font-size:11px;">▲ 专业、有深度、有态度
+  beliefs 有行业锋芒，methodology 是真实临床流程
+  只有口腔种植医生才会这样说话</span>
+    </pre>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 5: 实现文件清单 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section-title">5. 实现改动清单 <span>涉及文件与核心改动点</span></div>
+
+<table class="xref-table">
+  <thead>
+    <tr>
+      <th style="width:300px">文件</th>
+      <th style="width:100px">操作</th>
+      <th>改动说明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>builder/templates/industry_intelligence.yaml</code></td>
+      <td><span class="tag blue" style="font-size:11px">新增</span></td>
+      <td>阶段 1 的 Prompt 模板：system_prompt + user_prompt_template + 输出 JSON schema</td>
+    </tr>
+    <tr>
+      <td><code>builder/generator.py</code></td>
+      <td><span class="tag orange" style="font-size:11px">修改</span></td>
+      <td>
+        1. 新增 <code>_generate_industry_intelligence()</code> 方法<br>
+        2. <code>generate()</code> 入口加阶段 1 调用<br>
+        3. <code>_generate_agents()</code> 签名加 <code>industry_intel</code> 参数<br>
+        4. <code>_build_agent_prompt()</code> 注入知识包上下文<br>
+        5. <code>_generate_squads()</code> system prompt 增强 + 注入 typical_squads<br>
+        6. <code>_generate_workflows()</code> 注入 typical_workflows + compliance<br>
+        7. <code>_generate_profile()</code> 注入 kpis + principles
+      </td>
+    </tr>
+    <tr>
+      <td><code>builder/templates/agent_generation.yaml</code></td>
+      <td><span class="tag orange" style="font-size:11px">修改</span></td>
+      <td>user_prompt_template 新增 <code>{industry_intelligence}</code> 占位符段落</td>
+    </tr>
+    <tr>
+      <td><code>builder/models.py</code></td>
+      <td><span class="tag orange" style="font-size:11px">修改</span></td>
+      <td>GeneratedProfile 加 <code>industry_intelligence: str</code> 字段，前端可展示</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

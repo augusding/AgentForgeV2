@@ -1,0 +1,123 @@
+position_id: "devops-engineer"
+display_name: "运维工程师"
+icon: "monitor"
+color: "#475569"
+department: "质量与运维"
+domain: "广告变现"
+description: "负责广告系统的基础设施运维、CI/CD流水线、监控告警体系、容量规划和故障应急响应"
+
+role: |
+  你是一位广告系统运维工程师的AI助手。你帮助工程师管理基础设施、处理线上告警、优化部署流程。
+
+goal: |
+  保障广告系统稳定运行，通过自动化运维、监控告警和容量规划实现99.99%服务可用率。
+
+context: |
+  技术领域：
+  - 基础设施：Kubernetes集群、服务网格(Istio)、云原生架构
+  - CI/CD：Jenkins/GitLab CI、蓝绿发布、金丝雀发布、快速回滚
+  - 监控告警：Prometheus/Grafana、ELK日志、链路追踪(Jaeger)、自定义告警规则
+  - 容量规划：资源利用率分析、弹性伸缩(HPA)、成本优化
+  - 故障处理：故障分级(P0-P3)、应急预案、故障复盘
+  - 安全运维：网络策略、密钥管理、漏洞扫描、DDoS防护
+
+  广告系统运维特点：
+  - 流量波峰：早高峰/晚高峰流量激增，需要弹性伸缩
+  - 低延迟要求：广告请求链路延迟敏感，P99<100ms
+  - 计费准确：扣费服务零丢失，需要高可靠设计
+  - 快速迭代：频繁发版，需要完善的灰度和回滚机制
+
+default_model: "sonnet"
+
+tools:
+  - code_executor
+  - http_request
+  - data_analysis
+  - text_processor
+  - calculator
+
+
+  - id: capacity-review
+    name: "容量评估"
+    description: "评估服务资源使用率和扩容需求"
+    icon: "hard-drive"
+    trigger: "scheduled"
+    schedule: "0 10 * * 1"
+    keywords: ["容量", "扩容", "资源评估", "弹性伸缩"]
+    default_params:
+      scope: "all_services"
+      time_range: "last_7d"
+
+  - id: deploy-review
+    name: "发布审查"
+    description: "检查发布配置、灰度策略和回滚方案"
+    icon: "rocket"
+    trigger: "manual"
+    workflow_ref: "release-checklist"
+    keywords: ["发布", "部署", "灰度", "回滚", "上线"]
+
+  - id: alert-tuning
+    name: "告警优化"
+    description: "分析告警噪音，优化告警规则和阈值"
+    icon: "bell"
+    trigger: "manual"
+    keywords: ["告警优化", "告警噪音", "阈值调整", "告警规则"]
+
+dashboard:
+  metrics:
+    - key: "service_availability"
+      name: "服务可用率"
+      unit: "%"
+      target: ">99.99"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "service_availability"
+        refresh: "1h"
+    - key: "active_alerts"
+      name: "活跃告警"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+    - key: "deploy_success_rate"
+      name: "发布成功率"
+      unit: "%"
+      target: ">98"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "deploy_success_rate"
+        refresh: "1h"
+    - key: "mttr"
+      name: "平均恢复时间"
+      unit: "分钟"
+      target: "<15"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "mttr"
+        refresh: "1h"
+    - key: "infra_cost"
+      name: "基础设施成本"
+      unit: "万元/月"
+      direction: "lower_is_better"
+      source:
+        type: "manual"
+
+knowledge_scope:
+  - "运维手册"
+  - "应急预案库"
+  - "监控告警规则"
+  - "发布流程SOP"
+  - "架构拓扑图"
+
+onboarding:
+  tip: "保障广告系统稳定运行与快速发布"
+  prompts:
+    - "当前有哪些活跃告警需要关注，是否存在告警风暴？"
+    - "本次发布的灰度策略和回滚方案是否完备？"
+    - "广告服务的容量水位如何，是否需要提前扩容应对流量高峰？"

@@ -1,0 +1,95 @@
+industry: "ad-monetization"
+description: "手机厂商商业产品部 — 负责商业化广告变现平台的产品设计、技术研发、流量运营和客户服务"
+
+glossary:
+  eCPM: "effective Cost Per Mille，每千次展示有效收入"
+  CPM: "Cost Per Mille，千次展示成本"
+  CPC: "Cost Per Click，单次点击成本"
+  CPA: "Cost Per Action，单次转化成本"
+  CTR: "Click-Through Rate，点击率"
+  CVR: "Conversion Rate，转化率"
+  ARPU: "Average Revenue Per User，每用户平均收入"
+  DAU: "Daily Active Users，日活跃用户数"
+  Fill Rate: "填充率，广告请求被填充的比例"
+  Win Rate: "竞价胜出率，RTB 竞价中胜出的比例"
+  RTB: "Real-Time Bidding，实时竞价"
+  DSP: "Demand-Side Platform，需求方平台"
+  SSP: "Supply-Side Platform，供给方平台"
+  DMP: "Data Management Platform，数据管理平台"
+  SDK: "Software Development Kit，软件开发工具包"
+  ROAS: "Return on Ad Spend，广告投入回报率"
+  GR: "Gross Revenue，毛收入"
+  NR: "Net Revenue，净收入"
+  Waterfall: "瀑布流，广告请求按优先级逐层分发的机制"
+  Header Bidding: "头部竞价，所有广告源同时竞价的机制"
+  Mediation: "聚合变现，整合多个广告网络的中间层"
+  Frequency Cap: "频次控制，限制广告展示次数"
+  Native Ad: "原生广告，与内容形态融合的广告"
+  Interstitial: "插屏广告，全屏展示的广告"
+  Rewarded Video: "激励视频广告，用户主动观看获取奖励"
+  Splash: "开屏广告，App启动时展示的全屏广告"
+  OTT: "Over-The-Top，通过互联网提供的内容服务"
+
+principles:
+  - "数据驱动：所有策略和优化决策基于A/B实验数据"
+  - "用户体验优先：商业化不能以损害用户体验为代价，严守频控和质量红线"
+  - "收入最大化：在用户体验约束下追求eCPM和填充率的最优组合"
+  - "技术驱动增长：通过算法和工程能力创造竞争壁垒"
+  - "合规底线：严格遵守个人信息保护法、广告法等法规"
+  - "敏捷迭代：快速实验、快速验证、快速上线"
+
+departments:
+  - id: "pm"
+    name: "产品部"
+    positions: ["project-manager", "platform-pm", "traffic-pm", "strategy-pm"]
+  - id: "rd"
+    name: "研发部"
+    positions: ["algorithm-engineer", "backend-engineer", "frontend-engineer", "bigdata-engineer", "mobile-engineer"]
+  - id: "qa-ops"
+    name: "质量与运维"
+    positions: ["qa-engineer", "devops-engineer"]
+  - id: "operations"
+    name: "运营部"
+    positions: ["product-ops", "traffic-ops", "customer-ops"]
+
+kpi_definitions:
+  revenue:
+    name: "广告总收入"
+    unit: "万元"
+    target: "月环比增长10%"
+  ecpm:
+    name: "整体eCPM"
+    unit: "元"
+    target: "持续优化提升"
+  fill_rate:
+    name: "广告填充率"
+    unit: "%"
+    target: ">85%"
+  ctr:
+    name: "广告点击率"
+    unit: "%"
+    target: ">2%"
+  dau:
+    name: "日活跃用户"
+    unit: "万"
+    target: "稳定增长"
+  user_satisfaction:
+    name: "用户满意度"
+    unit: "分"
+    target: ">4.2/5"
+
+sop_triggers:
+  - keywords: ["需求", "需求评审", "PRD"]
+    workflow: "requirement-review"
+  - keywords: ["上线", "发版", "发布"]
+    workflow: "release-checklist"
+  - keywords: ["故障", "事故", "P0", "告警"]
+    workflow: "incident-response"
+  - keywords: ["实验", "AB测试", "ABTest"]
+    workflow: "ab-experiment"
+
+llm_preference:
+  requirement_analysis: "opus"
+  code_review: "sonnet"
+  daily_report: "haiku"
+  data_analysis: "sonnet"

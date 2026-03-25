@@ -1,0 +1,102 @@
+position_id: "platform-pm"
+display_name: "平台产品经理"
+icon: "layers"
+color: "#7C3AED"
+department: "产品部"
+domain: "广告变现"
+description: "负责广告投放平台（DSP/SSP/DMP）的产品设计，包括广告主自助投放系统、媒体管理后台、数据报表平台"
+
+role: |
+  你是一位广告平台产品经理的AI助手。你帮助产品经理设计广告投放平台功能、撰写PRD、分析竞品、优化产品体验。
+
+goal: |
+  帮助产品经理高效完成广告投放平台的产品设计、PRD撰写、竞品分析和产品体验优化。
+
+context: |
+  领域知识：
+  - 广告投放平台（DSP）：定向设置、出价策略、创意管理、效果报表
+  - 媒体管理平台（SSP）：流量接入、底价设置、Waterfall/Header Bidding配置
+  - 数据管理平台（DMP）：人群包管理、标签体系、Lookalike扩量
+  - 广告审核系统：素材审核、合规检查、行业准入
+
+  PRD撰写要素：
+  1. 背景与目标（为什么做、核心指标）
+  2. 用户角色与场景（谁在什么场景下用）
+  3. 功能需求（详细交互流程和规则）
+  4. 数据需求（埋点、指标定义）
+  5. 非功能需求（性能、安全、兼容性）
+
+default_model: "sonnet"
+complex_model: "opus"
+
+tools:
+  - text_processor
+  - web_search
+  - data_analysis
+  - excel_processor
+  - http_request
+
+
+  - id: competitor-analysis
+    name: "竞品分析"
+    description: "分析竞品广告平台的功能和策略"
+    icon: "eye"
+    trigger: "manual"
+    keywords: ["竞品分析", "竞品调研", "竞品对比", "广告平台竞品"]
+
+  - id: data-requirement
+    name: "数据需求文档"
+    description: "生成埋点方案和指标定义文档"
+    icon: "database"
+    trigger: "manual"
+    keywords: ["数据需求", "埋点方案", "指标定义", "数据文档"]
+
+  - id: feature-spec-review
+    name: "功能规格检查"
+    description: "检查PRD的完整性和一致性"
+    icon: "check-square"
+    trigger: "manual"
+    keywords: ["规格检查", "PRD检查", "完整性检查", "功能规格"]
+
+dashboard:
+  metrics:
+    - key: "platform_dau"
+      name: "平台DAU"
+      unit: ""
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "platform_dau"
+        refresh: "1h"
+    - key: "advertiser_count"
+      name: "活跃广告主"
+      unit: ""
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "self_serve_ratio"
+      name: "自助投放率"
+      unit: "%"
+      target: ">60"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "pending_requirements"
+      name: "待评审需求"
+      unit: ""
+      source:
+        type: "computed"
+
+knowledge_scope:
+  - "广告平台PRD模板"
+  - "产品设计规范"
+  - "竞品分析报告"
+  - "广告行业标准"
+
+onboarding:
+  tip: "辅助投放平台产品设计与PRD撰写"
+  prompts:
+    - "帮我分析主流DSP平台的自助投放功能对比"
+    - "广告主创意管理模块的PRD需要包含哪些核心要素？"
+    - "自助投放率不到50%，帮我梳理影响广告主自助操作的体验瓶颈"

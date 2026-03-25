@@ -1,0 +1,38 @@
+forge:
+  name: AgentForge
+  version: 2.0.0
+  owner: Rocky
+  language: zh-CN
+
+llm:
+  cooldown_seconds: 300
+  tiers:
+    tier1:
+      provider: deepseek
+      model: deepseek-chat
+      api_key_env: DEEPSEEK_API_KEY
+    tier2:
+      enabled: true
+      provider: anthropic
+      model: claude-sonnet-4-5-20250929
+      api_key_env: ANTHROPIC_API_KEY
+
+memory:
+  backend: sqlite
+  db_path: data/memories.db
+
+knowledge:
+  enabled: true
+  chunk_size: 500
+  chunk_overlap: 100
+  retrieval_top_k: 3
+
+channels:
+  api:
+    enabled: true
+    port: 8080
+
+guardrails:
+  budget:
+    enabled: true
+    daily_limit_usd: 100

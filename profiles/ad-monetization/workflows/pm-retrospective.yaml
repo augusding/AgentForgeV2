@@ -1,0 +1,283 @@
+name: "pm-retrospective"
+description: "项目/迭代复盘：数据采集 → 问题归因 → 根因分析(5Why) → 改进措施 → 知识沉淀，形成可执行的改进闭环"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "项目复盘"
+    - "迭代复盘"
+    - "Sprint回顾"
+    - "事故复盘"
+    - "经验总结"
+    - "复盘分析"
+  semantic: "对项目或迭代进行复盘分析，总结经验教训"
+
+parameters:
+  - name: retro_target
+    type: text
+    label: "复盘对象（项目名/迭代名/事故名）"
+    required: true
+  - name: retro_type
+    type: select
+    label: "复盘类型"
+    options: ["迭代复盘", "项目结项复盘", "线上事故复盘", "专项复盘"]
+    default: "迭代复盘"
+  - name: time_period
+    type: text
+    label: "时间范围（如 2026-03-01 ~ 2026-03-14）"
+    required: true
+  - name: participants
+    type: textarea
+    label: "参与方/角色（如：产品-张三、研发-李四、测试-王五）"
+    required: true
+  - name: raw_facts
+    type: textarea
+    label: "客观事实记录（时间线、数据、结果、过程中的关键事件）"
+    required: true
+  - name: team_feedback
+    type: textarea
+    label: "团队反馈（大家觉得做得好的/做得不好的/建议改进的）"
+    required: false
+
+nodes:
+  # ── 第1步：事实还原 ──
+  - id: fact-reconstruction
+    type: task
+    instruction: |
+      你是项目复盘引导师。请对原始事实进行结构化还原。
+
+      复盘对象: {{ retro_target }}
+      复盘类型: {{ retro_type }}
+      时间范围: {{ time_period }}
+      参与方: {{ participants }}
+
+      客观事实:
+      {{ raw_facts }}
+
+      请输出：
+
+      ## 事件时间线
+      按时间顺序梳理关键事件节点：
+      | 时间 | 事件 | 当事方 | 影响 |
+
+      ## 关键数据
+      | 指标 | 计划值 | 实际值 | 偏差 | 偏差率 |
+      （如：工期、人天消耗、Bug数、交付范围、性能指标等）
+
+      ## 目标达成度
+      - 原定目标是什么？
+      - 实际交付了什么？
+      - 差距在哪里？
+
+      仅陈述事实，不做评价和归因。
+    output: facts
+
+  # ── 第2步（并行A）：做得好的 ──
+  - id: what-went-well
+    type: task
+    depends_on:
+      - fact-reconstruction
+    instruction: |
+      请从事实中提炼做得好的方面。
+
+      事实还原: {{ fact-reconstruction }}
+      团队反馈: {{ team_feedback }}
+
+      分析维度：
+      ### 流程方面
+      - 哪些流程执行到位，效果好？
+      - 有无流程创新，提升了效率？
+
+      ### 协作方面
+      - 跨团队协作中哪些环节顺畅？
+      - 信息同步机制是否有效？
+
+      ### 技术方面
+      - 技术方案选型是否正确？
+      - 代码质量/测试覆盖是否到位？
+
+      ### 风险管控
+      - 是否有风险被提前发现和化解？
+      - 应急预案是否发挥了作用？
+
+      每个亮点标注：
+      | 亮点 | 具体表现 | 可复制性(高/中/低) | 建议固化为 |
+      （可复制性高的建议固化为团队规范/SOP/Checklist）
+    output: went_well
+
+  # ── 第2步（并行B）：问题归因 ──
+  - id: problem-attribution
+    type: task
+    depends_on:
+      - fact-reconstruction
+    instruction: |
+      请从事实中识别问题并进行初步归因。
+
+      事实还原: {{ fact-reconstruction }}
+      团队反馈: {{ team_feedback }}
+
+      对每个问题按以下结构分析：
+
+      ## 问题清单
+
+      ### 问题 1: [标题]
+      - **现象**: 发生了什么？
+      - **影响**: 造成了什么后果？（量化）
+      - **初步归因**: 属于哪个类别？
+        - 需求层：需求不清/变更频繁/范围蔓延
+        - 排期层：估算偏差/资源不足/并行度不合理
+        - 执行层：技术方案失误/沟通断层/质量问题
+        - 流程层：流程缺失/流程未执行/审批卡点
+        - 外部因素：第三方延迟/不可抗力
+      - **涉及角色**: 谁需要参与改进？
+
+      按影响程度从大到小排列。
+    output: problems
+
+  # ── 第3步：根因分析（5 Why） ──
+  - id: root-cause-analysis
+    type: task
+    depends_on:
+      - problem-attribution
+    instruction: |
+      请对TOP 3问题进行5 Why根因分析。
+
+      问题清单: {{ problem-attribution }}
+
+      对排名前3的问题，分别进行5 Why追问：
+
+      ### 问题 1: [标题]
+
+      | 层次 | 问题 | 回答 |
+      |------|------|------|
+      | Why 1 | 为什么[现象]发生了？ | 因为... |
+      | Why 2 | 为什么[Why1的回答]？ | 因为... |
+      | Why 3 | 为什么[Why2的回答]？ | 因为... |
+      | Why 4 | 为什么[Why3的回答]？ | 因为... |
+      | Why 5 | 为什么[Why4的回答]？ | 因为... |
+
+      **根因**: [一句话总结根本原因]
+      **根因类型**: 人/流程/工具/机制/文化
+
+      ### 问题 2: ...
+      ### 问题 3: ...
+
+      ## 根因汇总
+      是否有多个问题指向同一个根因？如果有，这就是最值得优先解决的系统性问题。
+    output: root_causes
+
+  # ── 第4步：改进措施制定 ──
+  - id: improvement-actions
+    type: task
+    depends_on:
+      - root-cause-analysis
+      - what-went-well
+    instruction: |
+      请基于根因分析和亮点总结，制定改进措施。
+
+      根因分析: {{ root-cause-analysis }}
+      做得好的: {{ what-went-well }}
+
+      改进措施要求：
+      1. 每个根因至少对应一个改进措施
+      2. 措施必须具体可执行，不能是"加强沟通"这种空话
+      3. 每个措施明确：做什么、谁负责、什么时候完成、怎么验证
+
+      ## 改进行动清单
+
+      | 编号 | 改进措施 | 针对问题 | 类型(流程/工具/机制/规范) | 负责人角色 | 完成标准 | 截止日期 | 优先级 |
+      |------|---------|---------|------------------------|-----------|---------|---------|-------|
+      | IM-1 | [具体措施] | [对应问题] | 流程 | PM | [怎么算做完] | YYYY-MM-DD | P0 |
+
+      ## 固化建议
+      基于本次亮点和改进，建议更新以下团队规范：
+      - [ ] [具体规范名称] — 新增/修改内容
+      - [ ] [Checklist名称] — 新增检查项
+
+      ## 不改进的（及原因）
+      如果有些问题决定暂不改进，说明原因（如投入产出比低、外部不可控等）
+    output: improvements
+
+  # ── 第5步：确认改进措施 ──
+  - id: confirm-improvements
+    type: approval
+    depends_on:
+      - improvement-actions
+    input_prompt: |
+      以上是复盘分析的完整结果和改进措施。
+      请确认改进措施的合理性和可行性。
+      确认后将生成正式复盘报告并进入知识沉淀。
+
+  # ── 第6步：生成复盘报告 + 知识沉淀 ──
+  - id: generate-retro-report
+    type: task
+    depends_on:
+      - confirm-improvements
+    instruction: |
+      请生成正式的复盘报告。
+
+      事实还原: {{ fact-reconstruction }}
+      亮点: {{ what-went-well }}
+      问题分析: {{ problem-attribution }}
+      根因分析: {{ root-cause-analysis }}
+      改进措施: {{ improvement-actions }}
+      审批反馈: {{ confirm-improvements }}
+
+      生成两份文档：
+
+      ---
+      # 复盘报告: {{ retro_target }}
+
+      **类型**: {{ retro_type }}
+      **周期**: {{ time_period }}
+      **参与方**: {{ participants }}
+      **复盘日期**: [当前日期]
+
+      ## 一、概述
+      一段话总结：做了什么、结果如何、核心经验教训
+
+      ## 二、目标达成度
+      [关键数据对比表]
+
+      ## 三、亮点 & 最佳实践
+      [可复制的经验，建议固化的做法]
+
+      ## 四、问题 & 根因
+      [TOP 3问题的5 Why分析结果]
+
+      ## 五、改进行动计划
+      [明确的改进措施表，含负责人和截止日期]
+
+      ## 六、经验教训（一句话总结）
+      提炼3-5条最核心的经验教训，简短有力：
+      1. [经验教训1]
+      2. [经验教训2]
+      ...
+      ---
+
+      ---
+      # 知识卡片（存入知识库）
+
+      **标题**: {{ retro_target }} 复盘经验
+      **标签**: 复盘, {{ retro_type }}
+      **适用场景**: [什么场景下应该回顾这份经验]
+
+      ## 核心教训
+      [3-5条精炼的经验]
+
+      ## 推荐做法
+      [从亮点中提炼的最佳实践]
+
+      ## 避坑指南
+      [从问题中提炼的注意事项]
+      ---
+    output: retro_report
+
+metadata:
+  category: "项目管理"
+  position: "project-manager"
+  tags:
+    - "复盘"
+    - "根因分析"
+    - "5Why"
+    - "持续改进"

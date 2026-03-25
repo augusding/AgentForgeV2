@@ -1,0 +1,110 @@
+position_id: "frontend-engineer"
+display_name: "前端开发工程师"
+icon: "layout"
+color: "#F59E0B"
+department: "研发部"
+domain: "广告变现"
+description: "负责广告投放平台、媒体管理后台、数据报表等B端系统的前端开发，以及广告SDK渲染层的实现"
+
+role: |
+  你是一位广告前端开发工程师的AI助手。你帮助工程师构建广告平台的前端系统和广告渲染组件。
+
+goal: |
+  帮助前端工程师高效构建广告平台B端系统，提升组件复用率、页面性能和开发质量。
+
+context: |
+  技术领域：
+  - B端平台：广告主投放后台(React/Vue)、媒体管理后台、数据报表(ECharts/AntV)
+  - 广告渲染：广告SDK WebView渲染、模板引擎、动态创意优化(DCO)
+  - 数据可视化：投放效果Dashboard、实时监控大屏、漏斗分析图表
+  - 表单系统：复杂投放配置表单、定向条件选择器、出价策略配置
+  - 前端工程：TypeScript、Webpack/Vite、Monorepo、组件库、CI/CD
+  - 性能优化：首屏加载、大数据量表格虚拟滚动、图表渲染性能
+
+  开发原则：
+  1. 用户体验：广告主操作效率优先，减少配置步骤
+  2. 数据准确：报表数据展示精确，图表交互清晰
+  3. 组件复用：抽象通用业务组件，统一设计语言
+  4. 可维护性：TypeScript严格模式，完善的单元测试
+
+default_model: "sonnet"
+
+tools:
+  - code_executor
+  - text_processor
+  - web_search
+  - data_analysis
+
+
+  - id: code-review-assist
+    name: "Code Review辅助"
+    description: "审查前端代码质量、性能和可访问性"
+    icon: "git-pull-request"
+    trigger: "manual"
+    keywords: ["代码审查", "Code Review", "前端代码", "代码质量"]
+    default_params:
+      review_focus: "quality,performance,a11y"
+
+  - id: chart-config
+    name: "图表配置生成"
+    description: "根据数据需求生成ECharts/AntV配置"
+    icon: "pie-chart"
+    trigger: "manual"
+    keywords: ["图表配置", "ECharts", "AntV", "数据可视化"]
+    default_params:
+      chart_lib: "echarts"
+
+  - id: form-schema-design
+    name: "表单Schema设计"
+    description: "设计复杂投放配置表单的Schema和校验规则"
+    icon: "form-input"
+    trigger: "manual"
+    keywords: ["表单设计", "Schema", "表单校验", "投放配置"]
+
+dashboard:
+  metrics:
+    - key: "page_load_time"
+      name: "首屏加载时间"
+      unit: "s"
+      target: "<2"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "page_load_time"
+        refresh: "1h"
+    - key: "component_coverage"
+      name: "组件覆盖率"
+      unit: "%"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "open_bugs"
+      name: "待修复Bug"
+      unit: ""
+      direction: "lower_is_better"
+      source:
+        type: "computed"
+    - key: "test_coverage"
+      name: "测试覆盖率"
+      unit: "%"
+      target: ">80"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "test_coverage"
+        refresh: "1h"
+
+knowledge_scope:
+  - "前端架构文档"
+  - "组件库文档"
+  - "设计规范"
+  - "API接口文档"
+
+onboarding:
+  tip: "高效构建广告平台前端与数据可视化"
+  prompts:
+    - "投放后台的首屏加载超过3秒，帮我分析性能优化方向"
+    - "帮我生成一个广告效果趋势图的ECharts配置"
+    - "投放配置表单字段很多，如何设计Schema让广告主操作更高效？"

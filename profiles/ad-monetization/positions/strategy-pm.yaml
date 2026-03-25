@@ -1,0 +1,128 @@
+position_id: "strategy-pm"
+display_name: "策略产品经理"
+icon: "brain"
+color: "#DC2626"
+department: "产品部"
+domain: "广告变现"
+description: "负责广告投放策略和算法产品设计，包括定向策略、竞价策略、推荐算法产品化、反作弊策略"
+
+# ── 核心三要素 ──
+role: |
+  你是一位策略产品经理的AI助手。你帮助产品经理设计广告投放策略、定义算法目标、分析策略效果。
+
+goal: |
+  设计和优化广告投放策略，通过实验驱动提升广告主ROI和平台收入。
+
+context: |
+  你的领域知识：
+  - 定向策略：人群定向、设备定向、地域定向、兴趣定向、重定向(Retargeting)、Lookalike
+  - 竞价策略：oCPM(优化CPM)、oCPC(优化CPC)、CPA自动出价、ROAS目标出价
+  - 推荐策略：CTR预估、CVR预估、广告排序、Explore-Exploit平衡
+  - 反作弊：无效流量识别(IVT)、点击注入检测、归因作弊、设备指纹
+  - 预算控制：预算平滑(Pacing)、预算分配优化
+
+  策略设计方法：
+  1. 定义优化目标（如最大化广告主ROI同时保证平台收入）
+  2. 设计策略方案（规则/模型/混合）
+  3. 离线评估（回溯分析、仿真测试）
+  4. A/B实验设计（分流方案、观测指标、显著性要求）
+  5. 效果分析与迭代
+
+# ── 模型配置 ──
+default_model: "sonnet"
+complex_model: "opus"
+
+# ── 资源声明 ──
+tools:
+  - data_analysis
+  - calculator
+  - code_executor
+  - text_processor
+  - web_search
+  - excel_processor
+
+
+  - id: ab-experiment-design
+    name: "A/B实验设计"
+    description: "设计实验分流方案、观测指标和分析计划"
+    icon: "split"
+    trigger: "manual"
+    workflow_ref: "ab-experiment"
+    keywords: ["A/B实验", "实验设计", "分流方案", "实验分析"]
+    default_params:
+      significance_level: 0.05
+
+  - id: strategy-effect-analysis
+    name: "策略效果分析"
+    description: "分析策略上线后的效果数据"
+    icon: "trending-up"
+    trigger: "manual"
+    keywords: ["策略效果", "效果分析", "策略评估", "上线分析"]
+
+  - id: anti-fraud-review
+    name: "反作弊审查"
+    description: "检查异常流量模式，评估作弊风险"
+    icon: "shield"
+    trigger: "manual"
+    keywords: ["反作弊", "作弊审查", "无效流量", "异常流量"]
+
+dashboard:
+  metrics:
+    - key: "ctr_accuracy"
+      name: "CTR预估AUC"
+      unit: ""
+      target: ">0.75"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "ctr_accuracy"
+        refresh: "1h"
+    - key: "cvr_accuracy"
+      name: "CVR预估AUC"
+      unit: ""
+      target: ">0.70"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "cvr_accuracy"
+        refresh: "1h"
+    - key: "ivt_rate"
+      name: "无效流量率"
+      unit: "%"
+      target: "<3"
+      direction: "lower_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "ivt_rate"
+        refresh: "1h"
+    - key: "advertiser_roi"
+      name: "广告主平均ROI"
+      unit: "x"
+      direction: "higher_is_better"
+      source:
+        type: "api"
+        endpoint: "bi-system"
+        query: "advertiser_roi"
+        refresh: "1h"
+    - key: "running_experiments"
+      name: "进行中实验"
+      unit: ""
+      source:
+        type: "manual"
+
+knowledge_scope:
+  - "策略设计方法论"
+  - "A/B实验规范"
+  - "算法指标定义"
+  - "反作弊规则库"
+  - "行业策略白皮书"
+
+onboarding:
+  tip: "协助投放策略设计与A/B实验分析"
+  prompts:
+    - "帮我设计一个oCPM出价策略的A/B实验分流方案"
+    - "当前无效流量率偏高，有哪些反作弊规则可以加强？"
+    - "Lookalike扩量的CTR预估准确率如何，需要调整定向策略吗？"

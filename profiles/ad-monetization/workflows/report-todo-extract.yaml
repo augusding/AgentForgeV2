@@ -1,0 +1,165 @@
+name: "report-todo-extract"
+description: "从汇报记录/会议纪要中提取待办事项，结构化建档并通知责任人"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "TODO提取"
+    - "待办提取"
+    - "会议纪要"
+    - "任务分配"
+    - "提取待办"
+  semantic: "从汇报记录或会议纪要中提取待办事项并建档"
+
+parameters:
+  - name: source_text
+    type: textarea
+    label: "汇报记录/会议纪要原文"
+    required: true
+  - name: meeting_date
+    type: text
+    label: "会议/汇报日期"
+    required: true
+    default: "2025-01-01"
+  - name: business_line
+    type: text
+    label: "业务线"
+    required: true
+  - name: report_type
+    type: select
+    label: "汇报类型"
+    options: ["okr", "annual", "special"]
+    default: "okr"
+
+nodes:
+  # ── 第1步：AI提取TODO ──
+  - id: extract-todos
+    type: task
+    instruction: |
+      你是一位专业的会议纪要分析师。请从以下汇报记录/会议纪要中提取所有待办事项。
+
+      汇报日期: {{ meeting_date }}
+      业务线: {{ business_line }}
+      汇报类型: {{ report_type }}
+
+      原文内容:
+      {{ source_text }}
+
+      请提取每一条待办事项，按以下格式输出：
+
+      ## 提取的待办事项清单
+
+      ### TODO-1: [事项标题]
+      - **事项描述**: [具体要做什么，越具体越好]
+      - **提出人**: [谁提出的要求，通常是领导/评审人]
+      - **责任人**: [谁来执行，如果原文未明确则标注"待指定"]
+      - **截止日期**: [YYYY-MM-DD格式，如果原文只说"下月""尽快"等模糊表述，请根据汇报类型推算合理日期并标注"推算"]
+      - **优先级**: [P0紧急/P1重要/P2常规/P3低优]
+      - **验收标准**: [怎么算完成？如果原文未明确，根据事项性质给出建议标准]
+      - **关联OKR**: [如果能对应到某个OKR目标，标注关联]
+      - **原文出处**: [引用原文中提到此TODO的原始表述]
+
+      ### TODO-2: [事项标题]
+      ...
+
+      ## 提取统计
+      - 总计提取 X 条待办
+      - 按优先级分布: P0: X条, P1: X条, P2: X条, P3: X条
+      - 按截止日期: 本周内: X条, 本月内: X条, 下月: X条
+
+      ## 提取注意事项
+      - 列出任何模糊的、需要确认的事项
+      - 标注哪些TODO的责任人或截止日期是推算的，需要人工确认
+    output: extracted_todos
+
+  # ── 第2步：人工确认 ──
+  - id: confirm-todos
+    type: approval
+    depends_on:
+      - extract-todos
+    input_prompt: |
+      请确认以上提取的待办事项是否准确完整。
+      您可以：
+      1. 确认无误 → 批准建档
+      2. 有修改 → 在反馈中说明需要修改的内容
+
+  # ── 第3步：结构化建档 ──
+  - id: create-todo-doc
+    type: task
+    depends_on:
+      - confirm-todos
+    instruction: |
+      请将确认后的待办事项整理为标准的知识库文档格式。
+
+      确认后的TODO列表:
+      {{ extracted_todos }}
+
+      审批反馈（如有修改要求，请据此调整）:
+      {{ confirm-todos }}
+
+      请生成以下格式的markdown文档，用于存入知识库：
+
+      ---
+      # 待办事项跟踪表
+
+      **来源**: {{ report_type }}汇报 - {{ business_line }}
+      **会议日期**: {{ meeting_date }}
+      **建档日期**: [当前日期]
+      **状态**: 跟踪中
+
+      ## 待办清单
+
+      | 编号 | 事项 | 责任人 | 截止日期 | 优先级 | 验收标准 | 状态 | 完成日期 | 验收结果 |
+      |------|------|--------|---------|--------|---------|------|---------|---------|
+      | TODO-001 | [事项] | [人] | YYYY-MM-DD | P0/1/2/3 | [标准] | 待开始 | - | - |
+      | ... | ... | ... | ... | ... | ... | ... | ... | ... |
+
+      ## 跟踪日志
+
+      | 日期 | 操作 | 说明 |
+      |------|------|------|
+      | {{ meeting_date }} | 建档 | 从{{ report_type }}汇报中提取，共X条待办 |
+
+      ---
+
+      文件命名建议: 待办事项-{{ business_line }}-{{ meeting_date }}.md
+    output: todo_document
+
+  # ── 第4步：生成通知摘要 ──
+  - id: notify-summary
+    type: task
+    depends_on:
+      - create-todo-doc
+    instruction: |
+      请生成一份简洁的通知摘要，用于发送给各责任人。
+
+      TODO文档:
+      {{ create-todo-doc }}
+
+      请按责任人分组，生成通知内容：
+
+      ## 待办事项通知
+
+      **来源**: {{ business_line }} {{ report_type }}汇报（{{ meeting_date }}）
+
+      [按责任人分组]
+      ### @[责任人1]
+      您有以下待办事项：
+      1. [事项描述] | 截止: YYYY-MM-DD | 优先级: PX
+      2. ...
+
+      ### @[责任人2]
+      ...
+
+      ---
+      请各位在截止日期前完成相应事项。如有疑问请联系[汇报组织者]。
+      系统将在截止日期前3天自动提醒，超期将自动升级。
+    output: notification
+
+metadata:
+  category: "汇报管理"
+  author: "report-manager"
+  tags:
+    - "TODO"
+    - "待办提取"
+    - "会议纪要"

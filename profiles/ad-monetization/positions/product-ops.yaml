@@ -1,0 +1,109 @@
+position_id: "product-ops"
+display_name: "产品运营"
+icon: "megaphone"
+color: "#E11D48"
+department: "运营部"
+domain: "广告变现"
+description: "负责广告产品的运营推广，包括广告主培训赋能、产品功能推广、运营活动策划和广告主成长体系搭建"
+
+# ── 核心三要素 ──
+role: |
+  你是一位广告产品运营的AI助手。你帮助运营人员推广广告产品、赋能广告主、策划运营活动。
+
+goal: |
+  提升广告主留存和首充率，通过分层运营和内容赋能推动平台GMV增长。
+
+context: |
+  你的工作领域：
+  - 广告主赋能：新手引导、投放教程、最佳实践案例、行业解决方案
+  - 产品推广：新功能发布、功能使用率提升、产品价值传达
+  - 运营活动：充值返点、新客激励、行业专场、大促助力
+  - 成长体系：广告主分级(初级/中级/高级/KA)、权益设计、升级路径
+  - 内容运营：帮助中心、投放指南、案例库、FAQ
+  - 数据分析：功能渗透率、广告主留存、LTV分析
+
+  运营原则：
+  1. 降低门槛：让广告主快速上手，缩短从注册到首次投放的时间
+  2. 数据驱动：用数据衡量运营效果，持续优化策略
+  3. 分层运营：不同级别广告主提供差异化服务
+  4. 价值传递：用案例和数据证明平台价值
+
+# ── 模型配置 ──
+default_model: "sonnet"
+
+# ── 资源声明 ──
+tools:
+  - text_processor
+  - data_analysis
+  - excel_processor
+  - web_search
+  - calculator
+
+
+  - id: advertiser-analysis
+    name: "广告主分析"
+    description: "分析广告主投放行为和成长路径"
+    icon: "users"
+    trigger: "manual"
+    keywords: ["广告主分析", "投放行为", "成长路径", "分层"]
+
+  - id: content-creation
+    name: "运营内容创作"
+    description: "撰写投放指南、案例分析和产品公告"
+    icon: "pen-tool"
+    trigger: "manual"
+    keywords: ["内容创作", "投放指南", "案例分析", "产品公告"]
+
+  - id: weekly-ops-report
+    name: "周度运营报告"
+    description: "汇总本周运营数据和活动效果"
+    icon: "file-bar-chart"
+    trigger: "scheduled"
+    schedule: "0 10 * * 5"
+    keywords: ["运营报告", "周报", "活动效果", "运营数据"]
+    default_params:
+      scope: "all_campaigns"
+      time_range: "this_week"
+
+dashboard:
+  metrics:
+    - key: "new_advertisers"
+      name: "新增广告主"
+      unit: ""
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "first_charge_rate"
+      name: "首充率"
+      unit: "%"
+      target: ">30"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "advertiser_retention"
+      name: "广告主留存率"
+      unit: "%"
+      target: ">60"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+    - key: "feature_adoption"
+      name: "新功能渗透率"
+      unit: "%"
+      direction: "higher_is_better"
+      source:
+        type: "manual"
+
+knowledge_scope:
+  - "运营活动SOP"
+  - "广告主成长体系"
+  - "投放最佳实践"
+  - "行业案例库"
+  - "竞品运营策略"
+
+onboarding:
+  tip: "助力广告主赋能和运营活动策划"
+  prompts:
+    - "新广告主的首充率偏低，帮我设计一套新客激励方案"
+    - "帮我撰写一篇游戏行业投放最佳实践案例"
+    - "本周新功能渗透率不到20%，如何策划推广活动提升使用率？"

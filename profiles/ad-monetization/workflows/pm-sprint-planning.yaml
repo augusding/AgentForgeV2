@@ -1,0 +1,232 @@
+name: "pm-sprint-planning"
+description: "迭代排期规划：需求池梳理 → 优先级评估 → 资源匹配 → 排期输出 → 风险预判，生成可执行的Sprint计划"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "迭代排期"
+    - "Sprint规划"
+    - "需求排期"
+    - "排期计划"
+    - "迭代计划"
+  semantic: "制定下一个迭代的需求排期和Sprint计划"
+
+parameters:
+  - name: sprint_name
+    type: text
+    label: "迭代名称（如 Sprint 2026-S12）"
+    required: true
+  - name: sprint_start
+    type: text
+    label: "迭代开始日期（YYYY-MM-DD）"
+    required: true
+  - name: sprint_end
+    type: text
+    label: "迭代结束日期（YYYY-MM-DD）"
+    required: true
+  - name: demand_pool
+    type: textarea
+    label: "需求池（粘贴需求列表，含标题、来源、描述）"
+    required: true
+  - name: team_capacity
+    type: textarea
+    label: "团队可用人力（如：前端2人、后端3人、测试1人，各自排除请假等不可用天数）"
+    required: true
+  - name: carry_over
+    type: textarea
+    label: "上迭代遗留未完成事项（可选）"
+    required: false
+
+nodes:
+  # ── 第1步：需求结构化 + 上迭代遗留整合 ──
+  - id: parse-demands
+    type: task
+    instruction: |
+      你是项目管理专家。请将以下需求池和遗留事项结构化整理。
+
+      迭代: {{ sprint_name }}（{{ sprint_start }} ~ {{ sprint_end }}）
+
+      需求池原始信息:
+      {{ demand_pool }}
+
+      上迭代遗留:
+      {{ carry_over }}
+
+      请输出结构化需求表：
+
+      | 编号 | 需求标题 | 来源(产品/运营/技术/外部) | 类型(功能/优化/Bug/技术债) | 描述摘要 | 是否遗留 |
+      |------|---------|------------------------|-------------------------|---------|---------|
+
+      同时标注：
+      - 需求间是否存在依赖关系（A做完才能做B）
+      - 是否有需求描述模糊需要产品补充PRD
+      - 遗留需求标注上迭代未完成原因
+    output: structured_demands
+
+  # ── 第2步（并行A）：优先级评估 ──
+  - id: priority-scoring
+    type: task
+    depends_on:
+      - parse-demands
+    instruction: |
+      请对每个需求进行优先级评估，使用 WSJF（加权最短作业优先）模型打分。
+
+      结构化需求:
+      {{ parse-demands }}
+
+      评估维度（每项1-5分）：
+      1. **业务价值 (Business Value)**: 对营收/用户体验/合规的直接贡献
+      2. **时间紧迫度 (Time Criticality)**: 延迟的损失有多大，是否有外部截止日
+      3. **风险降低 (Risk Reduction)**: 能否降低技术/业务/合规风险
+      4. **工作量估算 (Job Size)**: 预估开发+测试人天（越小越优先）
+
+      WSJF = (业务价值 + 时间紧迫度 + 风险降低) / 工作量
+
+      输出排序后的优先级表：
+      | 排名 | 需求 | 业务价值 | 紧迫度 | 风险降低 | 工作量(人天) | WSJF | 建议级别(P0/P1/P2/P3) |
+    output: priority_result
+
+  # ── 第2步（并行B）：资源能力分析 ──
+  - id: capacity-analysis
+    type: task
+    depends_on:
+      - parse-demands
+    instruction: |
+      请分析团队在本迭代的实际可用产能。
+
+      迭代周期: {{ sprint_start }} ~ {{ sprint_end }}
+      团队信息: {{ team_capacity }}
+
+      请计算：
+      1. **迭代总工作日**（排除周末和法定假日）
+      2. **各角色可用人天**（扣除请假、会议等损耗，一般按80%利用率计算）
+      3. **总可用人天**，按角色分类：前端/后端/测试/其他
+      4. **建议预留缓冲**：建议保留15-20%应对突发需求和估算偏差
+
+      输出：
+      | 角色 | 人数 | 迭代工作日 | 可用人天(80%利用率) | 缓冲预留(15%) | 实际可排期人天 |
+    output: capacity_result
+
+  # ── 第3步：排期匹配 ──
+  - id: sprint-matching
+    type: task
+    depends_on:
+      - priority-scoring
+      - capacity-analysis
+    instruction: |
+      请将优先级排序后的需求匹配到可用资源，生成排期方案。
+
+      优先级排序:
+      {{ priority-scoring }}
+
+      资源产能:
+      {{ capacity-analysis }}
+
+      排期原则：
+      1. 按WSJF从高到低装入，直到产能用完
+      2. 遗留需求优先装入（已有上下文，重启成本低）
+      3. 有依赖关系的需求必须一起排入或都不排
+      4. 每个角色的工作量不能超过其可排期人天
+      5. 至少保留1个测试人天作为回归测试buffer
+
+      输出：
+      ## 本迭代纳入（Sprint Backlog）
+      | 需求 | 优先级 | 前端人天 | 后端人天 | 测试人天 | 计划开始 | 计划完成 | 负责人建议 |
+
+      ## 本迭代不纳入（移至下迭代）
+      | 需求 | 原因（产能不足/优先级低/依赖未就绪）|
+
+      ## 资源利用率
+      | 角色 | 可用人天 | 已排期人天 | 利用率 | 剩余buffer |
+    output: sprint_plan
+
+  # ── 第4步：风险预判 ──
+  - id: risk-assessment
+    type: task
+    depends_on:
+      - sprint-matching
+    instruction: |
+      请对本迭代排期方案进行风险预判。
+
+      排期方案:
+      {{ sprint-matching }}
+
+      结构化需求（含依赖关系）:
+      {{ parse-demands }}
+
+      请从以下维度评估风险：
+
+      ### 1. 排期风险
+      - 是否有角色利用率超过85%（过载预警）？
+      - 需求间依赖是否形成关键路径？关键路径上的任务有多少buffer？
+      - 是否存在单点依赖（某个需求只有1人能做）？
+
+      ### 2. 交付风险
+      - 哪些需求的工作量估算不确定性高（PRD模糊/技术方案未定/首次接触的领域）？
+      - 是否有外部依赖（等接口/等设计稿/等审批）？
+
+      ### 3. 变更风险
+      - 是否有高概率被插入的紧急需求来源？
+      - 排期buffer是否足够应对1-2个中等变更？
+
+      每个风险给出：
+      | 风险描述 | 概率(高/中/低) | 影响(高/中/低) | 预防措施 | 应急预案 |
+    output: risk_report
+
+  # ── 第5步：人工确认 ──
+  - id: confirm-plan
+    type: approval
+    depends_on:
+      - sprint-matching
+      - risk-assessment
+    input_prompt: |
+      请确认以上Sprint排期方案和风险评估。
+      确认后将生成正式的迭代计划文档。
+      如有调整需求，请在反馈中说明。
+
+  # ── 第6步：生成正式迭代计划 ──
+  - id: generate-sprint-doc
+    type: task
+    depends_on:
+      - confirm-plan
+    instruction: |
+      请生成正式的迭代计划文档。
+
+      排期方案: {{ sprint-matching }}
+      风险评估: {{ risk-assessment }}
+      审批反馈: {{ confirm-plan }}
+
+      生成格式：
+      ---
+      # {{ sprint_name }} 迭代计划
+      **周期**: {{ sprint_start }} ~ {{ sprint_end }}
+      **制定日期**: [当前日期]
+
+      ## 一、迭代目标
+      用2-3句话概括本迭代的核心交付目标
+
+      ## 二、Sprint Backlog
+      [按优先级排列的需求表，含负责人和计划时间]
+
+      ## 三、里程碑节点
+      | 日期 | 里程碑 | 验收标准 |
+      （至少包含：开发完成、提测、UAT、发版）
+
+      ## 四、风险清单 & 应对方案
+      [TOP 5风险及预防/应急措施]
+
+      ## 五、沟通机制
+      - 每日站会：XX:XX
+      - 迭代中期检查：[日期]
+      - 迭代评审/回顾：{{ sprint_end }}
+      ---
+    output: sprint_document
+
+metadata:
+  category: "项目管理"
+  position: "project-manager"
+  tags:
+    - "迭代排期"
+    - "Sprint"
+    - "需求管理"
+    - "资源分配"

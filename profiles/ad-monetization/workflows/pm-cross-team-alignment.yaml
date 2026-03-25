@@ -1,0 +1,259 @@
+name: "pm-cross-team-alignment"
+description: "跨团队项目对齐：干系人梳理 → 依赖关系分析 → 接口契约确认 → 联调计划 → 风险升级机制，解决多团队协作信息不对称"
+version: "1.0"
+
+trigger:
+  keywords:
+    - "跨团队对齐"
+    - "联调计划"
+    - "接口对齐"
+    - "多团队协作"
+    - "依赖梳理"
+    - "协作计划"
+  semantic: "梳理跨团队项目的依赖关系和协作计划"
+
+parameters:
+  - name: project_name
+    type: text
+    label: "项目名称"
+    required: true
+  - name: project_desc
+    type: textarea
+    label: "项目描述（目标、范围、预期上线时间）"
+    required: true
+  - name: involved_teams
+    type: textarea
+    label: "涉及团队及负责人（每行一个：团队名-负责人-职责范围）"
+    required: true
+  - name: known_dependencies
+    type: textarea
+    label: "已知的依赖关系和接口需求（可选）"
+    required: false
+  - name: deadline
+    type: text
+    label: "项目整体截止日期（YYYY-MM-DD）"
+    required: true
+
+nodes:
+  # ── 第1步：干系人图谱 ──
+  - id: stakeholder-map
+    type: task
+    instruction: |
+      你是项目协调专家。请梳理本项目的干系人图谱。
+
+      项目: {{ project_name }}
+      描述: {{ project_desc }}
+      涉及团队: {{ involved_teams }}
+      截止日期: {{ deadline }}
+
+      请输出：
+
+      ## 干系人矩阵（RACI）
+      | 团队/角色 | R(执行) | A(负责) | C(咨询) | I(通知) | 关键交付物 |
+
+      ## 沟通需求
+      | 沟通对 | 沟通频率 | 沟通方式 | 核心话题 |
+      （只列出需要主动沟通的关系对，不需面面俱到）
+
+      ## 决策链
+      - 技术方案分歧由谁拍板？
+      - 排期冲突由谁协调？
+      - 需求变更需要谁审批？
+    output: stakeholder_result
+
+  # ── 第2步：依赖关系深度分析 ──
+  - id: dependency-analysis
+    type: task
+    depends_on:
+      - stakeholder-map
+    instruction: |
+      请深度分析项目的依赖关系。
+
+      项目信息: {{ project_desc }}
+      涉及团队: {{ involved_teams }}
+      已知依赖: {{ known_dependencies }}
+      干系人图谱: {{ stakeholder-map }}
+
+      请输出：
+
+      ## 依赖拓扑（按时间顺序）
+      用文字描述依赖链路，标明先后顺序：
+      ```
+      [团队A: 接口开发] → [团队B: 前端对接] → [团队C: 测试验证]
+                        ↘ [团队D: 数据埋点]  ↗
+      ```
+
+      ## 依赖明细表
+      | 编号 | 上游(提供方) | 下游(依赖方) | 依赖内容 | 需要日期 | 当前状态 | 风险等级 |
+
+      ## 隐性依赖排查
+      根据项目描述和广告变现业务特点，以下常见依赖是否已考虑：
+      - 账号/权限申请（如API key、数据库权限）
+      - 测试环境/数据准备
+      - 第三方服务审批（如广告平台SDK审核）
+      - 设计资源（UI/UX稿）
+      - 法务/合规审核
+      - 数据指标口径对齐
+
+      列出可能被遗漏但需要确认的隐性依赖。
+
+      ## 关键路径
+      哪条依赖链决定了整体进度？关键路径上的总工期是多少天？
+      距离截止日期（{{ deadline }}）还有多少buffer？
+    output: dependency_result
+
+  # ── 第3步：接口契约草案 ──
+  - id: interface-contract
+    type: task
+    depends_on:
+      - dependency-analysis
+    instruction: |
+      请根据依赖分析，生成各团队间的接口契约草案。
+
+      依赖分析: {{ dependency-analysis }}
+
+      对每个跨团队依赖，生成接口契约：
+
+      ## 接口契约清单
+
+      ### 契约 1: [上游团队] → [下游团队]
+      - **接口名称**: [描述这个接口/交付物]
+      - **交付形式**: API接口 / 数据表 / SDK / 文档 / 配置
+      - **交付内容要求**: 具体字段/格式/协议
+      - **交付日期**: YYYY-MM-DD
+      - **验收标准**: 什么算交付完成
+      - **联调时间**: 预计联调所需天数
+      - **对接人**: 上游侧 / 下游侧
+
+      ### 契约 2: ...
+
+      ## 接口变更管理
+      - 接口变更需提前几天通知？
+      - 变更影响评估由谁负责？
+      - 是否需要兼容旧版本？过渡期多长？
+    output: contract_result
+
+  # ── 第4步：人工确认契约 ──
+  - id: confirm-contracts
+    type: approval
+    depends_on:
+      - interface-contract
+    input_prompt: |
+      以上是项目的干系人图谱、依赖分析和接口契约草案。
+      请审阅并确认，或在反馈中补充修正。
+      确认后将据此生成联调计划和风险升级机制。
+
+  # ── 第5步（并行A）：联调计划 ──
+  - id: integration-plan
+    type: task
+    depends_on:
+      - confirm-contracts
+    instruction: |
+      请基于确认后的接口契约生成联调计划。
+
+      依赖分析: {{ dependency-analysis }}
+      接口契约: {{ interface-contract }}
+      审批反馈: {{ confirm-contracts }}
+      截止日期: {{ deadline }}
+
+      生成联调计划：
+
+      ## 联调阶段
+      | 阶段 | 参与团队 | 联调内容 | 开始日期 | 结束日期 | 环境要求 |
+      （按依赖拓扑顺序安排，上游先就绪再联调）
+
+      ## 联调环境需求
+      - 各阶段需要什么测试环境？
+      - 测试数据如何准备？
+      - 是否需要Mock服务过渡？
+
+      ## 联调验收标准
+      每个阶段的通过标准是什么？
+
+      ## 联调问题处理
+      - 联调中发现的问题如何分类（阻塞/非阻塞）？
+      - 阻塞问题的响应时效要求？
+      - 问题记录和追踪方式？
+    output: integration_result
+
+  # ── 第5步（并行B）：风险升级机制 ──
+  - id: escalation-mechanism
+    type: task
+    depends_on:
+      - confirm-contracts
+    instruction: |
+      请为本跨团队项目设计风险升级机制。
+
+      干系人: {{ stakeholder-map }}
+      依赖分析: {{ dependency-analysis }}
+      截止日期: {{ deadline }}
+
+      ## 风险分级 & 升级路径
+      | 级别 | 定义 | 示例 | 响应时效 | 升级至 |
+      | L1 | 单团队内可解决 | 某接口实现延迟1天 | 24小时 | 团队负责人 |
+      | L2 | 需跨团队协调 | 接口契约变更/联调阻塞 | 8小时 | 项目经理 |
+      | L3 | 影响整体交付 | 关键路径延迟/方案推翻 | 4小时 | 项目经理+各团队负责人 |
+      | L4 | 项目目标受威胁 | 截止日期不可达/需求大幅变更 | 2小时 | 业务负责人/总监 |
+
+      ## 预警信号
+      列出需要触发升级的具体信号：
+      - 进度偏差超过X天
+      - 接口交付日期变更
+      - 关键人员请假/离职
+      - 外部依赖延迟确认
+
+      ## 定期检查点
+      建议的项目同步会频率和内容模板
+    output: escalation_result
+
+  # ── 第6步：汇总输出 ──
+  - id: final-alignment-doc
+    type: task
+    depends_on:
+      - integration-plan
+      - escalation-mechanism
+    instruction: |
+      请汇总生成完整的跨团队对齐文档。
+
+      干系人: {{ stakeholder-map }}
+      依赖分析: {{ dependency-analysis }}
+      接口契约: {{ interface-contract }}
+      联调计划: {{ integration-plan }}
+      升级机制: {{ escalation-result }}
+
+      生成：
+      ---
+      # {{ project_name }} — 跨团队协作计划
+
+      **截止日期**: {{ deadline }}
+      **制定日期**: [当前日期]
+      **项目经理**: [当前用户]
+
+      ## 一、项目概览与团队分工
+      [RACI矩阵]
+
+      ## 二、依赖关系与关键路径
+      [依赖拓扑 + 关键路径分析]
+
+      ## 三、接口契约
+      [各团队间接口约定]
+
+      ## 四、联调计划
+      [分阶段联调安排]
+
+      ## 五、风险升级机制
+      [分级定义 + 升级路径]
+
+      ## 六、里程碑 & 检查点
+      [关键日期一览]
+      ---
+    output: alignment_document
+
+metadata:
+  category: "项目管理"
+  position: "project-manager"
+  tags:
+    - "跨团队"
+    - "依赖管理"
+    - "联调计划"
+    - "接口契约"
