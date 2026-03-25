@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { login as apiLogin, getMe, logout as apiLogout, register as apiRegister } from '../api/auth'
 
-interface User { id: string; username: string; role: string; display_name?: string; org_id?: string }
+interface User { id: string; username: string; role: string; display_name?: string; org_id?: string; active_position?: string }
 
 interface AuthState {
   user: User | null
@@ -11,6 +11,7 @@ interface AuthState {
   register: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
+  setActivePosition: (positionId: string) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -33,6 +34,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('agentforge_token')
     set({ user: null, isAuthenticated: false })
   },
+
+  setActivePosition: (positionId) => set((s) => ({
+    user: s.user ? { ...s.user, active_position: positionId } : null,
+  })),
 
   checkAuth: async () => {
     try {

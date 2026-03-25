@@ -1,16 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Plus, Trash2, MessageSquare, Wrench, ChevronDown, ChevronRight } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
+import { useAuthStore } from '../stores/useAuthStore'
 import type { ToolCall } from '../stores/useChatStore'
+import client from '../api/client'
 import Markdown from '../components/Markdown'
 
 export default function Chat() {
   const store = useChatStore()
+  const { user } = useAuthStore()
   const [input, setInput] = useState('')
+  const [positionId, setPositionId] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const isFirstMsg = useRef(true)
 
   useEffect(() => { store.loadSessions() }, [])
+  useEffect(() => {
+    if (user?.active_position) { setPositionId(user.active_position); return }
+    client.get('/workstation/home').then((data: any) => {
+      if (data.position?.position_id) setPositionId(data.position.position_id)
+    }).catch(() => {})
+  }, [user?.active_position])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
 
   const send = async () => {
@@ -29,7 +39,7 @@ export default function Chat() {
       const resp = await fetch('/api/v1/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: text, position_id: 'strategy-pm', session_id: store.currentSessionId || undefined }),
+        body: JSON.stringify({ content: text, position_id: positionId || '', session_id: store.currentSessionId || undefined }),
       })
       const reader = resp.body?.getReader()
       const decoder = new TextDecoder()

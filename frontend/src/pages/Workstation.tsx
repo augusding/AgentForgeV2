@@ -2,11 +2,18 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageSquare, BookOpen, Zap } from 'lucide-react'
 import { useWorkstationStore } from '../stores/useWorkstationStore'
+import { useAuthStore } from '../stores/useAuthStore'
 import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function Workstation() {
-  const { home, positions, loading, loadHome, assignPosition } = useWorkstationStore()
+  const { home, positions, loading, loadHome, assignPosition: rawAssign } = useWorkstationStore()
+  const { setActivePosition } = useAuthStore()
   const navigate = useNavigate()
+
+  const assignPosition = async (positionId: string) => {
+    await rawAssign(positionId)
+    setActivePosition(positionId)
+  }
 
   useEffect(() => { loadHome() }, [])
 

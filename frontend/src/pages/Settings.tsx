@@ -6,7 +6,7 @@ import client from '../api/client'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
-  const { user } = useAuthStore()
+  const { user, setActivePosition } = useAuthStore()
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [changingPw, setChangingPw] = useState(false)
@@ -27,7 +27,7 @@ export default function Settings() {
   }
 
   const switchPosition = async (positionId: string) => {
-    try { await client.post('/workstation/assign', { position_id: positionId }); toast.success('岗位已切换') } catch {}
+    try { await client.post('/workstation/assign', { position_id: positionId }); setActivePosition(positionId); toast.success('岗位已切换') } catch {}
   }
 
   return (
