@@ -1,0 +1,236 @@
+import { useState } from 'react'
+import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+interface CProps { config: Record<string, any>; onChange: (c: Record<string, any>) => void; inputData?: any }
+const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }
+const lbl = "text-xs font-medium mb-1.5 block"
+
+export const hasCustomUI = (t: string) => ['http', 'ai', 'code', 'scheduleTrigger', 'feishu', 'dingtalk', 'wecom'].includes(t)
+
+export default function NodeCustomUI({ nodeType, ...p }: CProps & { nodeType: string }) {
+  if (nodeType === 'http') return <HttpUI {...p} />
+  if (nodeType === 'ai') return <AiUI {...p} />
+  if (nodeType === 'code') return <CodeUI {...p} />
+  if (nodeType === 'scheduleTrigger') return <ScheduleUI config={p.config} onChange={p.onChange} />
+  if (['feishu', 'dingtalk', 'wecom'].includes(nodeType)) return <MsgUI nodeType={nodeType} {...p} />
+  return null
+}
+
+function Sec({ children, title, collapsed, onToggle }: { children: React.ReactNode; title: string; collapsed?: boolean; onToggle?: () => void }) {
+  return <div className="space-y-3 pb-4 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+    <button onClick={onToggle} className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider w-full" style={{ color: 'var(--text-muted)' }}>
+      {onToggle && (collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />)}{title}</button>
+    {(!onToggle || !collapsed) && children}</div>
+}
+
+/* ── HTTP ── */
+function HttpUI({ config: c, onChange }: CProps) {
+  const [showAuth, setShowAuth] = useState(!!c.authType && c.authType !== 'none')
+  const [showAdv, setShowAdv] = useState(false)
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-5">
+    <Sec title="基本设置">
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>请求</label>
+        <div className="flex gap-2">
+          <select value={c.method || 'GET'} onChange={e => s('method', e.target.value)} className="w-[100px] px-3 py-2.5 rounded-lg text-xs font-bold outline-none" style={st}>
+            {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m}>{m}</option>)}</select>
+          <input value={c.url || ''} onChange={e => s('url', e.target.value)} className="flex-1 px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder="https://api.example.com/data" /></div></div>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>Headers</label><KV value={c.headers} onChange={v => s('headers', v)} kp="Content-Type" vp="application/json" /></div>
+      {['POST', 'PUT', 'PATCH'].includes(c.method || '') && <div>
+        <div className="flex items-center justify-between mb-1.5"><label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Body</label>
+          <select value={c.bodyType || 'json'} onChange={e => s('bodyType', e.target.value)} className="px-2 py-0.5 rounded text-[10px] outline-none" style={st}>
+            <option value="json">JSON</option><option value="text">文本</option></select></div>
+        <textarea value={c.body || ''} onChange={e => s('body', e.target.value)} rows={5} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 80 }}
+          placeholder={'{\n  "key": "value"\n}'} /></div>}
+    </Sec>
+    <Sec title="认证" collapsed={!showAuth} onToggle={() => setShowAuth(!showAuth)}>
+      <select value={c.authType || 'none'} onChange={e => s('authType', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
+        <option value="none">无</option><option value="bearer">Bearer Token</option><option value="basic">Basic Auth</option><option value="apikey">API Key</option></select>
+      {c.authType === 'bearer' && <input value={c.authToken || ''} onChange={e => s('authToken', e.target.value)} type="password" className="w-full px-3 py-2 rounded-lg text-xs outline-none font-mono" style={st} placeholder="Token" />}
+      {c.authType === 'basic' && <div className="flex gap-2"><input value={c.authUser || ''} onChange={e => s('authUser', e.target.value)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="用户名" />
+        <input value={c.authPass || ''} onChange={e => s('authPass', e.target.value)} type="password" className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="密码" /></div>}
+      {c.authType === 'apikey' && <div className="flex gap-2"><input value={c.authKeyName || ''} onChange={e => s('authKeyName', e.target.value)} className="w-[40%] px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="Header名" />
+        <input value={c.authKeyValue || ''} onChange={e => s('authKeyValue', e.target.value)} type="password" className="flex-1 px-3 py-2 rounded-lg text-xs outline-none font-mono" style={st} placeholder="Key" /></div>}
+    </Sec>
+    <Sec title="高级" collapsed={!showAdv} onToggle={() => setShowAdv(!showAdv)}>
+      <div className="flex gap-3"><div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>超时(秒)</label>
+        <input type="number" value={c.timeout || 30} onChange={e => s('timeout', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} /></div>
+        <div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>重试</label>
+        <input type="number" value={c.retries || 0} onChange={e => s('retries', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} min={0} max={5} /></div></div>
+    </Sec>
+  </div>
+}
+
+/* ── AI ── */
+function AiUI({ config: c, onChange, inputData }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  const op = c.operation || 'generate'; const [showAdv, setShowAdv] = useState(false)
+  return <div className="space-y-5">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>操作类型</label>
+      <div className="grid grid-cols-5 gap-1.5">{[
+        { v: 'generate', l: '生成', i: '✨' }, { v: 'classify', l: '分类', i: '🏷️' }, { v: 'extract', l: '提取', i: '📋' },
+        { v: 'summarize', l: '摘要', i: '📝' }, { v: 'route', l: '路由', i: '🔀' },
+      ].map(o => <button key={o.v} onClick={() => s('operation', o.v)}
+        className={`flex flex-col items-center gap-1 p-2 rounded-lg ${op === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+        style={{ background: op === o.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <span className="text-base">{o.i}</span><span className="text-[10px] font-medium" style={{ color: op === o.v ? 'var(--accent)' : 'var(--text)' }}>{o.l}</span></button>)}</div></div>
+    {op === 'generate' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>提示词</label>
+      <textarea value={c.prompt || ''} onChange={e => s('prompt', e.target.value)} rows={6} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 100 }}
+        placeholder={'分析数据：\n{{ $input.text }}'} /></div>}
+    {op === 'classify' && <><div><label className={lbl} style={{ color: 'var(--text-muted)' }}>分类类别</label>
+      <TagInput value={c.categories || ''} onChange={v => s('categories', v)} placeholder="输入类别后回车" /></div>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>指令(可选)</label>
+      <input value={c.instruction || ''} onChange={e => s('instruction', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="只输出类别名" /></div></>}
+    {op === 'extract' && <><div><label className={lbl} style={{ color: 'var(--text-muted)' }}>提取字段</label>
+      <KV value={c.extractionSchema} onChange={v => s('extractionSchema', v)} kp="字段名" vp="说明" /></div>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>指令</label>
+      <input value={c.instruction || ''} onChange={e => s('instruction', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} /></div></>}
+    {op === 'summarize' && <div className="flex gap-3"><div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>最大字数</label>
+      <input type="number" value={c.maxLength || 200} onChange={e => s('maxLength', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} /></div>
+      <div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>指令</label>
+      <input value={c.instruction || ''} onChange={e => s('instruction', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="保留数据" /></div></div>}
+    {op === 'route' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>分支描述</label>
+      <textarea value={c.routeDescriptions || ''} onChange={e => s('routeDescriptions', e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={st}
+        placeholder={'客服: 产品使用\n技术: Bug\n投诉: 不满'} /></div>}
+    <Sec title="模型设置" collapsed={!showAdv} onToggle={() => setShowAdv(!showAdv)}>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>系统提示词</label>
+        <textarea value={c.systemPrompt || ''} onChange={e => s('systemPrompt', e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={st} placeholder="你是专业分析师..." /></div>
+      <div><div className="flex items-center justify-between mb-1"><label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>温度</label>
+        <span className="text-[10px] font-mono" style={{ color: 'var(--accent)' }}>{(c.temperature ?? 0.7).toFixed(1)}</span></div>
+        <input type="range" min="0" max="2" step="0.1" value={c.temperature ?? 0.7} onChange={e => s('temperature', parseFloat(e.target.value))}
+          className="w-full h-1.5 rounded-full appearance-none cursor-pointer" style={{ background: `linear-gradient(to right, var(--accent) ${((c.temperature ?? 0.7) / 2) * 100}%, var(--border) 0%)` }} />
+        <div className="flex justify-between text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}><span>精确</span><span>平衡</span><span>创意</span></div></div>
+    </Sec>
+  </div>
+}
+
+/* ── Code ── */
+function CodeUI({ config: c, onChange, inputData }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const code = c.code || ''; const lines = code.split('\n')
+  return <div className="space-y-4">
+    <div><div className="flex items-center justify-between mb-1.5"><label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Python 代码</label>
+      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{lines.length} 行</span></div>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        <div className="px-2 py-2 text-right select-none shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', minWidth: 32 }}>
+          {lines.map((_, i) => <div key={i} className="text-[10px] font-mono leading-[20px]">{i + 1}</div>)}</div>
+        <textarea value={code} onChange={e => s('code', e.target.value)} className="flex-1 px-3 py-2 text-xs font-mono outline-none resize-y leading-[20px]"
+          style={{ background: 'var(--bg-surface)', color: 'var(--text)', minHeight: 200, tabSize: 4 }} spellCheck={false}
+          placeholder={'# result 变量作为输出\nresult = {"count": len(items)}'} /></div></div>
+    <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      <div className="text-[10px] font-medium mb-2" style={{ color: 'var(--text-muted)' }}>📖 可用变量</div>
+      <div className="space-y-1.5">{[
+        { n: 'input_data', d: '上游数据 (dict)', c: '#3b82f6' }, { n: 'variables', d: '全局变量 (dict)', c: '#22c55e' },
+        { n: 'items', d: 'input_data 快捷引用', c: '#f59e0b' }, { n: 'result', d: '设置此变量作为输出', c: '#ef4444' },
+      ].map(v => <button key={v.n} onClick={() => { navigator.clipboard.writeText(v.n); toast.success(`已复制: ${v.n}`) }}
+        className="w-full flex items-center gap-2 px-2 py-1 rounded text-left hover:bg-[var(--bg-hover)]">
+        <code className="text-[10px] font-mono" style={{ color: v.c }}>{v.n}</code>
+        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{v.d}</span></button>)}</div>
+      {inputData && typeof inputData === 'object' && <div className="mt-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+        <div className="text-[9px] mb-1" style={{ color: 'var(--text-muted)' }}>input_data 字段：</div>
+        <div className="flex flex-wrap gap-1">{Object.keys(inputData).slice(0, 10).map(k =>
+          <button key={k} onClick={() => { navigator.clipboard.writeText(`input_data["${k}"]`); toast.success('已复制') }}
+            className="px-1.5 py-0.5 rounded text-[9px] font-mono hover:bg-[var(--accent)] hover:text-white" style={{ background: 'var(--bg)', color: 'var(--accent)' }}>{k}</button>)}</div></div>}
+    </div>
+  </div>
+}
+
+/* ── Schedule ── */
+function ScheduleUI({ config: c, onChange }: { config: Record<string, any>; onChange: (c: Record<string, any>) => void }) {
+  const [mode, setMode] = useState<'simple' | 'cron'>(c._scheduleMode ? 'simple' : (c.cron ? 'cron' : 'simple'))
+  const [sm, setSm] = useState(c._scheduleMode || 'daily')
+  const upd = (freq: string, h?: string, m?: string, wd?: string) => {
+    setSm(freq); const hr = h ?? c._hour ?? '9'; const mn = m ?? c._minute ?? '0'; const w = wd ?? c._weekday ?? '1'
+    let cron = ''; if (freq === 'hourly') cron = `${mn} * * * *`; else if (freq === 'daily') cron = `${mn} ${hr} * * *`
+    else if (freq === 'weekly') cron = `${mn} ${hr} * * ${w}`; else cron = `${mn} ${hr} 1 * *`
+    onChange({ ...c, cron, _scheduleMode: freq, _hour: hr, _minute: mn, _weekday: w })
+  }
+  const desc = sm === 'hourly' ? `每小时第 ${c._minute || 0} 分` : sm === 'daily' ? `每天 ${(c._hour || '9').toString().padStart(2, '0')}:${(c._minute || '0').toString().padStart(2, '0')}` :
+    sm === 'weekly' ? `每周${'日一二三四五六'[parseInt(c._weekday || '1')]} ${(c._hour || '9').toString().padStart(2, '0')}:${(c._minute || '0').toString().padStart(2, '0')}` :
+    `每月1日 ${(c._hour || '9').toString().padStart(2, '0')}:${(c._minute || '0').toString().padStart(2, '0')}`
+
+  return <div className="space-y-4">
+    <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      {(['simple', 'cron'] as const).map(m => <button key={m} onClick={() => setMode(m)} className="flex-1 py-2 text-xs font-medium"
+        style={{ background: mode === m ? 'var(--accent)' : 'var(--bg-surface)', color: mode === m ? 'white' : 'var(--text-muted)' }}>{m === 'simple' ? '简单模式' : 'Cron'}</button>)}</div>
+    {mode === 'simple' ? <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-1.5">{[{ v: 'hourly', l: '每小时', i: '⏰' }, { v: 'daily', l: '每天', i: '📅' }, { v: 'weekly', l: '每周', i: '📆' }, { v: 'monthly', l: '每月', i: '🗓️' }].map(x =>
+        <button key={x.v} onClick={() => upd(x.v)} className={`flex flex-col items-center gap-1 p-2.5 rounded-lg ${sm === x.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: sm === x.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <span className="text-lg">{x.i}</span><span className="text-[10px] font-medium" style={{ color: sm === x.v ? 'var(--accent)' : 'var(--text)' }}>{x.l}</span></button>)}</div>
+      {sm !== 'hourly' && <div className="flex gap-3">
+        {sm === 'weekly' && <div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>星期</label>
+          <select value={c._weekday || '1'} onChange={e => upd(sm, undefined, undefined, e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
+            {'日一二三四五六'.split('').map((d, i) => <option key={i} value={i}>星期{d}</option>)}</select></div>}
+        <div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>时</label>
+          <select value={c._hour || '9'} onChange={e => upd(sm, e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
+            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}</select></div>
+        <div className="flex-1"><label className={lbl} style={{ color: 'var(--text-muted)' }}>分</label>
+          <select value={c._minute || '0'} onChange={e => upd(sm, undefined, e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
+            {[0, 5, 10, 15, 20, 30, 45].map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}</select></div></div>}
+      {sm === 'hourly' && <div className="w-1/2"><label className={lbl} style={{ color: 'var(--text-muted)' }}>分钟</label>
+        <select value={c._minute || '0'} onChange={e => upd(sm, undefined, e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
+          {[0, 5, 10, 15, 20, 30, 45].map(m => <option key={m} value={m}>第 {m} 分</option>)}</select></div>}
+      <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--accent)' }}>⏰ {desc} 执行</div>
+    </div> : <div className="space-y-3">
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>Cron 表达式</label>
+        <input value={c.cron || '0 9 * * *'} onChange={e => onChange({ ...c, cron: e.target.value })} className="w-full px-3 py-2.5 rounded-lg text-sm font-mono outline-none" style={st} placeholder="分 时 日 月 周" /></div>
+      <div className="text-[10px] px-3 py-2 rounded-lg space-y-0.5" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+        <div><code style={{ color: 'var(--accent)' }}>0 9 * * *</code> → 每天 09:00</div>
+        <div><code style={{ color: 'var(--accent)' }}>0 */2 * * *</code> → 每 2 小时</div>
+        <div><code style={{ color: 'var(--accent)' }}>30 8 * * 1-5</code> → 工作日 08:30</div></div>
+    </div>}
+  </div>
+}
+
+/* ── Messaging ── */
+function MsgUI({ nodeType, config: c, onChange }: CProps & { nodeType: string }) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  const pn = nodeType === 'feishu' ? '飞书' : nodeType === 'dingtalk' ? '钉钉' : '企微'
+  const ph = nodeType === 'feishu' ? 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx' : nodeType === 'dingtalk' ? 'https://oapi.dingtalk.com/robot/send?access_token=xxx' : 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>{pn} Webhook URL</label>
+      <input value={c.webhookUrl || ''} onChange={e => s('webhookUrl', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs font-mono outline-none" style={st} placeholder={ph} />
+      <div className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>{pn}群设置→机器人→获取 Webhook</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>格式</label>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        {(['text', 'markdown'] as const).map(t => <button key={t} onClick={() => s('msgType', t)} className="flex-1 py-2 text-xs"
+          style={{ background: (c.msgType || 'text') === t ? 'var(--accent)' : 'var(--bg-surface)', color: (c.msgType || 'text') === t ? 'white' : 'var(--text-muted)' }}>{t === 'text' ? '文本' : 'Markdown'}</button>)}</div></div>
+    {c.msgType === 'markdown' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>标题</label>
+      <input value={c.title || ''} onChange={e => s('title', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="通知标题" /></div>}
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>内容</label>
+      <textarea value={c.content || ''} onChange={e => s('content', e.target.value)} rows={5} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 80 }}
+        placeholder={c.msgType === 'markdown' ? '## 通知\n{{ $input.summary }}' : '{{ $input.summary }}'} /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>📱 预览</label>
+      <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 mb-2 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] text-white"
+            style={{ background: nodeType === 'feishu' ? '#3370ff' : nodeType === 'dingtalk' ? '#0089ff' : '#07c160' }}>{pn[0]}</div>
+          <span className="text-[10px] font-medium" style={{ color: 'var(--text)' }}>机器人</span></div>
+        {c.title && c.msgType === 'markdown' && <div className="text-xs font-bold mb-1" style={{ color: 'var(--text)' }}>{c.title}</div>}
+        <div className="text-xs whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>{c.content || '(空)'}</div>
+      </div></div>
+  </div>
+}
+
+/* ── Shared ── */
+function KV({ value, onChange, kp, vp }: { value: any; onChange: (v: string) => void; kp?: string; vp?: string }) {
+  let pairs: [string, string][] = []; try { const o = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {})
+    if (typeof o === 'object' && !Array.isArray(o)) pairs = Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]) } catch {}
+  const upd = (p: [string, string][]) => { const o: Record<string, string> = {}; for (const [k, v] of p) if (k.trim()) o[k.trim()] = v; onChange(JSON.stringify(o)) }
+  return <div className="space-y-1.5">{pairs.map(([k, v], i) => <div key={i} className="flex gap-1.5">
+    <input value={k} onChange={e => { const n = [...pairs]; n[i] = [e.target.value, v]; upd(n) }} placeholder={kp || 'Key'} className="w-[35%] px-2 py-1.5 rounded text-xs outline-none" style={st} />
+    <input value={v} onChange={e => { const n = [...pairs]; n[i] = [k, e.target.value]; upd(n) }} placeholder={vp || 'Value'} className="flex-1 px-2 py-1.5 rounded text-xs outline-none" style={st} />
+    <button onClick={() => upd(pairs.filter((_, j) => j !== i))} className="p-1 rounded hover:text-[var(--error)]" style={{ color: 'var(--text-muted)' }}><Trash2 size={12} /></button></div>)}
+    <button onClick={() => upd([...pairs, ['', '']])} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}><Plus size={10} /> 添加</button></div>
+}
+
+function TagInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const tags = (value || '').split(',').map(t => t.trim()).filter(Boolean); const [inp, setInp] = useState('')
+  const add = (t: string) => { if (t.trim() && !tags.includes(t.trim())) onChange([...tags, t.trim()].join(', ')); setInp('') }
+  return <div><div className="flex flex-wrap gap-1.5 mb-1.5">{tags.map((t, i) => <span key={i} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px]"
+    style={{ background: 'var(--accent)20', color: 'var(--accent)', border: '1px solid var(--accent)40' }}>{t}
+    <button onClick={() => onChange(tags.filter((_, j) => j !== i).join(', '))} className="hover:text-[var(--error)]">×</button></span>)}</div>
+    <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(inp) } }}
+      className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={placeholder} /></div>
+}

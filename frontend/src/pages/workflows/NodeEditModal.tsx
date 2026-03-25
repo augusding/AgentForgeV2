@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Play, Loader2, ChevronRight, ChevronDown, Plus, Trash2, HelpCircle } from 'lucide-react'
+import NodeCustomUI, { hasCustomUI } from './NodeCustomUI'
 import type { Node } from '@xyflow/react'
 import type { NodeTypeDef } from '../../api/workflow'
 import { testNode } from '../../api/workflow'
@@ -98,7 +99,7 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
   } catch { toast.error('测试失败') } finally { setTesting(false) } }
 
   const outItems = useMemo(() => { const o = result?.output; if (!o) return []; if (Array.isArray(o)) return o; if (o.items && Array.isArray(o.items)) return o.items; return [o] }, [result])
-  const up = (n: string, v: any) => onUpdateConfig({ ...config, [n]: v })
+  const up = (n: string, v: any) => n === '_full' ? onUpdateConfig(v) : onUpdateConfig({ ...config, [n]: v })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
@@ -121,6 +122,7 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
         <div className="flex-1 flex min-h-0">
           {/* Left: params */}
           <div className="flex-1 overflow-auto p-5 space-y-4 border-r" style={{ borderColor: 'var(--border)' }}>
+            {hasCustomUI(nodeType) ? <NodeCustomUI nodeType={nodeType} config={config} onChange={c => up('_full', c)} inputData={upstreamOutput} /> : <>
             <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>参数配置</h3>
             {params.map(p => { if (p.displayOptions?.show && !Object.entries(p.displayOptions.show).every(([k, v]: [string, any]) => Array.isArray(v) ? v.includes(config[k]) : config[k] === v)) return null
               return (<div key={p.name} className="space-y-1.5">
@@ -132,6 +134,7 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                 <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} />
               </div>)})}
             {!params.length && <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>无需配置</div>}
+            </>}
             {NDOCS[nodeType] && <details className="group mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
               <summary className="text-xs font-medium cursor-pointer flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                 <HelpCircle size={12} /> 使用说明 <ChevronRight size={12} className="group-open:rotate-90 transition-transform ml-auto" /></summary>
