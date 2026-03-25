@@ -21,22 +21,20 @@ def _json(data, status=200):
 # ── 节点目录 ──────────────────────────────────────────────
 
 async def handle_node_catalog(request):
-    """GET /api/v1/workflow-engine/nodes"""
+    """GET /api/v1/workflow-engine/nodes — 从 NodeRegistry 获取真实节点目录"""
+    engine = request.app["engine"]
+    if engine.wf_engine and hasattr(engine.wf_engine, '_registry'):
+        catalog = engine.wf_engine._registry.get_catalog()
+        if catalog:
+            return _json({"nodes": catalog})
+    # fallback
     return _json({"nodes": [
         {"name": "manualTrigger", "displayName": "手动触发", "group": "trigger"},
         {"name": "scheduleTrigger", "displayName": "定时触发", "group": "trigger"},
         {"name": "webhookTrigger", "displayName": "Webhook 触发", "group": "trigger"},
-        {"name": "ai", "displayName": "AI 处理", "group": "ai"},
-        {"name": "code", "displayName": "代码执行", "group": "action"},
-        {"name": "if", "displayName": "条件判断", "group": "logic"},
-        {"name": "switch", "displayName": "多路分发", "group": "logic"},
+        {"name": "code", "displayName": "代码执行", "group": "logic"},
         {"name": "set", "displayName": "设置变量", "group": "data"},
-        {"name": "http", "displayName": "HTTP 请求", "group": "action"},
-        {"name": "notification", "displayName": "通知", "group": "action"},
-        {"name": "approval", "displayName": "人工审批", "group": "action"},
-        {"name": "loop", "displayName": "循环", "group": "logic"},
-        {"name": "document", "displayName": "文档处理", "group": "data"},
-        {"name": "transform", "displayName": "数据转换", "group": "data"},
+        {"name": "notification", "displayName": "通知", "group": "notify"},
     ]})
 
 
@@ -239,4 +237,5 @@ def register(app: web.Application) -> None:
     r.add_post("/api/v1/workflow-engine/workflows/{wf_id}/execute", handle_wf_execute)
     r.add_get("/api/v1/workflow-engine/executions", _stub_list)
     r.add_post("/api/v1/workflow-engine/generate", handle_workflow_generate)
-    r.add_post("/api/v1/workflow-engine/test-node", _stub_ok)
+    from api.routes.workflow import handle_test_node
+    r.add_post("/api/v1/workflow-engine/test-node", handle_test_node)

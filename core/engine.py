@@ -112,10 +112,14 @@ class ForgeEngine:
         from workflow.trigger import TriggerManager
         from workflow.store import WorkflowStore
         from workflow.engine import WorkflowEngine as WFEngine
+        from workflow.registry import NodeRegistry as WFNodeRegistry
+        from workflow.nodes import register_all_nodes
         self._scheduler = Scheduler(check_interval=60)
         self._wf_store = WorkflowStore(str(self.root_dir / "data" / "workflows.db"))
         await self._wf_store.ensure_tables()
-        self._wf_engine = WFEngine()
+        wf_registry = WFNodeRegistry()
+        register_all_nodes(wf_registry, self._llm)
+        self._wf_engine = WFEngine(registry=wf_registry)
         self._trigger_manager = TriggerManager(self._wf_store, self._wf_engine, self._scheduler, self._llm)
         await self._trigger_manager.load_triggers()
 

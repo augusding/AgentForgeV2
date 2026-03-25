@@ -12,6 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from workflow.engine import WorkflowEngine
+from workflow.registry import NodeRegistry
+from workflow.nodes import register_all_nodes
 from workflow.types import WorkflowDefinition, WorkflowNode, NodeResult
 from workflow.store import WorkflowStore
 
@@ -21,7 +23,9 @@ from workflow.store import WorkflowStore
 class TestWorkflowEngine:
 
     def setup_method(self):
-        self.engine = WorkflowEngine()
+        registry = NodeRegistry()
+        register_all_nodes(registry)
+        self.engine = WorkflowEngine(registry=registry)
 
     @pytest.mark.asyncio
     async def test_simple_linear(self):

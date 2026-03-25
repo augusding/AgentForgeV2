@@ -169,6 +169,34 @@ async def handle_trigger_list(request: web.Request) -> web.Response:
     return _json({"webhooks": tm.get_webhook_ids(), "chat_triggers": tm.get_chat_triggers()})
 
 
+async def handle_test_node(request: web.Request) -> web.Response:
+    """POST /api/v1/workflow-engine/test-node — 单节点测试"""
+    engine = request.app["engine"]
+    body = await request.json()
+    node_type = body.get("type", "")
+    config = body.get("parameters", body.get("config", {}))
+    input_data = body.get("input", {})
+
+    if not node_type or not engine.wf_engine:
+        return _json({"error": "节点类型不能为空"}, status=400)
+
+    executor = engine.wf_engine._registry.get_executor(node_type)
+    if not executor:
+        return _json({"error": f"未知节点类型: {node_type}"}, status=400)
+
+    from workflow.types import WorkflowNode as WFNode
+    import time as _time
+    test_node = WFNode(id="test", type=node_type, config=config)
+    ctx = {"llm": engine._llm, "_last_output": input_data, "_node_outputs": {}}
+    start = _time.time()
+    try:
+        result = await executor(test_node, body.get("variables", {}), ctx)
+        result.duration = _time.time() - start
+        return _json({"status": result.status, "output": result.output, "error": result.error, "duration": round(result.duration, 3)})
+    except Exception as e:
+        return _json({"status": "failed", "error": str(e), "duration": round(_time.time() - start, 3)})
+
+
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workflows", handle_workflow_list)
     app.router.add_get("/api/v1/workflows/{workflow_id}", handle_workflow_get)
@@ -178,3 +206,4 @@ def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workflows/{workflow_id}/executions", handle_workflow_executions)
     app.router.add_post("/api/v1/webhook/{trigger_id}", handle_webhook)
     app.router.add_get("/api/v1/triggers", handle_trigger_list)
+    app.router.add_post("/api/v1/workflow-engine/test-node", handle_test_node)
