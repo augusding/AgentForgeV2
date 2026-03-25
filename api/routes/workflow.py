@@ -67,12 +67,13 @@ async def handle_workflow_get(request: web.Request) -> web.Response:
 
 
 async def handle_workflow_create(request: web.Request) -> web.Response:
-    """POST /api/v1/workflows"""
+    """POST/PUT /api/v1/workflows — 创建或更新"""
     store = await _get_wf_store(request)
     body = await request.json()
+    url_id = request.match_info.get("workflow_id", "")
 
     wf = WorkflowDefinition(
-        id=body.get("id", uuid4().hex[:12]),
+        id=url_id or body.get("id", uuid4().hex[:12]),
         name=body.get("name", "未命名工作流"),
         description=body.get("description", ""),
         org_id=body.get("org_id", ""),
@@ -201,6 +202,7 @@ def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workflows", handle_workflow_list)
     app.router.add_get("/api/v1/workflows/{workflow_id}", handle_workflow_get)
     app.router.add_post("/api/v1/workflows", handle_workflow_create)
+    app.router.add_put("/api/v1/workflows/{workflow_id}", handle_workflow_create)  # upsert
     app.router.add_delete("/api/v1/workflows/{workflow_id}", handle_workflow_delete)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute", handle_workflow_execute)
     app.router.add_get("/api/v1/workflows/{workflow_id}/executions", handle_workflow_executions)

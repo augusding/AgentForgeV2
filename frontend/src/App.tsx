@@ -7,6 +7,7 @@ import Chat from './pages/Chat'
 import Workstation from './pages/Workstation'
 import Knowledge from './pages/Knowledge'
 import Workflows from './pages/Workflows'
+import WorkflowEditor from './pages/workflows/WorkflowEditor'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/workflows" element={<Workflows />} />
+        <Route path="/workflows/:workflowId" element={<WorkflowEditor />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
