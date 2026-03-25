@@ -10,6 +10,7 @@ import WfNode from './WfNode'
 import NodePalette from './NodePalette'
 import PropertyPanel from './PropertyPanel'
 import NodeEditModal from './NodeEditModal'
+import { NODE_OUTPUT_SCHEMAS } from './nodeOutputSchemas'
 import toast from 'react-hot-toast'
 
 const nodeTypes = { wfNode: WfNode }
@@ -98,6 +99,16 @@ export default function WorkflowEditor() {
 
   const onNodeCtx = useCallback((ev: React.MouseEvent, n: Node) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, nodeId: n.id }) }, [])
 
+  const getUpstreamInfo = useCallback((nodeId: string) => {
+    const upstreams: Array<{ nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }> = []
+    for (const edge of edges) { if (edge.target === nodeId) {
+      const src = nodes.find(n => n.id === edge.source); if (!src) continue
+      const st = (src.data as any)?.nodeType || ''
+      upstreams.push({ nodeId: edge.source, nodeLabel: (src.data as any)?.label || st, nodeType: st, data: execStatus[edge.source]?.output || null, schema: NODE_OUTPUT_SCHEMAS[st] || [] })
+    } }
+    return { upstreams, directOutput: upstreams.find(u => u.data)?.data || null }
+  }, [edges, nodes, execStatus])
+
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--bg)' }}>
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
@@ -150,9 +161,9 @@ export default function WorkflowEditor() {
               <button onClick={() => setShowTriggerPicker(false)} className="w-full mt-3 py-2 text-xs rounded-lg" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>跳过</button>
             </div></div>}
         </div>
-        {selected && !resultPopup && <PropertyPanel node={selected} catalog={catalog} execData={execStatus[selected.id]}
-          upstreamOutput={edges.reduce((a: any, e) => a || (e.target === selected.id ? execStatus[e.source]?.output : null), null)}
-          onUpdateConfig={c => updateCfg(selected.id, c)} onUpdateLabel={l => updateLabel(selected.id, l)} onDelete={() => delNode(selected.id)} onClose={() => setSelected(null)} />}
+        {selected && !resultPopup && (() => { const ui = getUpstreamInfo(selected.id); return <PropertyPanel node={selected} catalog={catalog} execData={execStatus[selected.id]}
+          upstreamOutput={ui.directOutput} upstreamNodes={ui.upstreams}
+          onUpdateConfig={c => updateCfg(selected.id, c)} onUpdateLabel={l => updateLabel(selected.id, l)} onDelete={() => delNode(selected.id)} onClose={() => setSelected(null)} /> })()}
         {resultPopup && <div className="absolute bottom-4 right-4 w-[350px] max-h-[400px] rounded-xl overflow-hidden shadow-2xl z-50" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
             <span className="text-xs font-medium">输出 <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] text-white" style={{ background: resultPopup.data.status === 'completed' ? 'var(--success)' : 'var(--error)' }}>{resultPopup.data.status}</span></span>
@@ -189,11 +200,11 @@ export default function WorkflowEditor() {
               </button>
           )}
         </div></>}
-      {editModal && <NodeEditModal node={editModal} catalog={catalog} execData={execStatus[editModal.id]}
-        upstreamOutput={edges.reduce((a: any, e) => a || (e.target === editModal.id ? execStatus[e.source]?.output : null), null)}
+      {editModal && (() => { const ui = getUpstreamInfo(editModal.id); return <NodeEditModal node={editModal} catalog={catalog} execData={execStatus[editModal.id]}
+        upstreamOutput={ui.directOutput} upstreamNodes={ui.upstreams}
         onUpdateConfig={c => { updateCfg(editModal.id, c); setEditModal(p => p ? { ...p, data: { ...p.data, config: c } } : null) }}
         onUpdateLabel={l => { updateLabel(editModal.id, l); setEditModal(p => p ? { ...p, data: { ...p.data, label: l } } : null) }}
-        onClose={() => setEditModal(null)} />}
+        onClose={() => setEditModal(null)} /> })()}
     </div>
   )
 }

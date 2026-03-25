@@ -7,11 +7,12 @@ import toast from 'react-hot-toast'
 
 interface Props {
   node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
+  upstreamNodes?: Array<{ nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }>
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onDelete: () => void; onClose: () => void
 }
 type Tab = 'params' | 'input' | 'output'
 
-export default function PropertyPanel({ node, catalog, execData, upstreamOutput, onUpdateConfig, onUpdateLabel, onDelete, onClose }: Props) {
+export default function PropertyPanel({ node, catalog, execData, upstreamOutput, upstreamNodes, onUpdateConfig, onUpdateLabel, onDelete, onClose }: Props) {
   const { label, nodeType, config } = node.data as any
   const def = catalog.find(c => c.name === nodeType)
   const params = def?.parameters || []
@@ -76,17 +77,20 @@ export default function PropertyPanel({ node, catalog, execData, upstreamOutput,
         </>}
 
         {tab === 'input' && <>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>测试输入</span>
-            {upstreamOutput && <button onClick={() => setTestInput(JSON.stringify(upstreamOutput, null, 2))}
-              className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: 'var(--accent)' }}>用上游数据</button>}
-          </div>
-          <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={12}
+          {(upstreamNodes || []).map(u => <div key={u.nodeId} className="mb-2">
+            <div className="text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{u.nodeLabel} {u.data ? '✅' : '📋'}</div>
+            <div className="flex flex-wrap gap-1">{(u.data ? Object.keys(typeof u.data === 'object' ? u.data : {}).slice(0, 10) : u.schema.map((f: any) => f.name)).map((f: string) =>
+              <button key={f} onClick={() => { navigator.clipboard.writeText(`{{ $input.${f} }}`); toast.success('已复制') }}
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono hover:bg-[var(--accent)] hover:text-white"
+                style={{ background: 'var(--bg)', color: 'var(--accent)' }}>{f}</button>)}</div>
+          </div>)}
+          {(!upstreamNodes || !upstreamNodes.length) && <div className="text-xs text-center py-3" style={{ color: 'var(--text-muted)' }}>无上游连接</div>}
+          <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={6}
             className="w-full px-2 py-1.5 rounded text-xs outline-none resize-y font-mono"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 120 }} />
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 60 }} placeholder='{"key":"value"}' />
           <button onClick={handleTest} disabled={testing} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-white"
             style={{ background: testing ? 'var(--border)' : 'var(--accent)' }}>
-            {testing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} 用此数据测试</button>
+            {testing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} 测试</button>
         </>}
 
         {tab === 'output' && (result ? <>

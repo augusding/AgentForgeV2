@@ -6,7 +6,7 @@ interface CProps { config: Record<string, any>; onChange: (c: Record<string, any
 const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }
 const lbl = "text-xs font-medium mb-1.5 block"
 
-export const hasCustomUI = (t: string) => ['http', 'ai', 'code', 'scheduleTrigger', 'feishu', 'dingtalk', 'wecom'].includes(t)
+export const hasCustomUI = (_t: string) => true  // all nodes have custom UI now
 
 export default function NodeCustomUI({ nodeType, ...p }: CProps & { nodeType: string }) {
   if (nodeType === 'http') return <HttpUI {...p} />
@@ -14,7 +14,18 @@ export default function NodeCustomUI({ nodeType, ...p }: CProps & { nodeType: st
   if (nodeType === 'code') return <CodeUI {...p} />
   if (nodeType === 'scheduleTrigger') return <ScheduleUI config={p.config} onChange={p.onChange} />
   if (['feishu', 'dingtalk', 'wecom'].includes(nodeType)) return <MsgUI nodeType={nodeType} {...p} />
-  return null
+  if (nodeType === 'manualTrigger') return <ManualTriggerUI />
+  if (nodeType === 'webhookTrigger') return <WebhookTriggerUI {...p} />
+  if (nodeType === 'email') return <EmailUI {...p} />
+  if (nodeType === 'notification') return <NotifUI {...p} />
+  if (nodeType === 'set') return <SetUI {...p} />
+  if (nodeType === 'excel') return <ExcelUI {...p} />
+  if (nodeType === 'document') return <DocUI {...p} />
+  if (nodeType === 'database') return <DbUI {...p} />
+  if (nodeType === 'scraper') return <ScraperUI {...p} />
+  if (nodeType === 'kvStore') return <KvUI {...p} />
+  if (nodeType === 'if' || nodeType === 'condition') return <IfUI {...p} />
+  return null  // fallback to generic
 }
 
 function Sec({ children, title, collapsed, onToggle }: { children: React.ReactNode; title: string; collapsed?: boolean; onToggle?: () => void }) {
@@ -63,7 +74,7 @@ function HttpUI({ config: c, onChange }: CProps) {
 }
 
 /* ── AI ── */
-function AiUI({ config: c, onChange, inputData }: CProps) {
+function AiUI({ config: c, onChange }: CProps) {
   const s = (k: string, v: any) => onChange({ ...c, [k]: v })
   const op = c.operation || 'generate'; const [showAdv, setShowAdv] = useState(false)
   return <div className="space-y-5">
@@ -113,7 +124,7 @@ function CodeUI({ config: c, onChange, inputData }: CProps) {
       <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{lines.length} 行</span></div>
       <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
         <div className="px-2 py-2 text-right select-none shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', minWidth: 32 }}>
-          {lines.map((_, i) => <div key={i} className="text-[10px] font-mono leading-[20px]">{i + 1}</div>)}</div>
+          {lines.map((_: string, i: number) => <div key={i} className="text-[10px] font-mono leading-[20px]">{i + 1}</div>)}</div>
         <textarea value={code} onChange={e => s('code', e.target.value)} className="flex-1 px-3 py-2 text-xs font-mono outline-none resize-y leading-[20px]"
           style={{ background: 'var(--bg-surface)', color: 'var(--text)', minHeight: 200, tabSize: 4 }} spellCheck={false}
           placeholder={'# result 变量作为输出\nresult = {"count": len(items)}'} /></div></div>
@@ -233,4 +244,217 @@ function TagInput({ value, onChange, placeholder }: { value: string; onChange: (
     <button onClick={() => onChange(tags.filter((_, j) => j !== i).join(', '))} className="hover:text-[var(--error)]">×</button></span>)}</div>
     <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(inp) } }}
       className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={placeholder} /></div>
+}
+
+/* ── Manual Trigger ── */
+function ManualTriggerUI() {
+  return <div className="space-y-4">
+    <div className="rounded-xl p-5 text-center" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      <div className="text-3xl mb-3">▶️</div><h3 className="text-sm font-bold mb-1" style={{ color: 'var(--text)' }}>手动触发</h3>
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>点击"执行"按钮启动，无需配置。</p></div>
+    <div className="rounded-lg p-3 text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+      💡 可通过 API 传入触发数据 | 下游用 {'{{ $input.trigger }}'} 获取</div></div>
+}
+
+/* ── Webhook Trigger ── */
+function WebhookTriggerUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  const url = `${window.location.origin}/api/v1/webhook/${c.webhookId || '<workflow_id>'}`
+  return <div className="space-y-4">
+    <div className="rounded-lg p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      <label className={lbl} style={{ color: 'var(--text-muted)' }}>Webhook URL</label>
+      <div className="flex gap-1.5"><input value={url} readOnly className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none" style={{ ...st, background: 'var(--bg)' }} />
+        <button onClick={() => { navigator.clipboard.writeText(url); toast.success('已复制') }} className="px-3 py-2 rounded-lg text-xs text-white shrink-0" style={{ background: 'var(--accent)' }}>复制</button></div>
+      <p className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>外部系统 POST 此 URL 触发工作流</p></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>响应消息</label>
+      <input value={c.responseMessage || ''} onChange={e => s('responseMessage', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="Webhook received" /></div>
+    <div className="rounded-lg p-3 text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+      <pre className="text-[10px] font-mono">curl -X POST {url} -H "Content-Type: application/json" -d '{"{"}message":"hello"{"}"}'</pre></div>
+  </div>
+}
+
+/* ── Email ── */
+function EmailUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>收件人</label>
+      <input value={c.to || ''} onChange={e => s('to', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none" style={st} placeholder="user@example.com（逗号分隔多个）" /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>主题</label>
+      <input value={c.subject || ''} onChange={e => s('subject', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none" style={st} placeholder="{{ $input.title }} - 通知" /></div>
+    <div className="flex items-center gap-3"><label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>格式</label>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        {[false, true].map(v => <button key={String(v)} onClick={() => s('html', v)} className="px-3 py-1 text-[10px]"
+          style={{ background: (c.html || false) === v ? 'var(--accent)' : 'var(--bg-surface)', color: (c.html || false) === v ? 'white' : 'var(--text-muted)' }}>{v ? 'HTML' : '文本'}</button>)}</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>正文</label>
+      <textarea value={c.body || ''} onChange={e => s('body', e.target.value)} rows={8} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 120 }}
+        placeholder={c.html ? '<h1>标题</h1>\n<p>{{ $input.summary }}</p>' : '{{ $input.summary }}'} /></div>
+    <div className="text-[10px] rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>⚙️ SMTP 环境变量: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS</div>
+  </div>
+}
+
+/* ── Notification ── */
+function NotifUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>标题</label>
+      <input value={c.title || ''} onChange={e => s('title', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none" style={st} placeholder="工作流通知" /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>内容</label>
+      <textarea value={c.message || ''} onChange={e => s('message', e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} placeholder="{{ $input.summary }}" /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>方式</label>
+      <div className="grid grid-cols-2 gap-2">{[{ v: 'system', l: '🔔 系统推送' }, { v: 'log', l: '📝 仅日志' }].map(o =>
+        <button key={o.v} onClick={() => s('channel', o.v)} className={`p-3 rounded-lg text-left text-xs ${(c.channel || 'system') === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>{o.l}</button>)}</div></div>
+  </div>
+}
+
+/* ── Set Variables ── */
+function SetUI({ config: c, onChange, inputData }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-4">
+    <div><div className="flex items-center justify-between mb-2"><label className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>变量赋值</label>
+      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>值支持 {'{{ }}'}</span></div>
+      <KV value={c.assignments} onChange={v => s('assignments', v)} kp="变量名" vp="{{ $input.field }}" /></div>
+    {inputData && typeof inputData === 'object' && <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      <div className="text-[10px] font-medium mb-2" style={{ color: 'var(--text-muted)' }}>上游字段</div>
+      <div className="flex flex-wrap gap-1.5">{Object.keys(Array.isArray(inputData) ? (inputData[0] || {}) : inputData).slice(0, 15).map(k =>
+        <button key={k} onClick={() => { navigator.clipboard.writeText(`{{ $input.${k} }}`); toast.success('已复制') }}
+          className="px-2 py-1 rounded text-[9px] font-mono hover:bg-[var(--accent)] hover:text-white" style={{ background: 'var(--bg)', color: 'var(--accent)' }}>{k}</button>)}</div></div>}
+    <div className="text-[10px] rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>💡 后续节点用 {'{{ $vars.变量名 }}'} 引用</div>
+  </div>
+}
+
+/* ── Excel ── */
+function ExcelUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const a = c.action || 'read'
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>操作</label>
+      <div className="grid grid-cols-3 gap-2">{[{ v: 'read', l: '📖 读取' }, { v: 'create', l: '📝 创建' }, { v: 'append', l: '➕ 追加' }].map(o =>
+        <button key={o.v} onClick={() => s('action', o.v)} className={`py-2.5 rounded-lg text-center text-xs font-medium ${a === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: a === o.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)', color: a === o.v ? 'var(--accent)' : 'var(--text)' }}>{o.l}</button>)}</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>文件路径</label>
+      <input value={c.path || ''} onChange={e => s('path', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder={a === 'create' ? 'data/outputs/report.xlsx' : 'data/input.xlsx'} /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>工作表</label>
+      <input value={c.sheet || ''} onChange={e => s('sheet', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="Sheet1（留空默认）" /></div>
+    {a !== 'read' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>数据（留空用上游）</label>
+      <textarea value={c.data || ''} onChange={e => s('data', e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 60 }}
+        placeholder={'[{"姓名": "张三", "得分": 85}]'} /></div>}
+  </div>
+}
+
+/* ── Document ── */
+function DocUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>类型</label>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        {[{ v: 'create_word', l: '📄 Word' }, { v: 'create_text', l: '📝 文本' }].map(t =>
+          <button key={t.v} onClick={() => s('action', t.v)} className="flex-1 py-2.5 text-xs"
+            style={{ background: (c.action || 'create_word') === t.v ? 'var(--accent)' : 'var(--bg-surface)', color: (c.action || 'create_word') === t.v ? 'white' : 'var(--text-muted)' }}>{t.l}</button>)}</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>标题</label>
+      <input value={c.title || ''} onChange={e => s('title', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none" style={st} placeholder="项目报告" /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>内容 <span className="text-[9px] font-normal">支持 Markdown</span></label>
+      <textarea value={c.content || ''} onChange={e => s('content', e.target.value)} rows={10} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 150 }}
+        placeholder={'# 标题\n## 第一部分\n{{ $input.ai_result }}'} /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>路径（留空自动）</label>
+      <input value={c.path || ''} onChange={e => s('path', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none font-mono" style={st} placeholder="data/outputs/report.docx" /></div>
+  </div>
+}
+
+/* ── Database ── */
+function DbUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const db = c.dbType || 'sqlite'
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>类型</label>
+      <div className="grid grid-cols-3 gap-2">{[{ v: 'sqlite', l: '🗄️ SQLite' }, { v: 'mysql', l: '🐬 MySQL' }, { v: 'postgresql', l: '🐘 PG' }].map(d =>
+        <button key={d.v} onClick={() => s('dbType', d.v)} className={`py-2 rounded-lg text-center text-[10px] font-medium ${db === d.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: db === d.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)', color: db === d.v ? 'var(--accent)' : 'var(--text)' }}>{d.l}</button>)}</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>{db === 'sqlite' ? '文件路径' : '连接字符串'}</label>
+      <input value={c.connection || ''} onChange={e => s('connection', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st}
+        placeholder={db === 'sqlite' ? 'data/memories.db' : 'host=localhost dbname=mydb'} /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>SQL</label>
+      <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        <div className="px-2 py-2 text-right select-none shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', minWidth: 28 }}>
+          {(c.query || '').split('\n').map((_: string, i: number) => <div key={i} className="text-[9px] font-mono leading-[18px]">{i + 1}</div>)}</div>
+        <textarea value={c.query || ''} onChange={e => s('query', e.target.value)} rows={6} className="flex-1 px-3 py-2 text-xs font-mono outline-none resize-y leading-[18px]"
+          style={{ background: 'var(--bg-surface)', color: 'var(--text)', minHeight: 100 }} placeholder="SELECT * FROM table LIMIT 50" /></div></div>
+    <div className="text-[10px] rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>SELECT → items 列表 | INSERT/UPDATE → affected_rows</div>
+  </div>
+}
+
+/* ── Scraper ── */
+function ScraperUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>网页 URL</label>
+      <input value={c.url || ''} onChange={e => s('url', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder="https://example.com/page" /></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>提取方式</label>
+      <div className="grid grid-cols-3 gap-2">{[{ v: 'text', l: '📝 文本' }, { v: 'html', l: '🌐 HTML' }, { v: 'json', l: '📦 JSON' }].map(e =>
+        <button key={e.v} onClick={() => s('extract', e.v)} className={`py-2 rounded-lg text-center text-[10px] font-medium ${(c.extract || 'text') === e.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: (c.extract || 'text') === e.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)', color: (c.extract || 'text') === e.v ? 'var(--accent)' : 'var(--text)' }}>{e.l}</button>)}</div></div>
+    {(c.extract || 'text') === 'text' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>关键词过滤</label>
+      <input value={c.selector || ''} onChange={e => s('selector', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="只保留含此词的段落" /></div>}
+  </div>
+}
+
+/* ── KV Store ── */
+function KvUI({ config: c, onChange }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const a = c.action || 'get'
+  return <div className="space-y-4">
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>操作</label>
+      <div className="grid grid-cols-4 gap-1.5">{[{ v: 'get', l: '📖' }, { v: 'set', l: '✏️' }, { v: 'delete', l: '🗑️' }, { v: 'list', l: '📋' }].map(o =>
+        <button key={o.v} onClick={() => s('action', o.v)} className={`py-2 rounded-lg text-center text-sm ${a === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: a === o.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)' }}>{o.l}</button>)}</div></div>
+    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>{a === 'list' ? '前缀' : '键名'}</label>
+      <input value={c.key || ''} onChange={e => s('key', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder={a === 'list' ? 'cache_' : 'my_key'} /></div>
+    {a === 'set' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>值（留空用上游）</label>
+      <textarea value={c.value || ''} onChange={e => s('value', e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 60 }} placeholder='{"data": "..."}' /></div>}
+    <div className="text-[10px] rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>💾 持久化存储，跨工作流共享</div>
+  </div>
+}
+
+/* ── Condition Rules (inline) ── */
+function CondRules({ value, onChange }: { value: any; onChange: (v: any) => void }) {
+  let p: { combineMode: string; rules: any[] } = { combineMode: 'AND', rules: [] }
+  try { p = typeof value === 'string' ? JSON.parse(value || '{}') : (value || {}); if (!p.rules) p = { combineMode: 'AND', rules: [] } } catch {}
+  const u = (n: typeof p) => onChange(JSON.stringify(n))
+  const ops = [['等于', 'equals'], ['不等于', 'not_equals'], ['大于', 'gt'], ['≥', 'gte'], ['小于', 'lt'], ['≤', 'lte'], ['包含', 'contains'], ['为空', 'is_empty'], ['非空', 'is_not_empty']]
+  return <div className="space-y-2">
+    <div className="flex items-center gap-2"><span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>满足</span>
+      <select value={p.combineMode} onChange={e => u({ ...p, combineMode: e.target.value })} className="px-2 py-1 rounded text-xs outline-none" style={st}>
+        <option value="AND">所有 (AND)</option><option value="OR">任一 (OR)</option></select></div>
+    {p.rules.map((r: any, i: number) => <div key={i} className="flex gap-1.5 items-center">
+      <input value={r.field || ''} onChange={e => { const n = [...p.rules]; n[i] = { ...r, field: e.target.value }; u({ ...p, rules: n }) }} placeholder="字段" className="w-[30%] px-2 py-1.5 rounded text-xs outline-none" style={st} />
+      <select value={r.operator || 'equals'} onChange={e => { const n = [...p.rules]; n[i] = { ...r, operator: e.target.value }; u({ ...p, rules: n }) }} className="w-[25%] px-2 py-1.5 rounded text-xs outline-none" style={st}>
+        {ops.map(([n, v]) => <option key={v} value={v}>{n}</option>)}</select>
+      <input value={r.value || ''} onChange={e => { const n = [...p.rules]; n[i] = { ...r, value: e.target.value }; u({ ...p, rules: n }) }} placeholder="值" className="flex-1 px-2 py-1.5 rounded text-xs outline-none" style={st} />
+      <button onClick={() => u({ ...p, rules: p.rules.filter((_: any, j: number) => j !== i) })} className="p-1 rounded hover:text-[var(--error)]" style={{ color: 'var(--text-muted)' }}><Trash2 size={12} /></button></div>)}
+    <button onClick={() => u({ ...p, rules: [...p.rules, { field: '', operator: 'equals', value: '' }] })} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}><Plus size={10} /> 添加条件</button>
+  </div>
+}
+
+/* ── If / Condition ── */
+function IfUI({ config: c, onChange, inputData }: CProps) {
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const mode = c.mode || 'rules'
+  return <div className="space-y-4">
+    <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      {[{ v: 'rules', l: '🎯 规则' }, { v: 'expression', l: '⚡ 表达式' }].map(m =>
+        <button key={m.v} onClick={() => s('mode', m.v)} className="flex-1 py-2 text-xs font-medium"
+          style={{ background: mode === m.v ? 'var(--accent)' : 'var(--bg-surface)', color: mode === m.v ? 'white' : 'var(--text-muted)' }}>{m.l}</button>)}</div>
+    {mode === 'rules' ? <div>
+      <CondRules value={c.conditions} onChange={(v: any) => s('conditions', v)} />
+      {inputData && typeof inputData === 'object' && <div className="mt-3 rounded-lg p-2.5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="text-[9px] mb-1.5" style={{ color: 'var(--text-muted)' }}>可用字段：</div>
+        <div className="flex flex-wrap gap-1">{Object.keys(Array.isArray(inputData) ? (inputData[0] || {}) : inputData).slice(0, 12).map(k =>
+          <span key={k} className="px-1.5 py-0.5 rounded text-[9px] font-mono" style={{ background: 'var(--bg)', color: 'var(--accent)' }}>{k}</span>)}</div></div>}
+    </div> : <div className="space-y-2">
+      <textarea value={c.expression || ''} onChange={e => s('expression', e.target.value)} rows={3} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 50 }}
+        placeholder="$input.score > 60 and $input.status == 'active'" />
+      <div className="text-[10px] rounded-lg p-2 font-mono" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+        <code style={{ color: 'var(--accent)' }}>$input.score {'>'} 60</code> | <code style={{ color: 'var(--accent)' }}>len($input.items) {'>'} 0</code></div>
+    </div>}
+    <div className="flex gap-2">
+      <div className="flex-1 rounded-lg p-2 text-center text-[10px]" style={{ background: '#22c55e15', border: '1px solid #22c55e40', color: '#22c55e' }}>✅ True → 输出 0</div>
+      <div className="flex-1 rounded-lg p-2 text-center text-[10px]" style={{ background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444' }}>❌ False → 输出 1</div>
+    </div>
+  </div>
 }

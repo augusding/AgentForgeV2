@@ -82,6 +82,16 @@ class WorkflowEngine:
                     if nr and nr.output and isinstance(nr.output, dict):
                         execution.variables.update(nr.output)
 
+                    # 构建按 label+id 索引的 node outputs（支持 $node["节点名"] 引用）
+                    label_outputs: dict = {}
+                    for n in workflow.nodes:
+                        r = execution.node_results.get(n.id)
+                        if r and r.output:
+                            label_outputs[n.id] = r.output
+                            if n.label:
+                                label_outputs[n.label] = r.output
+                    ctx["_node_outputs"] = label_outputs
+
                     # WebSocket 推送节点状态
                     _push_node_status(ctx, execution, nid, nr)
 

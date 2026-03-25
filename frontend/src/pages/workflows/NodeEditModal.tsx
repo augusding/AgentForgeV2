@@ -6,7 +6,9 @@ import type { NodeTypeDef } from '../../api/workflow'
 import { testNode } from '../../api/workflow'
 import toast from 'react-hot-toast'
 
+interface UpstreamNode { nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }
 interface Props { node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
+  upstreamNodes?: UpstreamNode[]
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onClose: () => void }
 
 function fErr(e: string, nt: string): string {
@@ -82,7 +84,7 @@ const PH: Record<string, string> = {
   connection: 'data/memories.db', path: 'data/outputs/report.xlsx',
 }
 
-export default function NodeEditModal({ node, catalog, execData, upstreamOutput, onUpdateConfig, onUpdateLabel, onClose }: Props) {
+export default function NodeEditModal({ node, catalog, execData, upstreamOutput, upstreamNodes, onUpdateConfig, onUpdateLabel, onClose }: Props) {
   const { label, nodeType, config } = node.data as any
   const def = catalog.find(c => c.name === nodeType); const params = def?.parameters || []
   const [testing, setTesting] = useState(false); const [result, setResult] = useState<any>(execData || null)
@@ -156,16 +158,40 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
             </div>
             <div className="flex-1 overflow-auto p-4">
               {rTab === 'input' && <div className="space-y-4">
-                {upstreamOutput ? <>
-                  <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                    <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>上游数据
-                      {Array.isArray(upstreamOutput?.items) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] text-white" style={{ background: 'var(--accent)' }}>{upstreamOutput.items.length} items</span>}</span></div>
-                    <JT data={upstreamOutput} /></div>
-                  <div><div className="text-xs font-medium mb-2" style={{ color: 'var(--text)' }}>可用字段 <span className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>点击复制表达式</span></div>
-                    <FL data={upstreamOutput} /></div>
-                </> : <div className="rounded-lg p-4 text-center" style={{ background: 'var(--bg-surface)', border: '1px dashed var(--border)' }}>
-                  <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>暂无上游数据</div>
-                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>先执行前置节点，数据会自动出现</div></div>}
+                {(upstreamNodes || []).length > 0 ? (upstreamNodes || []).map(u => (
+                  <div key={u.nodeId} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ background: 'var(--bg-surface)' }}>
+                      <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{u.nodeLabel}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{u.nodeType}</span>
+                      {u.data && <span className="text-[9px] px-1.5 py-0.5 rounded text-white ml-auto" style={{ background: 'var(--success)' }}>有数据</span>}
+                      {!u.data && <span className="text-[9px] ml-auto" style={{ color: 'var(--text-muted)' }}>📋 预测</span>}
+                    </div>
+                    <div className="px-3 py-2 space-y-0.5">{(u.data
+                      ? Object.entries(typeof u.data === 'object' ? u.data : { value: u.data }).slice(0, 15)
+                      : u.schema.map((f: any) => [f.name, f.description])
+                    ).map(([key, val]: any) => (
+                      <div key={key} className="flex items-center gap-1.5 py-0.5 group">
+                        <span className="text-[10px] font-mono" style={{ color: u.data ? 'var(--accent)' : 'var(--text-muted)' }}>{key}</span>
+                        <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>
+                          {u.data ? (typeof val === 'object' ? JSON.stringify(val).slice(0, 30) : String(val).slice(0, 30)) : val}
+                        </span>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                          <button onClick={() => { navigator.clipboard.writeText(`{{ $input.${key} }}`); toast.success('已复制') }}
+                            className="px-1 py-0.5 rounded text-[8px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}>$input</button>
+                          <button onClick={() => { navigator.clipboard.writeText(`{{ $node["${u.nodeLabel}"].${key} }}`); toast.success('已复制') }}
+                            className="px-1 py-0.5 rounded text-[8px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}>$node</button>
+                        </div>
+                      </div>))}</div>
+                  </div>
+                )) : <div className="rounded-lg p-4 text-center" style={{ background: 'var(--bg-surface)', border: '1px dashed var(--border)' }}>
+                  <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>无上游连接</div></div>}
+                <div className="rounded-lg p-3 text-[10px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                  <div className="font-medium mb-1" style={{ color: 'var(--text)' }}>📖 引用语法</div>
+                  <div className="font-mono space-y-0.5">
+                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $input.字段 }}'}</code> — 直接上游</div>
+                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $node["节点名"].字段 }}'}</code> — 指定节点</div>
+                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $vars.变量名 }}'}</code> — 工作流变量</div>
+                  </div></div>
                 <details className="group"><summary className="text-xs font-medium cursor-pointer flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
                   <ChevronRight size={12} className="group-open:rotate-90 transition-transform" /> 手动测试数据</summary>
                   <div className="mt-2"><textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={6} placeholder='{"key": "value"}'
