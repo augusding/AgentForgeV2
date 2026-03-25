@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ReactFlow, Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState, MarkerType,
+import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState, useReactFlow, MarkerType,
   type Connection, type Edge, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from 'dagre'
@@ -16,13 +16,18 @@ import toast from 'react-hot-toast'
 const nodeTypes = { wfNode: WfNode }
 let _cnt = 1; const nextId = () => `n_${Date.now()}_${_cnt++}`
 function autoLayout(ns: Node[], es: Edge[]): Node[] {
-  const g = new dagre.graphlib.Graph(); g.setDefaultEdgeLabel(() => ({})); g.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 180 })
-  ns.forEach(n => g.setNode(n.id, { width: 200, height: 60 })); es.forEach(e => g.setEdge(e.source, e.target)); dagre.layout(g)
-  return ns.map(n => { const p = g.node(n.id); return { ...n, position: { x: p.x - 100, y: p.y - 30 } } })
+  if (!ns.length) return ns
+  const g = new dagre.graphlib.Graph(); g.setDefaultEdgeLabel(() => ({})); g.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 200, marginx: 50, marginy: 50 })
+  ns.forEach(n => g.setNode(n.id, { width: 200, height: 70 })); es.forEach(e => g.setEdge(e.source, e.target)); dagre.layout(g)
+  return ns.map(n => { const p = g.node(n.id); return { ...n, position: { x: p.x - 100, y: p.y - 35 } } })
 }
 type ES = Record<string, { status: string; output?: any; error?: string; duration?: number }>
 
 export default function WorkflowEditor() {
+  return <ReactFlowProvider><WorkflowEditorInner /></ReactFlowProvider>
+}
+
+function WorkflowEditorInner() {
   const { workflowId } = useParams(); const navigate = useNavigate(); const isNew = workflowId === 'new'
   const [wfId, setWfId] = useState(isNew ? '' : workflowId || ''); const [wfName, setWfName] = useState('新工作流')
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]); const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -36,19 +41,38 @@ export default function WorkflowEditor() {
   const [showTriggerPicker, setShowTriggerPicker] = useState(false)
   const [pinnedData, setPinnedData] = useState<Record<string, any>>({})
   const wsRef = useRef<WebSocket | null>(null)
+  const { fitView } = useReactFlow()
 
   useEffect(() => { getNodeCatalog().then(d => setCatalog(d.nodes || [])).catch(() => {}) }, [])
   useEffect(() => { if (isNew && catalog.length > 0 && nodes.length === 0) setShowTriggerPicker(true) }, [isNew, catalog])
   useEffect(() => { if (!isNew && workflowId) { getWorkflow(workflowId).then(wf => {
     setWfName(wf.name || '工作流')
-    setNodes((wf.nodes || []).map((n: any) => ({ id: n.id, type: 'wfNode', position: n.position || { x: 0, y: 0 },
-      data: { label: n.label || n.type, nodeType: n.type, config: n.config || {}, catalog: [], disabled: n.disabled || false } })))
-    setEdges((wf.edges || []).map((e: any, i: number) => ({ id: `e-${i}`, source: e.source, target: e.target,
+    const ln = (wf.nodes || []).map((n: any) => ({ id: n.id, type: 'wfNode', position: n.position || { x: 0, y: 0 },
+      data: { label: n.label || n.type, nodeType: n.type, config: n.config || {}, catalog: [], disabled: n.disabled || false } }))
+    const le = (wf.edges || []).map((e: any, i: number) => ({ id: `e-${i}`, source: e.source, target: e.target,
       sourceHandle: e.sourceOutput != null ? `out-${e.sourceOutput}` : undefined,
-      markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } })))
+      markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }))
+    // Auto-layout if positions overlap or all at origin
+    const needsLayout = ln.length > 1 && (ln.every((n: any) => !n.position.x && !n.position.y) ||
+      new Set(ln.map((n: any) => `${Math.round(n.position.x)},${Math.round(n.position.y)}`)).size < ln.length * 0.5)
+    setNodes(needsLayout ? autoLayout(ln, le) : ln); setEdges(le)
+    setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 200)
   }).catch(() => toast.error('加载失败')) } }, [workflowId])
   useEffect(() => { if (catalog.length) setNodes(ns => ns.map(n => ({ ...n, data: { ...n.data, catalog } }))) }, [catalog])
   useEffect(() => { setNodes(ns => ns.map(n => ({ ...n, data: { ...n.data, execState: execStatus[n.id], isPinned: !!pinnedData[n.id] } }))) }, [execStatus, pinnedData])
+
+  // Edge animation based on execution status
+  useEffect(() => {
+    const hasExec = Object.keys(execStatus).length > 0
+    setEdges(eds => eds.map(e => {
+      if (!hasExec) return { ...e, className: '', animated: false, style: { stroke: 'var(--border)' } }
+      const ss = execStatus[e.source]?.status; const ts = execStatus[e.target]?.status
+      if (ss === 'completed' && ts === 'completed') return { ...e, className: 'wf-edge-completed', animated: false, style: { stroke: '#22c55e' } }
+      if (ss === 'completed' && ts === 'failed') return { ...e, className: 'wf-edge-failed', animated: false, style: { stroke: '#ef4444' } }
+      if (ss === 'completed' && (!ts || ts === 'running')) return { ...e, className: 'wf-edge-running', animated: true, style: { stroke: '#3b82f6' } }
+      return { ...e, className: '', animated: false, style: { stroke: 'var(--border)' } }
+    }))
+  }, [execStatus])
 
   // WebSocket
   useEffect(() => { try { const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`); wsRef.current = ws
@@ -60,8 +84,12 @@ export default function WorkflowEditor() {
     return () => { wsRef.current?.close() } }, [])
 
   const onConnect = useCallback((p: Connection) => setEdges(es => addEdge({ ...p, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }, es)), [])
-  const addNode = useCallback((td: NodeTypeDef) => { setNodes(ns => [...ns, { id: nextId(), type: 'wfNode',
-    position: { x: 300 + Math.random() * 200, y: 150 + Math.random() * 200 }, data: { label: td.displayName, nodeType: td.name, config: {}, catalog } }]) }, [catalog])
+  const addNode = useCallback((td: NodeTypeDef) => {
+    const maxX = nodes.length ? Math.max(...nodes.map(n => n.position?.x || 0)) : 50
+    const avgY = nodes.length ? nodes.reduce((s, n) => s + (n.position?.y || 0), 0) / nodes.length : 200
+    setNodes(ns => [...ns, { id: nextId(), type: 'wfNode', position: { x: maxX + 250, y: avgY },
+      data: { label: td.displayName, nodeType: td.name, config: {}, catalog } }])
+  }, [catalog, nodes])
   const delNode = useCallback((id: string) => { setNodes(ns => ns.filter(n => n.id !== id)); setEdges(es => es.filter(e => e.source !== id && e.target !== id)); if (selected?.id === id) setSelected(null); setCtxMenu(null) }, [selected])
   const updateCfg = useCallback((id: string, cfg: any) => { setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, config: cfg } } : n)); if (selected?.id === id) setSelected(p => p ? { ...p, data: { ...p.data, config: cfg } } : null) }, [selected])
   const updateLabel = useCallback((id: string, l: string) => { setNodes(ns => ns.map(n => n.id === id ? { ...n, data: { ...n.data, label: l } } : n)) }, [])
@@ -122,7 +150,7 @@ export default function WorkflowEditor() {
           <input value={wfName} onChange={e => setWfName(e.target.value)} className="text-sm font-medium bg-transparent outline-none w-[200px]" style={{ color: 'var(--text)' }} />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setNodes(autoLayout(nodes, edges))} className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="布局"><Layout size={14} /></button>
+          <button onClick={() => { setNodes(autoLayout(nodes, edges)); setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 100) }} className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="布局"><Layout size={14} /></button>
           <button onClick={async () => { if (!wfId) return; const d = await getExecutions(wfId); setHistory(d.executions || []); setShowHistory(true) }} className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="历史"><Clock size={14} /></button>
           <button onClick={() => { const b = new Blob([JSON.stringify(toWfData(), null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `${wfName}.json`; a.click() }}
             className="p-1.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="导出"><Download size={14} /></button>
