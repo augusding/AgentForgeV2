@@ -1,9 +1,5 @@
 import client from './client'
 
-export async function sendMessage(content: string, positionId: string, sessionId?: string) {
-  return client.post('/chat', { content, position_id: positionId, session_id: sessionId }) as Promise<any>
-}
-
 export async function getSessions(limit = 50) {
   return client.get('/chat/sessions', { params: { limit } }) as Promise<any[]>
 }
@@ -14,4 +10,21 @@ export async function getSessionMessages(sessionId: string) {
 
 export async function deleteSession(sessionId: string) {
   return client.delete(`/chat/sessions/${sessionId}`) as Promise<any>
+}
+
+export async function generateTitle(sessionId: string) {
+  return client.post(`/chat/sessions/${sessionId}/title`) as Promise<{ title: string }>
+}
+
+export async function uploadChatFile(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('target', 'chat')
+  return client.post('/files/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }) as Promise<{ file_id: string; filename: string; size: number; extracted_text?: string }>
+}
+
+export async function getQuickCommands() {
+  return client.get('/chat/quick-commands') as Promise<Array<{ text: string; position_id?: string }>>
 }
