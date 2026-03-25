@@ -32,9 +32,11 @@ export default function WorkflowEditor() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
   const [clipboard, setClipboard] = useState<Node | null>(null)
   const [editModal, setEditModal] = useState<Node | null>(null)
+  const [showTriggerPicker, setShowTriggerPicker] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => { getNodeCatalog().then(d => setCatalog(d.nodes || [])).catch(() => {}) }, [])
+  useEffect(() => { if (isNew && catalog.length > 0 && nodes.length === 0) setShowTriggerPicker(true) }, [isNew, catalog])
   useEffect(() => { if (!isNew && workflowId) { getWorkflow(workflowId).then(wf => {
     setWfName(wf.name || '工作流')
     setNodes((wf.nodes || []).map((n: any) => ({ id: n.id, type: 'wfNode', position: n.position || { x: 0, y: 0 },
@@ -116,7 +118,7 @@ export default function WorkflowEditor() {
       </div>
       <div className="flex-1 flex min-h-0 relative">
         <NodePalette catalog={catalog} onAdd={addNode} />
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
             onConnect={onConnect} onNodeClick={(_, n) => { setSelected(n); const es = execStatus[n.id]; if (es?.output) setResultPopup({ nodeId: n.id, data: es }) }}
             onNodeDoubleClick={(_, n) => setEditModal(n)}
@@ -125,6 +127,28 @@ export default function WorkflowEditor() {
             defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }} style={{ background: 'var(--bg)' }}>
             <Background color="var(--border)" gap={20} size={1} /><Controls /><MiniMap style={{ background: 'var(--bg-surface)' }} />
           </ReactFlow>
+          {nodes.length === 0 && !showTriggerPicker && <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+            <div className="text-center pointer-events-auto"><div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--accent)', opacity: 0.15 }}>
+              <Play size={32} style={{ color: 'var(--accent)' }} /></div>
+              <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--text)' }}>开始创建工作流</h3>
+              <p className="text-xs mb-4 max-w-[300px]" style={{ color: 'var(--text-muted)' }}>选择触发方式，然后添加处理节点</p>
+              <button onClick={() => setShowTriggerPicker(true)} className="px-5 py-2.5 rounded-lg text-sm text-white font-medium" style={{ background: 'var(--accent)' }}>选择触发方式</button>
+            </div></div>}
+          {showTriggerPicker && <div className="absolute inset-0 flex items-center justify-center z-20" style={{ background: 'rgba(0,0,0,0.3)' }}>
+            <div className="rounded-xl p-5 w-[400px]" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--text)' }}>选择触发方式</h3>
+              <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>工作流如何启动？</p>
+              <div className="space-y-2">{catalog.filter(c => c.group === 'trigger').map(t => (
+                <button key={t.name} onClick={() => { addNode(t); setShowTriggerPicker(false) }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:border-[var(--accent)]"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: '#22c55e20', color: '#22c55e' }}>
+                    {t.name === 'manualTrigger' ? '▶' : t.name === 'scheduleTrigger' ? '⏰' : '🔗'}</div>
+                  <div><div className="text-xs font-medium" style={{ color: 'var(--text)' }}>{t.displayName}</div>
+                    <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.description}</div></div>
+                </button>))}</div>
+              <button onClick={() => setShowTriggerPicker(false)} className="w-full mt-3 py-2 text-xs rounded-lg" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>跳过</button>
+            </div></div>}
         </div>
         {selected && !resultPopup && <PropertyPanel node={selected} catalog={catalog} execData={execStatus[selected.id]}
           upstreamOutput={edges.reduce((a: any, e) => a || (e.target === selected.id ? execStatus[e.source]?.output : null), null)}

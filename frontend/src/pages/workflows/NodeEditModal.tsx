@@ -8,6 +8,15 @@ import toast from 'react-hot-toast'
 interface Props { node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onClose: () => void }
 
+function exprPreview(expr: string, data: any): string {
+  if (!expr || !expr.includes('{{')) return ''
+  try { return expr.replace(/\{\{(.+?)\}\}/g, (_, inner) => {
+    const t = inner.trim(); const m = t.match(/^\$input\.(\w+)$/)
+    if (m && data && typeof data === 'object') { const v = data[m[1]]; return v !== undefined ? String(v) : '<undefined>' }
+    if (t === '$input') return typeof data === 'object' ? JSON.stringify(data).slice(0, 50) : String(data || '')
+    return `<${t}>` }) } catch { return '' }
+}
+
 const PH: Record<string, string> = {
   url: 'https://api.example.com/data', webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx',
   prompt: '请分析以下数据：\n{{ $input.text }}', instruction: '用中文回答，200字以内', content: '{{ $input.ai_result }}',
@@ -69,7 +78,7 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                     <span className="absolute left-5 top-0 hidden group-hover:block z-10 px-2 py-1 rounded text-[10px] max-w-[250px]"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>{p.description}</span></span>}
                 </div>
-                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} />
+                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} />
               </div>)})}
             {!params.length && <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>无需配置</div>}
           </div>
@@ -82,17 +91,22 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
               </button>)}
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {rTab === 'input' && <div className="space-y-3">
-                {upstreamOutput && <><div className="flex items-center justify-between"><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>上游输出</span>
-                  <button onClick={() => setTestInput(JSON.stringify(upstreamOutput, null, 2))} className="text-[10px] px-2 py-0.5 rounded" style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}>复制为输入</button></div>
-                  <JT data={upstreamOutput} /><div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
-                    <div className="text-xs font-medium mb-2" style={{ color: 'var(--text)' }}>可用字段</div>
-                    <FL data={upstreamOutput} /></div></>}
-                <div className={upstreamOutput ? 'border-t pt-3' : ''} style={{ borderColor: 'var(--border)' }}>
-                  <div className="text-xs font-medium mb-2" style={{ color: 'var(--text)' }}>测试输入</div>
-                  <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={8} placeholder='{"key": "value"}'
-                    className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 80 }} />
-                </div></div>}
+              {rTab === 'input' && <div className="space-y-4">
+                {upstreamOutput ? <>
+                  <div className="rounded-lg p-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center justify-between mb-2"><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>上游数据
+                      {Array.isArray(upstreamOutput?.items) && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] text-white" style={{ background: 'var(--accent)' }}>{upstreamOutput.items.length} items</span>}</span></div>
+                    <JT data={upstreamOutput} /></div>
+                  <div><div className="text-xs font-medium mb-2" style={{ color: 'var(--text)' }}>可用字段 <span className="text-[10px] font-normal" style={{ color: 'var(--text-muted)' }}>点击复制表达式</span></div>
+                    <FL data={upstreamOutput} /></div>
+                </> : <div className="rounded-lg p-4 text-center" style={{ background: 'var(--bg-surface)', border: '1px dashed var(--border)' }}>
+                  <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>暂无上游数据</div>
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>先执行前置节点，数据会自动出现</div></div>}
+                <details className="group"><summary className="text-xs font-medium cursor-pointer flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                  <ChevronRight size={12} className="group-open:rotate-90 transition-transform" /> 手动测试数据</summary>
+                  <div className="mt-2"><textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={6} placeholder='{"key": "value"}'
+                    className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 60 }} /></div></details>
+              </div>}
               {rTab === 'output' && (result ? <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2"><span className="text-[10px] px-2 py-0.5 rounded text-white" style={{ background: result.status === 'completed' ? 'var(--success)' : 'var(--error)' }}>{result.status === 'completed' ? '成功' : '失败'}</span>
@@ -136,17 +150,36 @@ function JT({ data, depth = 0 }: { data: any; depth?: number }) {
 }
 
 function FL({ data }: { data: any }) {
-  const fields = Array.isArray(data) ? (data[0] && typeof data[0] === 'object' ? Object.keys(data[0]) : []) : (typeof data === 'object' ? Object.keys(data) : [])
-  return <div className="flex flex-wrap gap-1.5">{fields.map(f => <button key={f} onClick={() => { navigator.clipboard.writeText(`{{ $input.${f} }}`); toast.success(`已复制`) }}
-    className="px-2 py-1 rounded text-[10px] font-mono hover:bg-[var(--accent)] hover:text-white" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--accent)' }}>{f}</button>)}</div>
+  const fields = useMemo(() => {
+    const r: Array<{ path: string; type: string; preview: string }> = []
+    const target = Array.isArray(data) ? (data[0] || {}) : (data || {})
+    if (typeof target !== 'object') return r
+    for (const [k, v] of Object.entries(target)) {
+      const t = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
+      r.push({ path: k, type: t, preview: t === 'array' ? `[${(v as any[]).length}]` : t === 'object' ? '{…}' : String(v).slice(0, 25) })
+      if (t === 'object' && v) for (const [sk, sv] of Object.entries(v as Record<string, any>))
+        r.push({ path: `${k}.${sk}`, type: typeof sv, preview: String(sv).slice(0, 20) })
+    }
+    return r.slice(0, 30)
+  }, [data])
+  const tc: Record<string, string> = { string: '#22c55e', number: '#3b82f6', boolean: '#f59e0b', array: '#a855f7', object: '#06b6d4' }
+  return <div className="space-y-1">{fields.map(f => <button key={f.path}
+    onClick={() => { navigator.clipboard.writeText(`{{ $input.${f.path} }}`); toast.success('已复制') }}
+    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-[var(--bg-hover)] group">
+    <span className="text-[10px] font-mono" style={{ color: 'var(--accent)' }}>{f.path.includes('.') ? '  ' + f.path : f.path}</span>
+    <span className="text-[9px] px-1 rounded" style={{ color: tc[f.type] || 'var(--text-muted)', background: `${tc[f.type] || '#666'}15` }}>{f.type}</span>
+    <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{f.preview}</span>
+    <span className="text-[9px] opacity-0 group-hover:opacity-100" style={{ color: 'var(--accent)' }}>复制</span></button>)}</div>
 }
 
-function RPI({ param, value, onChange }: { param: any; value: any; onChange: (v: any) => void }) {
+function RPI({ param, value, onChange, inputData }: { param: any; value: any; onChange: (v: any) => void; inputData?: any }) {
   const [fx, setFx] = useState(false)
   const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }
-  if (fx) return <div className="flex gap-1"><input type="text" value={typeof value === 'string' ? value : JSON.stringify(value)} onChange={e => onChange(e.target.value)}
+  const pv = typeof value === 'string' && value.includes('{{') ? exprPreview(value, inputData) : ''
+  const pvEl = pv ? <div className="mt-1 px-2 py-1 rounded text-[10px] font-mono" style={{ background: 'var(--bg-surface)', color: 'var(--success)', border: '1px solid var(--border)' }}>预览: {pv}</div> : null
+  if (fx) return <div><div className="flex gap-1"><input type="text" value={typeof value === 'string' ? value : JSON.stringify(value)} onChange={e => onChange(e.target.value)}
     className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none" style={{ ...st, borderColor: 'var(--accent)' }} placeholder="{{ $input.field }}" />
-    <button onClick={() => setFx(false)} className="px-2 rounded-lg text-[10px] font-bold" style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}>fx</button></div>
+    <button onClick={() => setFx(false)} className="px-2 rounded-lg text-[10px] font-bold" style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}>fx</button></div>{pvEl}</div>
   if (param.type === 'options' && param.options) return <select value={value} onChange={e => onChange(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
     {param.options.map((o: any) => <option key={o.value} value={o.value}>{o.name}</option>)}</select>
   if (param.type === 'boolean') return <button onClick={() => onChange(!value)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs w-full text-left" style={{ ...st, borderColor: value ? 'var(--accent)' : 'var(--border)' }}>
@@ -157,10 +190,10 @@ function RPI({ param, value, onChange }: { param: any; value: any; onChange: (v:
   if (param.type === 'json') return <KVE value={value} onChange={onChange} ph={PH[param.name] || '{}'} />
   if (param.type === 'filter') return <CB value={value} onChange={onChange} />
   const ml = ['prompt', 'content', 'body', 'message', 'instruction', 'query', 'text'].includes(param.name)
-  if (ml) return <div className="relative"><textarea value={value} onChange={e => onChange(e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} placeholder={PH[param.name] || ''} />
-    <button onClick={() => setFx(true)} className="absolute right-2 top-2 px-1.5 py-0.5 rounded text-[9px] opacity-30 hover:opacity-100" style={{ color: 'var(--text-muted)', background: 'var(--bg)' }}>fx</button></div>
-  return <div className="flex gap-1"><input type="text" value={value} onChange={e => onChange(e.target.value)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name] || ''} />
-    <button onClick={() => setFx(true)} className="px-2 rounded-lg text-[10px] opacity-40 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>fx</button></div>
+  if (ml) return <div><div className="relative"><textarea value={value} onChange={e => onChange(e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} placeholder={PH[param.name] || ''} />
+    <button onClick={() => setFx(true)} className="absolute right-2 top-2 px-1.5 py-0.5 rounded text-[9px] opacity-30 hover:opacity-100" style={{ color: 'var(--text-muted)', background: 'var(--bg)' }}>fx</button></div>{pvEl}</div>
+  return <div><div className="flex gap-1"><input type="text" value={value} onChange={e => onChange(e.target.value)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name] || ''} />
+    <button onClick={() => setFx(true)} className="px-2 rounded-lg text-[10px] opacity-40 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>fx</button></div>{pvEl}</div>
 }
 
 function KVE({ value, onChange, ph }: { value: any; onChange: (v: any) => void; ph: string }) {
