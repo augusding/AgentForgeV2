@@ -21,6 +21,7 @@ class WorkflowNode:
     outputs: dict = field(default_factory=dict)
     next_nodes: list[str] = field(default_factory=list)  # 后续节点 ID
     position: dict = field(default_factory=dict)         # UI 位置 {x, y}
+    disabled: bool = False
 
 
 @dataclass

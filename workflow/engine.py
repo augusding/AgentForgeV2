@@ -38,6 +38,7 @@ class WorkflowEngine:
     async def run(
         self, workflow: WorkflowDefinition,
         trigger_data: dict | None = None, context: dict | None = None,
+        stop_at_node: str = "",
     ) -> WorkflowExecution:
         """执行工作流。"""
         execution = WorkflowExecution(
@@ -98,6 +99,12 @@ class WorkflowEngine:
                                 if _evaluate_edge(edge_info, execution.variables):
                                     queue.append(next_id)
 
+                # stop_at_node: 执行到指定节点后停止
+                if stop_at_node and nid == stop_at_node:
+                    execution.status = "completed"; execution.completed_at = time.time()
+                    _push_execution_done(ctx, execution)
+                    return execution
+
             execution.status = "completed"
         except Exception as e:
             execution.status = "failed"; execution.error = str(e)
@@ -112,6 +119,8 @@ class WorkflowEngine:
     async def _execute_node(self, node: WorkflowNode, execution: WorkflowExecution,
                             edges: list[dict], ctx: dict) -> NodeResult:
         """执行单个节点：表达式解析 → 执行器调用。"""
+        if node.disabled:
+            return NodeResult(node_id=node.id, status="skipped", output={"skipped_reason": "disabled"})
         executor = self._registry.get_executor(node.type)
         if not executor:
             return NodeResult(node_id=node.id, status="failed", error=f"未知节点类型: {node.type}")

@@ -108,11 +108,12 @@ async def handle_workflow_execute(request: web.Request) -> web.Response:
 
     body = await request.json() if request.can_read_body else {}
     trigger_data = body.get("trigger_data", {})
+    stop_at = body.get("stop_at_node", "")
 
     user = request.get("user") or {}
     uid = user.get("sub", "") if isinstance(user, dict) else ""
     ctx = {"llm": engine._llm, "gateway": request.app.get("gateway"), "user_id": uid}
-    execution = await wf_engine.run(wf, trigger_data=trigger_data, context=ctx)
+    execution = await wf_engine.run(wf, trigger_data=trigger_data, context=ctx, stop_at_node=stop_at)
 
     # 持久化执行记录
     node_results_dict = {
