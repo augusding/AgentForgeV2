@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getSessions, getSessionMessages, deleteSession, generateTitle } from '../api/chat'
+import { getSessions, getSessionMessages, deleteSession, generateTitle, submitFeedback } from '../api/chat'
 
 interface ToolCall { type: 'tool_start' | 'tool_result'; name: string; input?: any; result?: string }
 interface Attachment { file_id: string; filename: string; extracted_text?: string }
@@ -8,7 +8,7 @@ interface Message {
   id?: string; role: 'user' | 'assistant'; content: string
   tool_calls?: ToolCall[]; attachments?: Attachment[]
   model?: string; tokens_used?: number; duration_ms?: number
-  thinking?: string
+  thinking?: string; created_at?: number
 }
 
 interface Session { id: string; title: string; position_id: string; updated_at: number }
@@ -16,6 +16,7 @@ interface Session { id: string; title: string; position_id: string; updated_at: 
 interface ChatState {
   sessions: Session[]; currentSessionId: string; loadingSessions: boolean
   messages: Message[]; streaming: boolean; abortController: AbortController | null
+  feedbacks: Record<string, 'up' | 'down'>
   loadSessions: () => Promise<void>; selectSession: (id: string) => Promise<void>
   newSession: () => void; removeSession: (id: string) => Promise<void>
   setSessionId: (id: string) => void; generateTitle: () => Promise<void>
@@ -26,13 +27,14 @@ interface ChatState {
   setThinking: (text: string) => void
   setStreaming: (v: boolean) => void; setAbortController: (c: AbortController | null) => void
   regenerate: () => string | null
+  toggleFeedback: (messageId: string, rating: 'up' | 'down') => Promise<void>
 }
 
 export type { ToolCall, Attachment, Message }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [], currentSessionId: '', loadingSessions: false,
-  messages: [], streaming: false, abortController: null,
+  messages: [], streaming: false, abortController: null, feedbacks: {},
 
   loadSessions: async () => {
     set({ loadingSessions: true })
@@ -46,23 +48,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   selectSession: async (sessionId) => {
-    set({ currentSessionId: sessionId, messages: [] })
+    set({ currentSessionId: sessionId, messages: [], feedbacks: {} })
     try {
       const data = await getSessionMessages(sessionId)
       set({ messages: (Array.isArray(data) ? data : []).map((m: any) => ({
-        id: m.id, role: m.role, content: m.content, model: m.model, tokens_used: m.tokens_used,
+        id: m.id, role: m.role, content: m.content, model: m.model,
+        tokens_used: m.tokens_used, created_at: m.created_at,
       })) })
     } catch {}
   },
 
-  newSession: () => set({ currentSessionId: '', messages: [] }),
+  newSession: () => set({ currentSessionId: '', messages: [], feedbacks: {} }),
 
   removeSession: async (sessionId) => {
     try {
       await deleteSession(sessionId)
       const { sessions, currentSessionId } = get()
       set({ sessions: sessions.filter(s => s.id !== sessionId) })
-      if (currentSessionId === sessionId) set({ currentSessionId: '', messages: [] })
+      if (currentSessionId === sessionId) set({ currentSessionId: '', messages: [], feedbacks: {} })
     } catch {}
   },
 
@@ -83,9 +86,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   addUserMessage: (content, attachments) => set((s) => ({
-    messages: [...s.messages, { role: 'user', content, attachments }],
+    messages: [...s.messages, { role: 'user', content, attachments, created_at: Date.now() / 1000 }],
   })),
-  startAssistant: () => set((s) => ({ messages: [...s.messages, { role: 'assistant', content: '', tool_calls: [] }] })),
+  startAssistant: () => set((s) => ({
+    messages: [...s.messages, { role: 'assistant', content: '', tool_calls: [], created_at: Date.now() / 1000 }],
+  })),
   appendDelta: (text) => set((s) => {
     const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
     if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: last.content + text }
@@ -113,11 +118,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   regenerate: () => {
     const { messages } = get()
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        set({ messages: messages.slice(0, i) })
-        return messages[i].content
-      }
+      if (messages[i].role === 'user') { set({ messages: messages.slice(0, i) }); return messages[i].content }
     }
     return null
+  },
+
+  toggleFeedback: async (messageId, rating) => {
+    const { feedbacks, currentSessionId } = get()
+    const next = { ...feedbacks }
+    if (next[messageId] === rating) delete next[messageId]
+    else next[messageId] = rating
+    set({ feedbacks: next })
+    try { await submitFeedback(messageId, currentSessionId, rating) } catch {}
   },
 }))
