@@ -8,6 +8,7 @@ interface Message {
   id?: string; role: 'user' | 'assistant'; content: string
   tool_calls?: ToolCall[]; attachments?: Attachment[]
   model?: string; tokens_used?: number; duration_ms?: number
+  thinking?: string
 }
 
 interface Session { id: string; title: string; position_id: string; updated_at: number }
@@ -22,6 +23,7 @@ interface ChatState {
   startAssistant: () => void; appendDelta: (text: string) => void
   addToolCall: (tc: ToolCall) => void
   finishAssistant: (meta?: { model?: string; tokens_used?: number; duration_ms?: number }) => void
+  setThinking: (text: string) => void
   setStreaming: (v: boolean) => void; setAbortController: (c: AbortController | null) => void
   regenerate: () => string | null
 }
@@ -98,6 +100,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!meta) return {}
     const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
     if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, ...meta }
+    return { messages: msgs }
+  }),
+  setThinking: (text) => set((s) => {
+    const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
+    if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, thinking: text }
     return { messages: msgs }
   }),
   setStreaming: (v) => set({ streaming: v }),

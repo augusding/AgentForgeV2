@@ -34,3 +34,11 @@ body {
 .markdown-body table { border-collapse: collapse; margin: 0.5em 0; }
 .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 6px 12px; }
 .markdown-body a { color: var(--accent); }
+
+.inline-code {
+  background: var(--bg-hover);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+}
