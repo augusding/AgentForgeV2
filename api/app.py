@@ -102,10 +102,16 @@ def create_app(engine: ForgeEngine) -> web.Application:
     reg_org(app)
 
     # 兼容路由（放在最后，真实路由优先匹配）
-    from api.routes.compat import register as reg_compat
-    from api.routes.compat_workflow import register as reg_compat_wf
-    reg_compat(app)
-    reg_compat_wf(app)
+    try:
+        from api.routes.compat import register as reg_compat
+        reg_compat(app)
+    except Exception as e:
+        logger.error("compat 路由注册失败: %s", e, exc_info=True)
+    try:
+        from api.routes.compat_workflow import register as reg_compat_wf
+        reg_compat_wf(app)
+    except Exception as e:
+        logger.error("compat_workflow 路由注册失败: %s", e, exc_info=True)
 
     # WebSocket 网关
     from api.gateway import WebSocketGateway

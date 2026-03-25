@@ -29,11 +29,13 @@ _JWT_EXPIRY_DAYS = 7
 # 不需要认证的路径
 _PUBLIC_PATHS = {
     "/api/v1/health",
+    "/api/v1/stats",
     "/api/v1/auth/login",
     "/api/v1/auth/register",
+    "/api/v1/auth/logout",
     "/api/v1/auth/register-org",
     "/api/v1/auth/send-code",
-    "/api/v1/stats",
+    "/api/v1/auth/onboarding-complete",
 }
 
 
@@ -115,7 +117,6 @@ def make_auth_middleware(jwt_secret: str, api_key: str = ""):
 
         # 公开路径直接放行（不设 user）
         if (request.path in _PUBLIC_PATHS
-                or request.path.startswith("/api/v1/auth/")
                 or request.path.startswith("/api/v1/webhook/")
                 or request.path == "/ws" or request.path.startswith("/ws?")):
             return await handler(request)
