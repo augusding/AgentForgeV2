@@ -15,6 +15,8 @@ def register_all_nodes(registry: NodeRegistry, llm_client=None) -> None:
     from workflow.nodes.document_node import register_document
     from workflow.nodes.database_node import register_database
     from workflow.nodes.scraper_node import register_scraper
+    from workflow.nodes.flow_nodes import register_flow
+    from workflow.nodes.data_nodes import register_data_nodes
 
     register_triggers(registry)
     register_logic(registry)
@@ -28,3 +30,5 @@ def register_all_nodes(registry: NodeRegistry, llm_client=None) -> None:
     register_document(registry)
     register_database(registry)
     register_scraper(registry)
+    register_flow(registry)
+    register_data_nodes(registry)

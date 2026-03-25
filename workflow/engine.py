@@ -31,8 +31,9 @@ class WorkflowEngine:
         execution = await engine.run(workflow_def, trigger_data)
     """
 
-    def __init__(self, registry: NodeRegistry | None = None):
+    def __init__(self, registry: NodeRegistry | None = None, store=None):
         self._registry = registry or NodeRegistry()
+        self._store = store
 
     async def run(
         self, workflow: WorkflowDefinition,
@@ -46,6 +47,8 @@ class WorkflowEngine:
             started_at=time.time(),
         )
         ctx = context or {}
+        ctx.setdefault("wf_engine", self)
+        ctx.setdefault("wf_store", self._store)
         node_map = {n.id: n for n in workflow.nodes}
         edges = workflow.edges
 

@@ -119,7 +119,7 @@ class ForgeEngine:
         await self._wf_store.ensure_tables()
         wf_registry = WFNodeRegistry()
         register_all_nodes(wf_registry, self._llm)
-        self._wf_engine = WFEngine(registry=wf_registry)
+        self._wf_engine = WFEngine(registry=wf_registry, store=self._wf_store)
         self._trigger_manager = TriggerManager(self._wf_store, self._wf_engine, self._scheduler, self._llm)
         await self._trigger_manager.load_triggers()
 
