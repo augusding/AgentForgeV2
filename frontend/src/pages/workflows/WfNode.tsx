@@ -17,7 +17,7 @@ const GRP_CLR: Record<string, string> = { trigger: '#22c55e', logic: '#f59e0b', 
 const ST_CLR: Record<string, string> = { completed: '#22c55e', failed: '#ef4444', running: '#3b82f6', skipped: '#9ca3af' }
 
 function WfNodeComponent({ data, selected }: NodeProps) {
-  const { label, nodeType, catalog, execState, disabled } = data as any
+  const { label, nodeType, catalog, execState, disabled, isPinned } = data as any
   const def = (catalog || []).find((c: any) => c.name === nodeType)
   const group = def?.group || 'action'
   const Icon = ICONS[nodeType] || Code
@@ -31,6 +31,8 @@ function WfNodeComponent({ data, selected }: NodeProps) {
         style={{ background: ST_CLR[execState.status] || '#6b7280', borderColor: 'var(--bg)' }} />}
       {disabled && <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] text-white bg-gray-500 z-10"
         style={{ border: '2px solid var(--bg)' }}>⏸</div>}
+      {isPinned && !disabled && <div className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] z-10"
+        style={{ background: 'var(--accent)', border: '2px solid var(--bg)' }}>📌</div>}
 
       {ins > 0 && <Handle type="target" position={Position.Left} id="in-0"
         style={{ width: 8, height: 8, background: baseClr, border: '2px solid var(--bg)' }} />}

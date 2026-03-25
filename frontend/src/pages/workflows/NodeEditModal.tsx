@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Play, Loader2, ChevronRight, ChevronDown, Plus, Trash2, HelpCircle } from 'lucide-react'
 import NodeCustomUI, { hasCustomUI } from './NodeCustomUI'
+import ExprAutocomplete, { extractFields } from './ExprAutocomplete'
 import type { Node } from '@xyflow/react'
 import type { NodeTypeDef } from '../../api/workflow'
 import { testNode } from '../../api/workflow'
@@ -9,6 +10,7 @@ import toast from 'react-hot-toast'
 interface UpstreamNode { nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }
 interface Props { node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
   upstreamNodes?: UpstreamNode[]
+  onPinOutput?: (output: any) => void; onUnpinOutput?: () => void; isPinned?: boolean
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onClose: () => void }
 
 function fErr(e: string, nt: string): string {
@@ -84,7 +86,7 @@ const PH: Record<string, string> = {
   connection: 'data/memories.db', path: 'data/outputs/report.xlsx',
 }
 
-export default function NodeEditModal({ node, catalog, execData, upstreamOutput, upstreamNodes, onUpdateConfig, onUpdateLabel, onClose }: Props) {
+export default function NodeEditModal({ node, catalog, execData, upstreamOutput, upstreamNodes, onPinOutput, onUnpinOutput, isPinned, onUpdateConfig, onUpdateLabel, onClose }: Props) {
   const { label, nodeType, config } = node.data as any
   const def = catalog.find(c => c.name === nodeType); const params = def?.parameters || []
   const [testing, setTesting] = useState(false); const [result, setResult] = useState<any>(execData || null)
@@ -99,6 +101,8 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
     const r = await testNode(nodeType, config, inp); setResult(r); setRTab('output')
     r.status === 'completed' ? toast.success('测试成功') : toast.error(`失败: ${r.error}`)
   } catch { toast.error('测试失败') } finally { setTesting(false) } }
+
+  const nodeLabels = useMemo(() => (upstreamNodes || []).map(u => u.nodeLabel).filter(Boolean), [upstreamNodes])
 
   const outItems = useMemo(() => { const o = result?.output; if (!o) return []; if (Array.isArray(o)) return o; if (o.items && Array.isArray(o.items)) return o.items; return [o] }, [result])
   const up = (n: string, v: any) => n === '_full' ? onUpdateConfig(v) : onUpdateConfig({ ...config, [n]: v })
@@ -133,7 +137,7 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                     <span className="absolute left-5 top-0 hidden group-hover:block z-10 px-2 py-1 rounded text-[10px] max-w-[250px]"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>{p.description}</span></span>}
                 </div>
-                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} />
+                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} nodeLabels={nodeLabels} />
               </div>)})}
             {!params.length && <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>无需配置</div>}
             </>}
@@ -200,7 +204,11 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
               {rTab === 'output' && (result ? <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2"><span className="text-[10px] px-2 py-0.5 rounded text-white" style={{ background: result.status === 'completed' ? 'var(--success)' : 'var(--error)' }}>{result.status === 'completed' ? '成功' : '失败'}</span>
-                    {result.duration > 0 && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{result.duration.toFixed(2)}s</span>}</div>
+                    {result.duration > 0 && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{result.duration.toFixed(2)}s</span>}
+                    {result.output && <button onClick={() => isPinned ? onUnpinOutput?.() : onPinOutput?.(result.output)}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px]"
+                      style={{ color: isPinned ? 'var(--accent)' : 'var(--text-muted)', background: isPinned ? 'var(--accent)15' : 'transparent', border: `1px solid ${isPinned ? 'var(--accent)' : 'var(--border)'}` }}>
+                      📌 {isPinned ? '已固定' : '固定'}</button>}</div>
                   <div className="flex rounded overflow-hidden" style={{ border: '1px solid var(--border)' }}>
                     {(['table', 'json'] as const).map(v => <button key={v} onClick={() => setOutView(v)} className="px-2.5 py-1 text-[10px]"
                       style={{ background: outView === v ? 'var(--accent)' : 'var(--bg-surface)', color: outView === v ? 'white' : 'var(--text-muted)' }}>{v === 'table' ? 'Table' : 'JSON'}</button>)}</div>
@@ -265,13 +273,15 @@ function FL({ data }: { data: any }) {
     <span className="text-[9px] opacity-0 group-hover:opacity-100" style={{ color: 'var(--accent)' }}>复制</span></button>)}</div>
 }
 
-function RPI({ param, value, onChange, inputData }: { param: any; value: any; onChange: (v: any) => void; inputData?: any }) {
+function RPI({ param, value, onChange, inputData, nodeLabels }: { param: any; value: any; onChange: (v: any) => void; inputData?: any; nodeLabels?: string[] }) {
   const [fx, setFx] = useState(false)
   const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }
   const pv = typeof value === 'string' && value.includes('{{') ? exprPreview(value, inputData) : ''
   const pvEl = pv ? <div className="mt-1 px-2 py-1 rounded text-[10px] font-mono" style={{ background: 'var(--bg-surface)', color: 'var(--success)', border: '1px solid var(--border)' }}>预览: {pv}</div> : null
-  if (fx) return <div><div className="flex gap-1"><input type="text" value={typeof value === 'string' ? value : JSON.stringify(value)} onChange={e => onChange(e.target.value)}
-    className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none" style={{ ...st, borderColor: 'var(--accent)' }} placeholder="{{ $input.field }}" />
+  const uf = inputData ? extractFields(inputData) : []
+  if (fx) return <div><div className="flex gap-1"><ExprAutocomplete value={typeof value === 'string' ? value : JSON.stringify(value)} onChange={onChange}
+    upstreamFields={uf} nodeLabels={nodeLabels} placeholder="{{ $input.field }}"
+    className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none" style={{ ...st, borderColor: 'var(--accent)' }} />
     <button onClick={() => setFx(false)} className="px-2 rounded-lg text-[10px] font-bold" style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}>fx</button></div>{pvEl}</div>
   if (param.type === 'options' && param.options) return <select value={value} onChange={e => onChange(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st}>
     {param.options.map((o: any) => <option key={o.value} value={o.value}>{o.name}</option>)}</select>
@@ -283,7 +293,8 @@ function RPI({ param, value, onChange, inputData }: { param: any; value: any; on
   if (param.type === 'json') return <KVE value={value} onChange={onChange} ph={PH[param.name] || '{}'} />
   if (param.type === 'filter') return <CB value={value} onChange={onChange} />
   const ml = ['prompt', 'content', 'body', 'message', 'instruction', 'query', 'text'].includes(param.name)
-  if (ml) return <div><div className="relative"><textarea value={value} onChange={e => onChange(e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} placeholder={PH[param.name] || ''} />
+  if (ml) return <div><div className="relative"><ExprAutocomplete value={value} onChange={onChange} upstreamFields={uf} nodeLabels={nodeLabels} multiline rows={4}
+    placeholder={PH[param.name] || ''} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} />
     <button onClick={() => setFx(true)} className="absolute right-2 top-2 px-1.5 py-0.5 rounded text-[9px] opacity-30 hover:opacity-100" style={{ color: 'var(--text-muted)', background: 'var(--bg)' }}>fx</button></div>{pvEl}</div>
   return <div><div className="flex gap-1"><input type="text" value={value} onChange={e => onChange(e.target.value)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name] || ''} />
     <button onClick={() => setFx(true)} className="px-2 rounded-lg text-[10px] opacity-40 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>fx</button></div>{pvEl}</div>

@@ -34,6 +34,7 @@ export default function WorkflowEditor() {
   const [clipboard, setClipboard] = useState<Node | null>(null)
   const [editModal, setEditModal] = useState<Node | null>(null)
   const [showTriggerPicker, setShowTriggerPicker] = useState(false)
+  const [pinnedData, setPinnedData] = useState<Record<string, any>>({})
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => { getNodeCatalog().then(d => setCatalog(d.nodes || [])).catch(() => {}) }, [])
@@ -47,7 +48,7 @@ export default function WorkflowEditor() {
       markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } })))
   }).catch(() => toast.error('加载失败')) } }, [workflowId])
   useEffect(() => { if (catalog.length) setNodes(ns => ns.map(n => ({ ...n, data: { ...n.data, catalog } }))) }, [catalog])
-  useEffect(() => { setNodes(ns => ns.map(n => ({ ...n, data: { ...n.data, execState: execStatus[n.id] } }))) }, [execStatus])
+  useEffect(() => { setNodes(ns => ns.map(n => ({ ...n, data: { ...n.data, execState: execStatus[n.id], isPinned: !!pinnedData[n.id] } }))) }, [execStatus, pinnedData])
 
   // WebSocket
   useEffect(() => { try { const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`); wsRef.current = ws
@@ -99,15 +100,19 @@ export default function WorkflowEditor() {
 
   const onNodeCtx = useCallback((ev: React.MouseEvent, n: Node) => { ev.preventDefault(); setCtxMenu({ x: ev.clientX, y: ev.clientY, nodeId: n.id }) }, [])
 
+  const pinOutput = useCallback((id: string, out: any) => { setPinnedData(p => ({ ...p, [id]: out })); toast.success('已固定') }, [])
+  const unpinOutput = useCallback((id: string) => { setPinnedData(p => { const n = { ...p }; delete n[id]; return n }); toast.success('已取消固定') }, [])
+
   const getUpstreamInfo = useCallback((nodeId: string) => {
     const upstreams: Array<{ nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }> = []
     for (const edge of edges) { if (edge.target === nodeId) {
       const src = nodes.find(n => n.id === edge.source); if (!src) continue
       const st = (src.data as any)?.nodeType || ''
-      upstreams.push({ nodeId: edge.source, nodeLabel: (src.data as any)?.label || st, nodeType: st, data: execStatus[edge.source]?.output || null, schema: NODE_OUTPUT_SCHEMAS[st] || [] })
+      upstreams.push({ nodeId: edge.source, nodeLabel: (src.data as any)?.label || st, nodeType: st,
+        data: pinnedData[edge.source] || execStatus[edge.source]?.output || null, schema: NODE_OUTPUT_SCHEMAS[st] || [] })
     } }
     return { upstreams, directOutput: upstreams.find(u => u.data)?.data || null }
-  }, [edges, nodes, execStatus])
+  }, [edges, nodes, execStatus, pinnedData])
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--bg)' }}>
@@ -202,6 +207,7 @@ export default function WorkflowEditor() {
         </div></>}
       {editModal && (() => { const ui = getUpstreamInfo(editModal.id); return <NodeEditModal node={editModal} catalog={catalog} execData={execStatus[editModal.id]}
         upstreamOutput={ui.directOutput} upstreamNodes={ui.upstreams}
+        onPinOutput={o => pinOutput(editModal.id, o)} onUnpinOutput={() => unpinOutput(editModal.id)} isPinned={!!pinnedData[editModal.id]}
         onUpdateConfig={c => { updateCfg(editModal.id, c); setEditModal(p => p ? { ...p, data: { ...p.data, config: c } } : null) }}
         onUpdateLabel={l => { updateLabel(editModal.id, l); setEditModal(p => p ? { ...p, data: { ...p.data, label: l } } : null) }}
         onClose={() => setEditModal(null)} /> })()}
