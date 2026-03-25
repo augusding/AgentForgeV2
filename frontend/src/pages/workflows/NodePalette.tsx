@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react'
-import { Search, X, Code, Play, Clock, Webhook, GitBranch, Split, Sparkles, Globe, Table, Mail, Bell, Edit3 } from 'lucide-react'
+import { Search, X, Code, Play, Clock, Webhook, GitBranch, Split, Sparkles, Globe, Table, Mail, Bell, Edit3,
+         MessageCircle, MessageSquare, MessagesSquare, FileText, Database, Scan } from 'lucide-react'
 import type { NodeTypeDef } from '../../api/workflow'
 
 const ICONS: Record<string, any> = {
   manualTrigger: Play, scheduleTrigger: Clock, webhookTrigger: Webhook,
   if: GitBranch, switch: Split, condition: GitBranch,
   code: Code, ai: Sparkles, http: Globe, excel: Table, email: Mail, notification: Bell, set: Edit3,
+  feishu: MessageCircle, dingtalk: MessageSquare, wecom: MessagesSquare,
+  document: FileText, database: Database, scraper: Scan,
 }
 const GRP_LABEL: Record<string, string> = { trigger: '触发器', logic: '逻辑', ai: 'AI', data: '数据', action: '动作', notify: '通知' }
 const GRP_ORDER = ['trigger', 'logic', 'ai', 'data', 'action', 'notify']

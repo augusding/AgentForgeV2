@@ -1,5 +1,4 @@
 """注册所有内置工作流节点。"""
-
 from workflow.registry import NodeRegistry
 
 
@@ -12,6 +11,10 @@ def register_all_nodes(registry: NodeRegistry, llm_client=None) -> None:
     from workflow.nodes.http_node import register_http
     from workflow.nodes.excel_node import register_excel
     from workflow.nodes.email_node import register_email
+    from workflow.nodes.messaging import register_messaging
+    from workflow.nodes.document_node import register_document
+    from workflow.nodes.database_node import register_database
+    from workflow.nodes.scraper_node import register_scraper
 
     register_triggers(registry)
     register_logic(registry)
@@ -21,3 +24,7 @@ def register_all_nodes(registry: NodeRegistry, llm_client=None) -> None:
     register_http(registry)
     register_excel(registry)
     register_email(registry)
+    register_messaging(registry)
+    register_document(registry)
+    register_database(registry)
+    register_scraper(registry)

@@ -78,6 +78,9 @@ class WorkflowEngine:
                     if nr and nr.output and isinstance(nr.output, dict):
                         execution.variables.update(nr.output)
 
+                    # WebSocket 推送节点状态
+                    _push_node_status(ctx, execution, nid, nr)
+
                     if nr and nr.status in ("completed", "skipped"):
                         out_idx = nr.output.get("_output_index") if isinstance(nr.output, dict) else None
                         for next_id in adjacency.get(nid, []):
@@ -97,6 +100,7 @@ class WorkflowEngine:
             execution.status = "failed"; execution.error = str(e)
 
         execution.completed_at = time.time()
+        _push_execution_done(ctx, execution)
         logger.info("工作流完成: wf=%s status=%s nodes=%d %.1fs",
                      workflow.id, execution.status, len(execution.node_results),
                      execution.completed_at - execution.started_at)
@@ -155,3 +159,33 @@ def _get_upstream_output(node_id: str, edges: list[dict], execution: WorkflowExe
             if nr and nr.output:
                 return nr.output
     return {}
+
+
+def _push_node_status(ctx: dict, execution: WorkflowExecution, nid: str, nr: NodeResult | None) -> None:
+    gateway, uid = ctx.get("gateway"), ctx.get("user_id", "")
+    if not gateway or not uid:
+        return
+    try:
+        asyncio.get_event_loop().create_task(gateway.push_to_user(uid, {
+            "type": "workflow_node_status", "execution_id": execution.id,
+            "workflow_id": execution.workflow_id, "node_id": nid,
+            "status": nr.status if nr else "failed",
+            "error": nr.error if nr else "", "duration": nr.duration if nr else 0,
+        }))
+    except Exception:
+        pass
+
+
+def _push_execution_done(ctx: dict, execution: WorkflowExecution) -> None:
+    gateway, uid = ctx.get("gateway"), ctx.get("user_id", "")
+    if not gateway or not uid:
+        return
+    try:
+        asyncio.get_event_loop().create_task(gateway.push_to_user(uid, {
+            "type": "workflow_execution_done", "execution_id": execution.id,
+            "workflow_id": execution.workflow_id, "status": execution.status,
+            "duration": execution.completed_at - execution.started_at,
+            "node_count": len(execution.node_results),
+        }))
+    except Exception:
+        pass

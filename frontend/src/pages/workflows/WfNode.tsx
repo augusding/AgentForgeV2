@@ -1,11 +1,14 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Play, Clock, Webhook, GitBranch, Split, Code, Sparkles, Globe, Table, Mail, Bell, Edit3 } from 'lucide-react'
+import { Play, Clock, Webhook, GitBranch, Split, Code, Sparkles, Globe, Table, Mail, Bell, Edit3,
+         MessageCircle, MessageSquare, MessagesSquare, FileText, Database, Scan } from 'lucide-react'
 
 const ICONS: Record<string, any> = {
   manualTrigger: Play, scheduleTrigger: Clock, webhookTrigger: Webhook,
   if: GitBranch, switch: Split, condition: GitBranch,
   code: Code, ai: Sparkles, http: Globe, excel: Table, email: Mail, notification: Bell, set: Edit3,
+  feishu: MessageCircle, dingtalk: MessageSquare, wecom: MessagesSquare,
+  document: FileText, database: Database, scraper: Scan,
 }
 const GRP_CLR: Record<string, string> = {
   trigger: '#22c55e', logic: '#f59e0b', ai: '#a855f7', data: '#3b82f6', action: '#06b6d4', notify: '#f97316',
