@@ -8,6 +8,32 @@ import toast from 'react-hot-toast'
 interface Props { node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onClose: () => void }
 
+function fErr(e: string, nt: string): string {
+  if (!e) return ''
+  if (e.includes('Cannot connect') || e.includes('Connection refused')) return '无法连接目标服务器，请检查 URL 和服务状态'
+  if (e.includes('Timeout') || e.includes('timeout')) return '请求超时，可尝试增加超时时间'
+  if (e.includes('Name or service not known') || e.includes('getaddrinfo')) return '域名解析失败，请检查 URL'
+  if (e.includes('404')) return '资源不存在 (404)，请检查 URL 路径'
+  if (e.includes('401') || e.includes('Unauthorized')) return '认证失败 (401)，请检查 Token'
+  if (e.includes('403')) return '权限不足 (403)'
+  if (e.includes('429')) return 'API 限流 (429)，稍后再试'
+  if (e.includes('LLM') && e.includes('不可用')) return 'AI 模型未配置，请检查 LLM 设置'
+  if (e.includes('rate limit')) return 'AI 接口频率超限，稍等再试'
+  if (e.includes('no such table')) return '数据库表不存在，请检查表名'
+  if (e.includes('syntax error') && e.includes('SQL')) return 'SQL 语法错误'
+  if (e.includes('文件不存在') || e.includes('No such file')) return '文件不存在，请检查路径'
+  if (e.includes('路径越界')) return '路径超出允许范围'
+  if (e.includes('NameError')) return '代码中使用了未定义的变量'
+  if (e.includes('SyntaxError')) return 'Python 语法错误（缩进/括号）'
+  if (e.includes('TypeError')) return '数据类型不匹配'
+  if (e.includes('KeyError')) return '访问了不存在的字段'
+  if (e.includes('webhookUrl') && e.includes('不能为空')) return '请填写 Webhook URL'
+  if (e.includes('SMTP 未配置')) return '邮件服务器未配置，请设置 SMTP 环境变量'
+  if (nt === 'excel' && e.includes('openpyxl')) return '缺少 Excel 库: pip install openpyxl'
+  if (e.includes('代码执行错误')) return e.replace('代码执行错误: ', '代码出错: ')
+  return e.length > 100 ? e.slice(0, 100) + '…' : e
+}
+
 function exprPreview(expr: string, data: any): string {
   if (!expr || !expr.includes('{{')) return ''
   try { return expr.replace(/\{\{(.+?)\}\}/g, (_, inner) => {
@@ -15,6 +41,31 @@ function exprPreview(expr: string, data: any): string {
     if (m && data && typeof data === 'object') { const v = data[m[1]]; return v !== undefined ? String(v) : '<undefined>' }
     if (t === '$input') return typeof data === 'object' ? JSON.stringify(data).slice(0, 50) : String(data || '')
     return `<${t}>` }) } catch { return '' }
+}
+
+const NDOCS: Record<string, { d: string; t: string[]; e: string[] }> = {
+  http: { d: '发送 HTTP 请求到外部 API。', t: ['URL 支持表达式 {{ $input.url }}', 'Headers 通常需要 Authorization', 'POST 需设置 Body'], e: ['GET https://api.example.com/data'] },
+  ai: { d: '调用 AI 大模型。支持生成/分类/提取/摘要/路由。', t: ['Prompt 中用 {{ $input.text }} 引用数据', '分类模式只输出类别名', '提取模式返回 JSON'], e: ['总结：{{ $input.text }}', '分类为：好评/中评/差评'] },
+  code: { d: '执行 Python 代码，设置 result 变量作为输出。', t: ['可用 input_data、variables、items', '支持 json/datetime/re/math', '不支持 import 外部库'], e: ['result = {"count": len(items)}'] },
+  if: { d: '条件分支：true→输出0，false→输出1。', t: ['规则模式用可视化构建器', '表达式模式写 $input.score > 60', 'AND=全部满足，OR=任一满足'], e: [] },
+  switch: { d: '按值多路分发，未匹配走 fallback。', t: ['路由值逗号分隔', '按字段值精确匹配'], e: [] },
+  set: { d: '设置工作流变量。', t: ['JSON 格式 {"key": "value"}', '值支持 {{ 表达式 }}'], e: [] },
+  excel: { d: '读取/创建/追加 Excel。', t: ['读取时第一行为表头', '路径相对于项目根目录'], e: [] },
+  email: { d: '通过 SMTP 发送邮件。', t: ['需配置 SMTP_HOST/USER/PASS 环境变量', '未配置时保存为草稿'], e: [] },
+  feishu: { d: '飞书群机器人通知。', t: ['群设置→添加机器人→获取 Webhook URL'], e: [] },
+  dingtalk: { d: '钉钉群机器人通知。', t: ['群设置→自定义机器人→获取 Webhook URL'], e: [] },
+  wecom: { d: '企业微信群机器人通知。', t: ['群设置→添加机器人→获取 Webhook URL'], e: [] },
+  database: { d: 'SQL 查询（SQLite）。', t: ['SELECT 返回 items 列表', 'INSERT/UPDATE 返回 affected_rows'], e: ['SELECT * FROM sessions LIMIT 10'] },
+  scraper: { d: '抓取网页提取文本。', t: ['可选文本/HTML/JSON 提取', '关键词过滤相关段落'], e: [] },
+  document: { d: '生成 Word/文本文档。', t: ['内容支持 Markdown', '路径留空自动生成'], e: [] },
+  loop: { d: '遍历列表逐项处理。', t: ['自动获取上游 items', '可用表达式转换每项'], e: [] },
+  delay: { d: '等待后继续。', t: ['最长 1 小时'], e: [] },
+  merge: { d: '合并多分支数据。', t: ['append=拼接列表', 'combine=合并对象'], e: [] },
+  transform: { d: '字段映射/过滤/重命名。', t: ['映射：{"新名": "{{ $input.旧名 }}"}', '过滤：$input.score > 60'], e: [] },
+  approval: { d: '人工审批（当前自动通过）。', t: ['通过→输出0，拒绝→输出1'], e: [] },
+  subWorkflow: { d: '调用另一个工作流。', t: ['传入工作流 ID', '子流程输出作为本节点输出'], e: [] },
+  kvStore: { d: '键值存储，跨工作流共享数据。', t: ['get/set/delete/list 四种操作'], e: [] },
+  notification: { d: '系统内通知，推送到前端。', t: ['通过 WebSocket 实时推送'], e: [] },
 }
 
 const PH: Record<string, string> = {
@@ -81,6 +132,16 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                 <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} />
               </div>)})}
             {!params.length && <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>无需配置</div>}
+            {NDOCS[nodeType] && <details className="group mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+              <summary className="text-xs font-medium cursor-pointer flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <HelpCircle size={12} /> 使用说明 <ChevronRight size={12} className="group-open:rotate-90 transition-transform ml-auto" /></summary>
+              <div className="mt-3 space-y-3">
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text)' }}>{NDOCS[nodeType].d}</p>
+                {NDOCS[nodeType].t.length > 0 && <div><div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>💡 技巧</div>
+                  <ul className="space-y-1">{NDOCS[nodeType].t.map((tip: string, i: number) => <li key={i} className="text-[10px] flex gap-1.5" style={{ color: 'var(--text-muted)' }}>• {tip}</li>)}</ul></div>}
+                {NDOCS[nodeType].e.length > 0 && <div><div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>📝 示例</div>
+                  {NDOCS[nodeType].e.map((ex: string, i: number) => <div key={i} className="text-[10px] px-2 py-1 rounded font-mono mb-1" style={{ background: 'var(--bg-surface)', color: 'var(--accent)' }}>{ex}</div>)}</div>}
+              </div></details>}
           </div>
           {/* Right: input/output */}
           <div className="w-[45%] flex flex-col min-h-0">
@@ -115,7 +176,10 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                     {(['table', 'json'] as const).map(v => <button key={v} onClick={() => setOutView(v)} className="px-2.5 py-1 text-[10px]"
                       style={{ background: outView === v ? 'var(--accent)' : 'var(--bg-surface)', color: outView === v ? 'white' : 'var(--text-muted)' }}>{v === 'table' ? 'Table' : 'JSON'}</button>)}</div>
                 </div>
-                {result.error && <div className="p-2 rounded text-xs" style={{ background: '#fef2f2', color: 'var(--error)' }}>⚠️ {result.error}</div>}
+                {result.error && <div className="p-3 rounded-lg text-xs" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+                  <div className="font-medium mb-1" style={{ color: 'var(--error)' }}>⚠️ {fErr(result.error, nodeType)}</div>
+                  <details><summary className="text-[10px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>原始错误</summary>
+                    <pre className="mt-1 text-[9px] font-mono whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>{result.error}</pre></details></div>}
                 {outView === 'table' && outItems.length > 0 && <DT items={outItems} />}
                 {outView === 'json' && <JT data={result.output} />}
               </div> : <div className="text-center py-12 text-xs" style={{ color: 'var(--text-muted)' }}>点击"测试"查看输出</div>)}
