@@ -26,7 +26,7 @@ def create_search_knowledge_tool(knowledge_base):
 
     return ToolDefinition(
         name="search_knowledge",
-        description="搜索知识库，查找与查询内容相关的文档片段。当需要查阅内部文档、规范、历史资料时使用。",
+        description="搜索知识库中的文档。当用户问关于公司政策、产品文档、操作手册、技术规范等有明确文档依据的问题时优先使用。返回最相关的文档片段和来源。注意：不要用于实时信息，那应该用 web_search。",
         input_schema={
             "type": "object",
             "properties": {

@@ -102,6 +102,12 @@ class ContextBuilder:
             "\n## 输出要求\n"
             "请用中文回答。结构化输出时使用 Markdown 格式。"
             "如果任务涉及数据，请给出具体数字和依据。"
+            "\n\n## 工具使用原则\n"
+            "1. 用户查询待办/任务/日程/跟进时，必须调用对应工具获取真实数据\n"
+            "2. 用户要求创建/修改/删除数据时，必须调用工具执行，不要只用文字回复\n"
+            "3. 用户问关于公司/业务的问题时，先用 search_knowledge 搜索知识库\n"
+            "4. 需要实时信息时使用 web_search，需要计算时使用 calculator\n"
+            "5. 如果不确定用哪个工具，优先选择只读工具（list/search）\n"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:

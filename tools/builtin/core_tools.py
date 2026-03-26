@@ -35,7 +35,7 @@ async def _calculator_handler(args: dict) -> str:
 
 calculator = ToolDefinition(
     name="calculator",
-    description="执行数学计算。支持四则运算、math 模块函数。",
+    description="执行数学计算。当用户需要计算数字、百分比、汇率换算、统计（平均值、总和）时使用。支持四则运算、幂运算、math 模块函数。",
     input_schema={
         "type": "object",
         "properties": {
@@ -61,7 +61,7 @@ async def _datetime_handler(args: dict) -> str:
 
 datetime_tool = ToolDefinition(
     name="datetime",
-    description="获取当前日期和时间。",
+    description="获取当前日期和时间。当用户问现在几点、今天几号、今天星期几、距离某日还有几天时使用。",
     input_schema={
         "type": "object",
         "properties": {
@@ -99,7 +99,7 @@ async def _code_executor_handler(args: dict) -> str:
 
 code_executor = ToolDefinition(
     name="code_executor",
-    description="执行 Python 代码片段并返回输出。适用于数据处理、计算、文件操作。",
+    description="执行 Python 代码。当需要复杂数据处理、文本转换、列表操作、正则匹配等编程任务时使用。代码在安全沙箱中运行，超时 10 秒。",
     input_schema={
         "type": "object",
         "properties": {
@@ -221,7 +221,7 @@ async def _text_processor_handler(args: dict) -> str:
 
 text_processor = ToolDefinition(
     name="text_processor",
-    description="文本处理工具：字数统计、摘要等。",
+    description="文本处理工具。当用户需要字数统计、词频分析、文本格式转换时使用。",
     input_schema={
         "type": "object",
         "properties": {
@@ -254,7 +254,7 @@ async def _http_request_handler(args: dict) -> str:
 
 http_request = ToolDefinition(
     name="http_request",
-    description="发送 HTTP 请求。",
+    description="发送 HTTP 请求到外部 API。当用户需要调用第三方接口、获取 API 数据时使用。支持 GET/POST。",
     input_schema={
         "type": "object",
         "properties": {

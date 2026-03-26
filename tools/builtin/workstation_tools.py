@@ -93,7 +93,7 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
     return [
         ToolDefinition(
             name="manage_priority",
-            description="管理优先事项。支持 list/add/update/delete。用于管理用户今天要重点关注的工作。",
+            description="管理用户的待办事项和优先级任务。当用户提到待办、任务、要做的事、截止日期、优先级、P0/P1/P2、提醒我、记一下、todo 时使用。支持 list(查看)/add(创建)/update(更新)/delete(删除)。创建时需要 title，可选 priority 和 due_date(YYYY-MM-DD)。",
             input_schema={"type": "object", "properties": {
                 "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "事项标题"},
@@ -108,7 +108,7 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_schedule",
-            description="管理日程安排。支持 list/add/delete。用于查看和管理用户的日程。",
+            description="管理用户的日程安排和会议。当用户提到日程、会议、安排、几点、上午/下午、开会、约了、schedule 时使用。支持 list(查看，可按日期过滤)/add(添加)/delete(删除)。创建需要 title 和 time(YYYY-MM-DD HH:MM)。",
             input_schema={"type": "object", "properties": {
                 "action": {"type": "string", "enum": ["list", "add", "delete"]},
                 "title": {"type": "string", "description": "日程标题"},
@@ -123,7 +123,7 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_followup",
-            description="管理跟进事项。支持 list/add/update/delete。用于追踪需要后续跟进的工作。",
+            description="管理用户的跟进事项和提醒。当用户提到跟进、提醒我、联系、回访、follow up、客户跟进、等回复、催一下时使用。支持 list/add/update/delete。创建需要 title，可选 target(跟进对象) 和 due_date。",
             input_schema={"type": "object", "properties": {
                 "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "跟进标题"},
@@ -138,7 +138,7 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_work_item",
-            description="管理工作项。支持 list/add/update/delete。用于管理任务、bug、需求等工作项。",
+            description="管理工作项和项目任务。当用户提到工作项、项目、进度、任务状态、进行中、已完成、work item 时使用。支持 list/add/update/delete。状态值：todo/in_progress/done。",
             input_schema={"type": "object", "properties": {
                 "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "工作项标题"},

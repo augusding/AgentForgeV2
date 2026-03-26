@@ -104,7 +104,7 @@ async def _excel_handler(args: dict) -> str:
 
 excel_processor = ToolDefinition(
     name="excel_processor",
-    description="Excel 表格处理。支持 create/read/stats/add_sheet 操作。",
+    description="创建、读取和修改 Excel 文件。当用户提到 Excel、表格、xlsx、数据导出、报表时使用。支持 read/create/stats/add_sheet。",
     input_schema={
         "type": "object",
         "properties": {
@@ -206,7 +206,7 @@ async def _word_handler(args: dict) -> str:
 
 word_processor = ToolDefinition(
     name="word_processor",
-    description="Word 文档处理。支持 create/read/replace/add_table 操作。",
+    description="创建和读取 Word 文档。当用户需要生成报告、文档、方案、会议纪要时使用。支持 create/read/replace/add_table。内容支持 Markdown。",
     input_schema={
         "type": "object",
         "properties": {
@@ -325,7 +325,7 @@ async def _merge_pdfs(raw_paths: list[str], output_raw: str) -> str:
 
 pdf_processor = ToolDefinition(
     name="pdf_processor",
-    description="PDF 文件处理。支持 read/info/merge 操作。",
+    description="读取 PDF 文件内容。当用户上传了 PDF 或需要提取 PDF 文本时使用。支持 read/info/merge。",
     input_schema={
         "type": "object",
         "properties": {
