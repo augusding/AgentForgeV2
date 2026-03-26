@@ -111,6 +111,21 @@ async def handle_list_files(request: web.Request) -> web.Response:
     return _json({"files": files[:100]})
 
 
+async def handle_download(request: web.Request) -> web.Response:
+    """GET /api/v1/files/download/{path:.*} — 下载文件"""
+    raw_path = request.match_info.get("path", "")
+    engine = request.app["engine"]
+    file_path = (engine.root_dir / raw_path).resolve()
+    if not str(file_path).startswith(str(engine.root_dir)):
+        return web.Response(status=403, text="路径越界")
+    if not file_path.is_file():
+        return web.Response(status=404, text="文件不存在")
+    return web.FileResponse(file_path, headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{file_path.name}",
+    })
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/files/upload", handle_upload)
     app.router.add_get("/api/v1/files", handle_list_files)
+    app.router.add_get("/api/v1/files/download/{path:.*}", handle_download)

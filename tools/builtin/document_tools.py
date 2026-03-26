@@ -341,4 +341,6 @@ pdf_processor = ToolDefinition(
 )
 
 
-ALL_DOCUMENT_TOOLS = [excel_processor, word_processor, pdf_processor]
+from tools.builtin.converter_tools import document_converter
+
+ALL_DOCUMENT_TOOLS = [excel_processor, word_processor, pdf_processor, document_converter]
