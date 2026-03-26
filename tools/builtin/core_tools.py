@@ -151,43 +151,107 @@ shell_executor = ToolDefinition(
 
 # ── Web 搜索 ─────────────────────────────────────────────
 
+async def _search_sogou(query: str, max_results: int) -> list[dict]:
+    """搜狗搜索（国内稳定可用，无需 API Key）。"""
+    import aiohttp, re as _re
+    from urllib.parse import quote
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
+    url = f"https://www.sogou.com/web?query={quote(query)}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10), allow_redirects=True) as resp:
+            html = await resp.text()
+    results = []
+    for block in _re.findall(r'<h3[^>]*>(.*?)</h3>', html, _re.DOTALL)[:max_results]:
+        m = _re.search(r'href="([^"]+)"[^>]*>(.*?)(?:</a>|$)', block, _re.DOTALL)
+        if not m:
+            continue
+        link, title = m.group(1), _re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        if not title:
+            continue
+        if link.startswith("/link?"):
+            link = f"https://www.sogou.com{link}"
+        results.append({"title": title, "url": link, "snippet": ""})
+    return results
+
+
+async def _search_bing(query: str, max_results: int) -> list[dict]:
+    """Bing 中国搜索。"""
+    import aiohttp, re as _re
+    from urllib.parse import quote
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36", "Accept-Language": "zh-CN,zh;q=0.9"}
+    url = f"https://cn.bing.com/search?q={quote(query)}&count={max_results}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+            html = await resp.text()
+    results = []
+    for block in _re.findall(r'<li class="b_algo">(.*?)</li>', html, _re.DOTALL)[:max_results]:
+        m = _re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block)
+        if not m:
+            continue
+        link, title = m.group(1), _re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        sm = _re.search(r'<p[^>]*>(.*?)</p>', block, _re.DOTALL)
+        snippet = _re.sub(r'<[^>]+>', '', sm.group(1)).strip()[:200] if sm else ""
+        if title and link.startswith("http"):
+            results.append({"title": title, "url": link, "snippet": snippet})
+    return results
+
+
 async def _web_search_handler(args: dict) -> str:
-    """联网搜索。优先 duckduckgo_search，fallback Tavily API。"""
+    """联网搜索。搜狗 → Bing → Tavily → DuckDuckGo → 提示。"""
     query = args.get("query", "").strip()
     if not query:
         return json.dumps({"error": "搜索关键词不能为空"}, ensure_ascii=False)
     max_results = min(args.get("max_results", 5), 10)
+    import os
 
-    # 方案 1: duckduckgo_search
+    # 方案 1: 搜狗（国内最稳定）
     try:
-        from duckduckgo_search import DDGS
-        results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=max_results):
-                results.append({"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")})
-        return json.dumps({"query": query, "results": results, "count": len(results)}, ensure_ascii=False)
-    except ImportError:
-        pass
+        results = await _search_sogou(query, max_results)
+        if results:
+            return json.dumps({"query": query, "results": results, "count": len(results), "source": "sogou"}, ensure_ascii=False)
     except Exception as e:
-        logger.warning("DuckDuckGo 搜索失败: %s", e)
+        logger.warning("搜狗搜索失败: %s", e)
+
+    # 方案 2: Bing 中国
+    try:
+        results = await _search_bing(query, max_results)
+        if results:
+            return json.dumps({"query": query, "results": results, "count": len(results), "source": "bing"}, ensure_ascii=False)
+    except Exception as e:
+        logger.warning("Bing 搜索失败: %s", e)
 
     # 方案 2: Tavily API
     try:
-        import os, aiohttp
+        import aiohttp
         key = os.environ.get("TAVILY_API_KEY", "")
         if key:
             async with aiohttp.ClientSession() as session:
                 async with session.post("https://api.tavily.com/search",
                     json={"query": query, "max_results": max_results, "api_key": key},
-                    timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    timeout=aiohttp.ClientTimeout(total=15)) as resp:
                     data = await resp.json()
                     results = [{"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")} for r in data.get("results", [])]
-                    return json.dumps({"query": query, "results": results, "count": len(results)}, ensure_ascii=False)
+                    if results:
+                        return json.dumps({"query": query, "results": results, "count": len(results), "source": "tavily"}, ensure_ascii=False)
     except Exception as e:
         logger.warning("Tavily 搜索失败: %s", e)
 
+    # 方案 3: DuckDuckGo（翻墙环境 fallback）
+    try:
+        from duckduckgo_search import DDGS
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("ALL_PROXY") or ""
+        kw = {"proxy": proxy} if proxy else {}
+        results = []
+        with DDGS(**kw) as ddgs:
+            for r in ddgs.text(query, max_results=max_results):
+                results.append({"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")})
+        if results:
+            return json.dumps({"query": query, "results": results, "count": len(results), "source": "duckduckgo"}, ensure_ascii=False)
+    except Exception as e:
+        logger.warning("DuckDuckGo 搜索失败: %s", e)
+
     return json.dumps({"query": query, "results": [], "count": 0,
-        "note": "需要 pip install duckduckgo_search 或设置 TAVILY_API_KEY"}, ensure_ascii=False)
+        "note": "搜索暂时不可用。可设置 TAVILY_API_KEY 获得更稳定的搜索。"}, ensure_ascii=False)
 
 web_search = ToolDefinition(
     name="web_search",
