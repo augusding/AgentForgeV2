@@ -8,6 +8,7 @@ import { uploadChatFile, getQuickCommands } from '../api/chat'
 import { SessionItem, ToolCalls, Collapsible, CopyBtn, FeedbackBtn, timeAgo } from '../components/ChatWidgets'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
+import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../components/SlashCommandMenu'
 import toast from 'react-hot-toast'
 
 export default function Chat() {
@@ -20,7 +21,9 @@ export default function Chat() {
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
   const [knowledgeScope, setKnowledgeScope] = useState<string[]>([]); const [hasKB, setHasKB] = useState(false)
   const [personality, setPersonality] = useState('')
+  const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
+  const slashRef = useRef<SlashMenuHandle>(null)
   const isFirstMsg = useRef(true)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -167,14 +170,26 @@ export default function Chat() {
             <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
               style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }}>
               <Globe size={11} /> 联网搜索{webSearch ? ' ✓' : ''}</button>
+            <button onClick={() => { setInput('/'); setShowSlash(true); setSlashQ(''); taRef.current?.focus() }}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
+              <span className="font-mono font-bold">/</span> 命令</button>
           </div>
           <div className="flex gap-2 max-w-[800px] mx-auto items-end">
             <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
-            <textarea ref={taRef} value={input} onChange={e => { setInput(e.target.value); adjustH() }}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-              placeholder="输入消息... (Shift+Enter 换行)" disabled={store.streaming} rows={1}
-              className="flex-1 px-4 py-2.5 rounded-lg text-sm outline-none resize-none"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', maxHeight: 200 }} />
+            <div className="relative flex-1">
+              <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
+                onSelect={(cmd: SlashCommand) => {
+                  setShowSlash(false); setSlashQ('')
+                  if (cmd.directSend) { setInput(''); send(cmd.prompt) }
+                  else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const l = cmd.prompt.length; taRef.current?.setSelectionRange(l, l) }, 50) }
+                }} onClose={() => setShowSlash(false)} />
+              <textarea ref={taRef} value={input}
+                onChange={e => { const v = e.target.value; setInput(v); adjustH(); if (v.startsWith('/')) { setSlashQ(v.slice(1)); setShowSlash(true) } else { setShowSlash(false) } }}
+                onKeyDown={e => { if (showSlash && slashRef.current?.handleKey(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                placeholder="输入消息... (/ 呼出命令, Shift+Enter 换行)" disabled={store.streaming} rows={1}
+                className="w-full px-4 py-2.5 rounded-lg text-sm outline-none resize-none"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', maxHeight: 200 }} />
+            </div>
             {store.streaming
               ? <button onClick={stopGen} className="p-2.5 rounded-lg" style={{ background: 'var(--error)' }}><Square size={16} className="text-white" /></button>
               : <button onClick={() => send()} disabled={!input.trim() && !attachments.length} className="p-2.5 rounded-lg"
