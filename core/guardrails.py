@@ -163,3 +163,43 @@ class AuditLogger:
             else:
                 out[k] = v
         return out
+
+
+# ── H5: 系统护栏 + H1: 输入护栏 ──
+
+class SystemGuard:
+    """系统级资源控制：Token 预算、请求频率、输入检查。"""
+
+    def __init__(self, max_tokens_per_session: int = 50000, max_requests_per_day: int = 200, max_input_length: int = 50000):
+        self.max_tokens_per_session = max_tokens_per_session
+        self.max_requests_per_day = max_requests_per_day
+        self.max_input_length = max_input_length
+        self._daily_counts: dict[str, list[float]] = {}
+
+    def check_budget(self, user_id: str, session_tokens: int = 0) -> GuardResult:
+        if session_tokens > self.max_tokens_per_session:
+            return GuardResult(blocked=True, passed=False,
+                reason=f"本次对话已消耗 {session_tokens:,} tokens，超过上限 {self.max_tokens_per_session:,}。请开启新对话。")
+        now = time.time()
+        today_start = now - (now % 86400)
+        self._daily_counts.setdefault(user_id, [])
+        self._daily_counts[user_id] = [t for t in self._daily_counts[user_id] if t > today_start]
+        if len(self._daily_counts[user_id]) >= self.max_requests_per_day:
+            return GuardResult(blocked=True, passed=False,
+                reason=f"今日对话次数已达上限（{self.max_requests_per_day} 次）。")
+        self._daily_counts[user_id].append(now)
+        return GuardResult(passed=True)
+
+    def check_input(self, content: str) -> GuardResult:
+        if not content or not content.strip():
+            return GuardResult(blocked=True, passed=False, reason="消息不能为空")
+        if len(content) > self.max_input_length:
+            return GuardResult(blocked=True, passed=False,
+                reason=f"消息过长（{len(content):,} 字符），请控制在 {self.max_input_length:,} 字符以内。")
+        _inj = [r"忽略(以上|上面|之前|所有)(的)?(指令|规则|设定)", r"(ignore|forget|disregard).*(instructions|rules|prompt)",
+                r"<\/?system>", r"(system|admin)\s*prompt"]
+        for p in _inj:
+            if re.search(p, content, re.I):
+                logger.warning("检测到可能的 Prompt 注入: %s", content[:100])
+                break
+        return GuardResult(passed=True)

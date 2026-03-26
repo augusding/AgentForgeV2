@@ -46,6 +46,7 @@ class ForgeEngine:
         self._pre_tool_guard = None
         self._exec_guard = None
         self._audit_logger = None
+        self._system_guard = None
         self._initialized = False
 
     async def init(self) -> None:
@@ -129,10 +130,16 @@ class ForgeEngine:
         await self._trigger_manager.load_triggers()
 
         # 安全护栏
-        from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger
+        from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger, SystemGuard
         self._pre_tool_guard = PreToolGuard()
         self._exec_guard = ExecutionGuard()
         self._audit_logger = AuditLogger()
+        gr_cfg = self.config.guardrails if hasattr(self.config, 'guardrails') and self.config.guardrails else {}
+        self._system_guard = SystemGuard(
+            max_tokens_per_session=gr_cfg.get("max_tokens_per_session", 50000),
+            max_requests_per_day=gr_cfg.get("max_requests_per_day", 200),
+            max_input_length=gr_cfg.get("max_input_length", 50000),
+        )
 
         self._initialized = True
         logger.info("ForgeEngine 初始化完成")
@@ -141,6 +148,10 @@ class ForgeEngine:
 
     async def handle_message(self, msg: UnifiedMessage) -> dict:
         """完整管线：解析岗位 → 会话管理 → 构建上下文 → 执行 → 存储。"""
+        if self._system_guard:
+            for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
+                if not chk.passed:
+                    return {"content": chk.reason, "status": "blocked"}
         position = self._resolve_position(msg)
         if not position:
             return {"content": "未找到岗位配置，请先选择岗位。", "status": "error"}
@@ -205,6 +216,12 @@ class ForgeEngine:
 
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
+        if self._system_guard:
+            for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
+                if not chk.passed:
+                    yield {"type": "text", "text": chk.reason}
+                    yield {"type": "done"}
+                    return
         position = self._resolve_position(msg)
         if not position:
             yield {"type": "text", "text": "未找到岗位配置。"}
