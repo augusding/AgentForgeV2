@@ -6,6 +6,7 @@ import { useChatStore } from '../stores/useChatStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { uploadChatFile, getQuickCommands } from '../api/chat'
 import { SessionItem, ToolCalls, Collapsible, CopyBtn, FeedbackBtn, timeAgo } from '../components/ChatWidgets'
+import ActionCard, { parseCard } from '../components/ActionCards'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
 import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../components/SlashCommandMenu'
@@ -227,6 +228,9 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos }: { msg: any; idx: 
             {msg.tool_calls?.length > 0 && <ToolCalls tools={msg.tool_calls} />}
             {msg.content && <Collapsible><Markdown content={msg.content} /></Collapsible>}
             {!msg.content && !msg.thinking && <span style={{ color: 'var(--text-muted)' }}>思考中...</span>}
+            {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
+              const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} /> : null
+            })}
           </div>
           {msg.content && <div className="flex items-center gap-1 px-3 py-1.5 border-t opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: 'var(--border)' }}>
             <CopyBtn text={msg.content} /><FeedbackBtn msgId={msgId} />

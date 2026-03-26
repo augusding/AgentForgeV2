@@ -4,6 +4,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { MessageSquare, Trash2, ChevronDown, ChevronRight, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
+import { parseCard } from './ActionCards'
 import client from '../api/client'
 import toast from 'react-hot-toast'
 
@@ -41,7 +42,9 @@ export function ToolCalls({ tools }: { tools: Array<{ type: string; name: string
           {p.done ? <Check size={10} style={{ color: 'var(--success)' }} /> : <div className="w-2.5 h-2.5 border border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" />}
           <span className="font-medium" style={{ color: 'var(--accent)' }}>{p.name}</span></div>
         {p.input && <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{typeof p.input === 'string' ? p.input : JSON.stringify(p.input, null, 2)}</pre>}
-        {p.result && <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{p.result.slice(0, 500)}</pre>}
+        {p.result && (parseCard(p.name, p.result)
+          ? <div className="mt-1 text-[9px] opacity-50">↑ 已渲染为交互卡片</div>
+          : <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{p.result.slice(0, 500)}</pre>)}
       </div>)}</div>}
     </div>)
 }
