@@ -16,5 +16,5 @@ export async function uploadFile(file: File, target: 'knowledge' | 'chat' = 'kno
 }
 
 export async function listFiles() {
-  return client.get('/files') as Promise<any>
+  return client.get('/knowledge/files') as Promise<any>
 }

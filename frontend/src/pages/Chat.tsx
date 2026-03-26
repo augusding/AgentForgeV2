@@ -11,6 +11,7 @@ import FilePreviewPanel from '../components/FilePreviewPanel'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
 import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../components/SlashCommandMenu'
+import VoiceInputButton from '../components/VoiceInputButton'
 import toast from 'react-hot-toast'
 
 export default function Chat() {
@@ -180,42 +181,47 @@ export default function Chat() {
         </div>
 
         {/* Input area */}
-        <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
-          {attachments.length > 0 && <div className="flex gap-2 mb-2 max-w-[800px] mx-auto">
-            {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1 px-2 py-1 rounded text-xs" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-              <Paperclip size={10} /><span className="max-w-[120px] truncate">{a.filename}</span>
-              <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="hover:text-[var(--error)]"><X size={10} /></button></div>)}</div>}
-          {/* Toolbar (#4 #5) */}
-          <div className="flex items-center gap-2 max-w-[800px] mx-auto mb-1">
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><Paperclip size={11} /> 附件</button>
-            <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
-              style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }}>
-              <Globe size={11} /> 联网搜索{webSearch ? ' ✓' : ''}</button>
-            <button onClick={() => { setInput('/'); setShowSlash(true); setSlashQ(''); taRef.current?.focus() }}
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
-              <span className="font-mono font-bold">/</span> 命令</button>
-          </div>
-          <div className="flex gap-2 max-w-[800px] mx-auto items-end">
-            <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
-            <div className="relative flex-1">
-              <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
-                onSelect={(cmd: SlashCommand) => {
-                  setShowSlash(false); setSlashQ('')
-                  if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
-                  if (cmd.directSend) { setInput(''); send(cmd.prompt) }
-                  else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const l = cmd.prompt.length; taRef.current?.setSelectionRange(l, l) }, 50) }
-                }} onClose={() => setShowSlash(false)} />
+        <div className="px-4 pb-4 pt-2">
+          <div className="max-w-[900px] mx-auto">
+            {attachments.length > 0 && <div className="flex gap-2 mb-2 px-3">
+              {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                <Paperclip size={10} style={{ color: 'var(--accent)' }} />
+                <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
+                <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
+              </div>)}</div>}
+            <div className="rounded-2xl overflow-hidden transition-shadow" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: input.trim() ? '0 2px 12px rgba(0,0,0,0.08)' : 'none' }}>
+              <div className="relative">
+                <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
+                  onSelect={(cmd: SlashCommand) => { setShowSlash(false); setSlashQ('')
+                    if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
+                    if (cmd.mode === 'direct') { setInput(''); send(cmd.prompt) }
+                    else { setInput(cmd.mode === 'template' ? (cmd.template || cmd.prompt) : cmd.prompt); setTimeout(() => { taRef.current?.focus(); adjustH() }, 50) }
+                  }} onClose={() => setShowSlash(false)} />
+              </div>
               <textarea ref={taRef} value={input}
-                onChange={e => { const v = e.target.value; setInput(v); adjustH(); if (v.startsWith('/')) { setSlashQ(v.slice(1)); setShowSlash(true) } else { setShowSlash(false) } }}
+                onChange={e => { const v = e.target.value; setInput(v); adjustH(); if (v.startsWith('/')) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
                 onKeyDown={e => { if (showSlash && slashRef.current?.handleKey(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="输入消息... (/ 呼出命令, Shift+Enter 换行)" disabled={store.streaming} rows={1}
-                className="w-full px-4 py-2.5 rounded-lg text-sm outline-none resize-none"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', maxHeight: 200 }} />
+                placeholder="输入消息，/ 呼出命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
+                className="w-full px-4 pt-3 pb-2 text-sm outline-none resize-none bg-transparent" style={{ color: 'var(--text)', maxHeight: 200 }} />
+              <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
+                <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="上传附件"><Paperclip size={16} /></button>
+                <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px]"
+                  style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }} title="联网搜索">
+                  <Globe size={14} /><span className="hidden sm:inline">{webSearch ? '联网 ✓' : '联网'}</span></button>
+                <button onClick={() => { setInput('/'); setShowSlash(true); setSlashQ(''); taRef.current?.focus() }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="快捷命令">
+                  <span className="font-mono font-bold text-xs">/</span><span className="hidden sm:inline">命令</span></button>
+                <div className="flex-1" />
+                <VoiceInputButton onTranscript={t => { setInput(p => p + t); setTimeout(adjustH, 50) }} />
+                {store.streaming
+                  ? <button onClick={stopGen} className="p-2 rounded-xl" style={{ background: 'var(--error)' }} title="停止"><Square size={16} className="text-white" /></button>
+                  : <button onClick={() => send()} disabled={!input.trim() && !attachments.length} className="p-2 rounded-xl"
+                      style={{ background: input.trim() || attachments.length ? 'var(--accent)' : 'var(--border)' }} title="发送"><Send size={16} className="text-white" /></button>}
+              </div>
             </div>
-            {store.streaming
-              ? <button onClick={stopGen} className="p-2.5 rounded-lg" style={{ background: 'var(--error)' }}><Square size={16} className="text-white" /></button>
-              : <button onClick={() => send()} disabled={!input.trim() && !attachments.length} className="p-2.5 rounded-lg"
-                  style={{ background: input.trim() || attachments.length ? 'var(--accent)' : 'var(--border)' }}><Send size={16} className="text-white" /></button>}
+            <div className="text-center mt-1.5"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AI 回复仅供参考，请核实重要信息</span></div>
           </div>
         </div>
       </div>
@@ -240,17 +246,19 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { ms
   return (
     <div className="flex gap-3 justify-start group">
       <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-xs" style={{ background: `${clr}15`, color: clr }}>✦</div>
-      <div className="max-w-[70%] min-w-0">
+      <div className="max-w-[85%] min-w-0">
         <div className="text-[10px] mb-1 flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
           <span className="font-medium">{pos?.display_name || 'AI'}</span>
           {msg.model && <span>· {msg.model}</span>}</div>
         <div className="rounded-xl text-sm" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <div className="px-4 py-2.5">
             {msg.thinking && !msg.content && <div className="flex items-center gap-2 text-xs py-1" style={{ color: 'var(--text-muted)' }}>
-              <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>{msg.thinking}...</span></div>}
+              <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>{msg.thinking}</span></div>}
             {msg.tool_calls?.length > 0 && <ToolCalls tools={msg.tool_calls} />}
             {msg.content && <Collapsible><Markdown content={msg.content} /></Collapsible>}
-            {!msg.content && !msg.thinking && <span style={{ color: 'var(--text-muted)' }}>思考中...</span>}
+            {msg.thinking && msg.content && <div className="flex items-center gap-2 text-xs py-2 mt-1 border-t" style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+              <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>{msg.thinking}</span></div>}
+            {!msg.content && !msg.thinking && !(msg.tool_calls?.length) && <span style={{ color: 'var(--text-muted)' }}>思考中...</span>}
             {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
               const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} onFileClick={onFileClick} /> : null
             })}

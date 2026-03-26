@@ -5,7 +5,7 @@ import client from '../api/client'
 import Markdown from '../components/Markdown'
 import toast from 'react-hot-toast'
 
-interface FileInfo { file_id: string; filename: string; size: number; modified: number }
+interface FileInfo { file_id: string; doc_id?: string; filename: string; size: number; modified: number }
 interface SearchResult { content: string; score: number; source: string }
 interface Stats { total_files: number; total_chunks: number; total_size: number; status: string }
 
@@ -136,7 +136,7 @@ export default function Knowledge() {
                   <div className="text-sm truncate">{f.filename}</div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtSize(f.size)}</div>
                 </div>
-                <button onClick={() => handleDelete(f.file_id, f.filename)}
+                <button onClick={() => handleDelete(f.doc_id || f.file_id, f.filename)}
                   className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-[var(--error)]" style={{ color: 'var(--text-muted)' }}>
                   <Trash2 size={14} />
                 </button>

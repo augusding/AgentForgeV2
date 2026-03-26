@@ -74,12 +74,22 @@ async def handle_upload(request: web.Request) -> web.Response:
     }
 
     if target == "knowledge" and extracted and engine.knowledge_base:
+        # 将文件移到知识库专用目录
+        kb_dir = engine.root_dir / "data" / "knowledge" / (o_id or "_default") / u_id
+        kb_dir.mkdir(parents=True, exist_ok=True)
+        kb_path = kb_dir / file_path.name
+        import shutil
+        shutil.move(str(file_path), str(kb_path))
+        file_path = kb_path
+        result["path"] = str(kb_path)
+
         final_doc_id = doc_id or file_path.stem
         chunks = engine.knowledge_base.add_document(
             doc_id=final_doc_id,
             content=extracted,
             metadata={"source": "upload", "filename": file_field.filename},
             is_markdown=file_path.suffix.lower() == ".md",
+            org_id=o_id,
         )
         result["knowledge"] = {"doc_id": final_doc_id, "chunks": chunks}
 
@@ -126,7 +136,7 @@ async def handle_download(request: web.Request) -> web.Response:
 
 
 async def handle_preview(request: web.Request) -> web.Response:
-    """GET /api/v1/files/preview/{path:.*} — 预览文件文本"""
+    """GET /api/v1/files/preview/{path:.*} — 按格式返回结构化预览"""
     raw = request.match_info.get("path", "")
     engine = request.app["engine"]
     fp = (engine.root_dir / raw).resolve()
@@ -134,9 +144,78 @@ async def handle_preview(request: web.Request) -> web.Response:
         return _json({"error": "路径越界"}, 403)
     if not fp.is_file():
         return _json({"error": "文件不存在"}, 404)
+    suffix = fp.suffix.lower()
+    fmt = suffix.lstrip(".")
+    base = {"filename": fp.name, "size": fp.stat().st_size, "format": fmt}
+
+    if suffix in (".xlsx", ".xls"):
+        return _json({**base, "type": "table", "data": _preview_xlsx(fp)})
+    if suffix == ".csv":
+        return _json({**base, "type": "table", "data": _preview_csv(fp)})
+    if suffix == ".pptx":
+        return _json({**base, "type": "slides", "data": _preview_pptx(fp)})
+    if suffix in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        return _json({**base, "type": "image", "data": {"url": f"/api/v1/files/download/{raw}"}})
+    if suffix == ".md":
+        return _json({**base, "type": "markdown", "content": fp.read_text(encoding="utf-8", errors="replace")[:10000]})
+
     from core.file_parser import extract_text
     text = await extract_text(str(fp))
-    return _json({"filename": fp.name, "size": fp.stat().st_size, "content": text[:5000] if text else "", "format": fp.suffix.lstrip(".")})
+    ptype = "richtext" if suffix in (".docx", ".pdf") else "text"
+    return _json({**base, "type": ptype, "content": text[:10000] if text else ""})
+
+
+def _preview_xlsx(fp):
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(fp, read_only=True, data_only=True)
+        sheets = []
+        for name in wb.sheetnames[:5]:
+            ws = wb[name]
+            rows = []
+            for row in ws.iter_rows(max_row=200, values_only=True):
+                cells = [str(c) if c is not None else "" for c in row]
+                if any(c.strip() for c in cells):
+                    rows.append(cells)
+            if rows:
+                sheets.append({"name": name, "rows": rows, "total_rows": ws.max_row or len(rows)})
+        wb.close()
+        return {"sheets": sheets}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _preview_csv(fp):
+    import csv
+    rows = []
+    try:
+        with open(fp, "r", encoding="utf-8-sig", errors="replace") as f:
+            for i, row in enumerate(csv.reader(f)):
+                if i >= 200: break
+                rows.append(row)
+        return {"sheets": [{"name": "数据", "rows": rows, "total_rows": len(rows)}]}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _preview_pptx(fp):
+    try:
+        from pptx import Presentation
+        prs = Presentation(str(fp))
+        slides = []
+        for i, slide in enumerate(prs.slides[:30], 1):
+            title, parts = "", []
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for p in shape.text_frame.paragraphs:
+                        t = p.text.strip()
+                        if t:
+                            if shape == slide.shapes.title: title = t
+                            else: parts.append(t)
+            slides.append({"number": i, "title": title or f"幻灯片 {i}", "content": parts})
+        return {"slides": slides, "total": len(prs.slides)}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def register(app: web.Application) -> None:

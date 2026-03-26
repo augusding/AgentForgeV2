@@ -208,14 +208,14 @@ class AgentRuntime:
 
             logger.info("流式工具循环 #%d: %s", loop + 1, [tc["name"] for tc in round_tool_calls])
 
-            # 执行工具
-            tool_results = await self._execute_tools(round_tool_calls)
-            needs_rethink = tracker.record(tool_results)
-
-            # yield 工具事件给前端
-            for tr in tool_results:
-                yield {"type": "tool_start", "name": tr["name"], "arguments": round_tool_calls[0].get("arguments", {}) if round_tool_calls else {}}
+            # 逐个执行：start → execute → result（用户实时看到进度）
+            tool_results = []
+            for tc in round_tool_calls:
+                yield {"type": "tool_start", "name": tc["name"], "arguments": tc.get("arguments", {})}
+                tr = await self._execute_single_tool(tc)
+                tool_results.append(tr)
                 yield {"type": "tool_result", "name": tr["name"], "result": tr["result"]}
+            needs_rethink = tracker.record(tool_results)
 
             # 注入工具结果到 messages 供下一轮 LLM
             messages.append({"role": "assistant", "content": round_content or ""})
@@ -284,55 +284,38 @@ class AgentRuntime:
                 break
         return content, total_tokens
 
+    async def _execute_single_tool(self, tc: dict) -> dict:
+        """执行单个工具调用（带护栏）。"""
+        name = tc.get("name", ""); args = tc.get("arguments", {}); start = time.time(); guard_action = "passed"
+        if self._tools and self._user_context:
+            td = self._tools.get(name)
+            if td and td.category == "workstation":
+                for k in ("user_id", "org_id", "position_id"): args.setdefault(k, self._user_context.get(k, ""))
+        if self._pre_guard:
+            check = self._pre_guard.check(name, args, self._user_context)
+            if check.modified_args: args = check.modified_args
+            if check.blocked:
+                self._log_audit(name, args, "blocked", "blocked", time.time() - start)
+                return {"tool_call_id": tc.get("id", ""), "name": name, "result": f"操作被安全护栏拦截: {check.reason}"}
+            if check.needs_confirmation: guard_action = "auto_confirmed"
+        handler = self._tools.get_handler(name) if self._tools else None
+        if handler:
+            result = await self._exec_guard.execute(handler, args, name) if self._exec_guard else await self._try_handler(handler, args)
+        else:
+            result = f"未找到工具: {name}"
+        dur = time.time() - start
+        status = "error" if str(result).startswith(("执行错误", "未找到工具", "操作被安全", "工具")) else "success"
+        self._log_audit(name, args, status, guard_action, dur)
+        return {"tool_call_id": tc.get("id", ""), "name": name, "result": result}
+
+    @staticmethod
+    async def _try_handler(handler, args):
+        try: return await handler(args)
+        except Exception as e: return f"执行错误: {e}"
+
     async def _execute_tools(self, tool_calls: list[dict]) -> list[dict]:
-        """执行工具调用列表（带护栏检查）。"""
-        results = []
-        for tc in tool_calls:
-            name = tc.get("name", "")
-            args = tc.get("arguments", {})
-            start = time.time()
-            guard_action = "passed"
-
-            # 工位工具注入上下文
-            if self._tools and self._user_context:
-                tool_def = self._tools.get(name)
-                if tool_def and tool_def.category == "workstation":
-                    for key in ("user_id", "org_id", "position_id"):
-                        args.setdefault(key, self._user_context.get(key, ""))
-
-            # H2: 调用前检查
-            if self._pre_guard:
-                check = self._pre_guard.check(name, args, self._user_context)
-                if check.modified_args:
-                    args = check.modified_args
-                if check.blocked:
-                    result = f"操作被安全护栏拦截: {check.reason}"
-                    guard_action = "blocked"
-                    self._log_audit(name, args, "blocked", guard_action, time.time() - start)
-                    results.append({"tool_call_id": tc.get("id", ""), "name": name, "result": result})
-                    continue
-                if check.needs_confirmation:
-                    guard_action = "auto_confirmed"
-                    logger.warning("护栏: 需确认 [%s] %s — 自动放行", name, check.reason)
-
-            # H3: 带护栏执行
-            handler = self._tools.get_handler(name) if self._tools else None
-            if handler:
-                if self._exec_guard:
-                    result = await self._exec_guard.execute(handler, args, name)
-                else:
-                    try:
-                        result = await handler(args)
-                    except Exception as e:
-                        result = f"执行错误: {e}"
-            else:
-                result = f"未找到工具: {name}"
-
-            dur = time.time() - start
-            status = "error" if str(result).startswith(("执行错误", "未找到工具", "操作被安全", "工具")) else "success"
-            self._log_audit(name, args, status, guard_action, dur)
-            results.append({"tool_call_id": tc.get("id", ""), "name": name, "result": result})
-        return results
+        """执行工具调用列表。"""
+        return [await self._execute_single_tool(tc) for tc in tool_calls]
 
     def _log_audit(self, name, args, status, action, dur):
         if self._audit:

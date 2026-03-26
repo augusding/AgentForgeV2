@@ -45,7 +45,7 @@ class ContextBuilder:
         system_parts = [self._build_identity(position)]
 
         if position.context:
-            system_parts.append(f"\n## 领域知识\n{position.context}")
+            system_parts.append(f"\n## 领域知识（仅在用户咨询专业问题时参考，日常指令无需使用）\n{position.context}")
 
         if rag_results:
             rag_text = self._format_rag(rag_results)
@@ -88,27 +88,42 @@ class ContextBuilder:
         )
 
     def _build_identity(self, position: PositionConfig) -> str:
-        """构建身份层 prompt。"""
+        """构建身份层 prompt — 轻量身份 + 专业能力备注。"""
         parts = []
         if position.role:
             parts.append(position.role.strip())
         if position.goal:
-            parts.append(f"\n你的目标: {position.goal.strip()}")
-        return "\n".join(parts) if parts else "你是一个AI助手。"
+            parts.append(f"\n你的专业领域: {position.goal.strip()}")
+            parts.append("注意：只在用户主动咨询专业问题时才发挥专业能力，日常指令简明回复。")
+        return "\n".join(parts) if parts else "你是一个AI助手，简明高效地帮助用户完成任务。"
 
     def _build_output_guide(self, position: PositionConfig) -> str:
-        """构建输出格式指南。"""
+        """构建响应校准指南。"""
         return (
-            "\n## 输出要求\n"
-            "请用中文回答。结构化输出时使用 Markdown 格式。"
-            "如果任务涉及数据，请给出具体数字和依据。"
-            "\n\n## 工具使用原则\n"
-            "1. 用户查询待办/任务/日程/跟进时，必须调用对应工具获取真实数据\n"
-            "2. 用户要求创建/修改/删除数据时，必须调用工具执行，不要只用文字回复\n"
-            "3. 用户问关于公司/业务的问题时，先用 search_knowledge 搜索知识库\n"
-            "4. 需要实时信息时使用 web_search，需要计算时使用 calculator\n"
-            "5. 如果不确定用哪个工具，优先选择只读工具（list/search）\n"
-            "6. 文件转换必须使用 document_converter(source_path=附件路径, target_format=目标格式)，附件路径已在消息中提供，不要用 shell 查找文件\n"
+            "\n## 响应原则\n"
+            "\n### 核心规则：匹配用户意图深度\n"
+            "**L1 执行型**（明确指令：创建/查看/删除/发送/安排/记录/转换/搜索）\n"
+            "→ 直接执行 + 1-2 句确认。不要额外发挥。\n"
+            "例：'明天上午开会' → 创建日程 + '已安排。需要我帮你准备什么吗？'\n"
+            "例：'你好' → 简短问候\n\n"
+            "**L2 辅助型**（帮我整理/处理一下/看看这个）\n"
+            "→ 执行任务 + 简要说明结果（3-5 句）\n\n"
+            "**L3 建议型**（怎么做/应该/建议/推荐/你觉得）\n"
+            "→ 结合专业视角给 1-2 段建议\n\n"
+            "**L4 分析型**（分析/评估/制定方案/设计/规划/全面梳理）\n"
+            "→ 发挥专业能力，完整分析\n\n"
+            "### 关键约束\n"
+            "- 用户没问的不要主动回答。'创建会议'≠'准备会议内容'\n"
+            "- 信息不足时简短追问，不要自己假设然后长篇输出\n"
+            "- 工具执行后 1 句话确认结果，不重复描述工具做了什么\n"
+            "- 中文回复，必要时用 Markdown\n\n"
+            "### 工具使用原则\n"
+            "1. 查询待办/日程/跟进时，必须调用工具获取真实数据\n"
+            "2. 创建/修改/删除时，必须调用工具执行\n"
+            "3. 公司/业务问题先搜索知识库\n"
+            "4. 实时信息用 web_search\n"
+            "5. 文件转换用 document_converter，路径已在附件信息中\n"
+            "6. 工具执行完成后简要告知结果即可\n"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:
