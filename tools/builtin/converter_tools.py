@@ -72,7 +72,11 @@ def _result(path: Path, fmt: str, source_text: str = "", **extra) -> str:
     if not preview and fmt in ("md", "txt", "csv"):
         try: preview = path.read_text(encoding="utf-8", errors="replace")[:800]
         except Exception: pass
-    return json.dumps({"status": "converted", "path": str(path), "filename": path.name,
+    try:
+        rel_path = str(path.relative_to(_ROOT)).replace("\\", "/")
+    except ValueError:
+        rel_path = str(path)
+    return json.dumps({"status": "converted", "path": rel_path, "filename": path.name,
                         "size": path.stat().st_size, "format": fmt, "preview": preview, **extra}, ensure_ascii=False)
 
 

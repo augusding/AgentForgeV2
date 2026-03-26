@@ -122,8 +122,10 @@ class ContextBuilder:
             "2. 创建/修改/删除时，必须调用工具执行\n"
             "3. 公司/业务问题先搜索知识库\n"
             "4. 实时信息用 web_search\n"
-            "5. 文件转换用 document_converter，路径已在附件信息中\n"
-            "6. 工具执行完成后简要告知结果即可\n"
+            "5. 文件转换（PDF转Word/Excel/PPT等）必须调用 document_converter 工具，绝对不要用文字描述转换结果\n"
+            "6. 生成文档（报告/方案等）必须调用 document_converter 工具，不要只输出文本\n"
+            "7. 任何涉及创建文件、转换文件的操作，都必须调用对应工具，不允许只用文字模拟\n"
+            "8. 工具执行完成后简要确认即可\n"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:
