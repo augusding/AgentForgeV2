@@ -67,9 +67,13 @@ async def _convert_handler(args: dict) -> str:
         return json.dumps({"error": f"转换失败: {e}"}, ensure_ascii=False)
 
 
-def _result(path: Path, fmt: str, **extra) -> str:
+def _result(path: Path, fmt: str, source_text: str = "", **extra) -> str:
+    preview = source_text[:800] if source_text else ""
+    if not preview and fmt in ("md", "txt", "csv"):
+        try: preview = path.read_text(encoding="utf-8", errors="replace")[:800]
+        except Exception: pass
     return json.dumps({"status": "converted", "path": str(path), "filename": path.name,
-                        "size": path.stat().st_size, "format": fmt, **extra}, ensure_ascii=False)
+                        "size": path.stat().st_size, "format": fmt, "preview": preview, **extra}, ensure_ascii=False)
 
 
 async def _to_docx(text: str, op: Path) -> str:
@@ -94,7 +98,7 @@ async def _to_docx(text: str, op: Path) -> str:
             doc.add_paragraph(s)
     op = op.with_suffix(".docx")
     doc.save(str(op))
-    return _result(op, "docx")
+    return _result(op, "docx", source_text=text)
 
 
 async def _to_pdf(text: str, op: Path) -> str:
@@ -119,7 +123,7 @@ async def _to_pdf(text: str, op: Path) -> str:
         for line in text.split("\n"):
             pdf.multi_cell(0, 6, line)
         pdf.output(str(op))
-        return _result(op, "pdf")
+        return _result(op, "pdf", source_text=text)
     except ImportError:
         op = op.with_suffix(".txt")
         op.write_text(text, encoding="utf-8")
@@ -155,7 +159,7 @@ async def _to_xlsx(text: str, op: Path) -> str:
         for j, c in enumerate(cells, 1):
             ws.cell(row=row_num, column=j, value=c.strip())
     wb.save(str(op))
-    return _result(op, "xlsx")
+    return _result(op, "xlsx", source_text=text)
 
 
 async def _to_pptx(text: str, op: Path) -> str:
@@ -189,7 +193,7 @@ async def _to_pptx(text: str, op: Path) -> str:
         if len(slide.placeholders) > 1:
             slide.placeholders[1].text = "\n".join(sd["content"][:20])
     prs.save(str(op))
-    return _result(op, "pptx", slides=len(slides))
+    return _result(op, "pptx", source_text=text, slides=len(slides))
 
 
 async def _to_csv(text: str, op: Path) -> str:

@@ -108,7 +108,7 @@ class ContextBuilder:
             "3. 用户问关于公司/业务的问题时，先用 search_knowledge 搜索知识库\n"
             "4. 需要实时信息时使用 web_search，需要计算时使用 calculator\n"
             "5. 如果不确定用哪个工具，优先选择只读工具（list/search）\n"
-            "6. 文件格式转换（PDF转Word等）使用 document_converter，用附件的文件路径作为 source_path\n"
+            "6. 文件转换必须使用 document_converter(source_path=附件路径, target_format=目标格式)，附件路径已在消息中提供，不要用 shell 查找文件\n"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:
@@ -131,7 +131,7 @@ class ContextBuilder:
             path = att.get("path", "")
             header = f"[附件: {name}]"
             if path:
-                header += f" (文件路径: {path})"
+                header += f"\n  工具调用路径: {path}"
             if text:
                 parts.append(f"{header}\n{text[:3000]}")
             else:

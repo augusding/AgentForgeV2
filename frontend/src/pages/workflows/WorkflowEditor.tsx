@@ -197,7 +197,33 @@ function WorkflowEditorInner() {
         {selected && !resultPopup && (() => { const ui = getUpstreamInfo(selected.id); return <PropertyPanel node={selected} catalog={catalog} execData={execStatus[selected.id]}
           upstreamOutput={ui.directOutput} upstreamNodes={ui.upstreams}
           onUpdateConfig={c => updateCfg(selected.id, c)} onUpdateLabel={l => updateLabel(selected.id, l)} onDelete={() => delNode(selected.id)} onClose={() => setSelected(null)} /> })()}
-        {resultPopup && <div className="absolute bottom-4 right-4 w-[350px] max-h-[400px] rounded-xl overflow-hidden shadow-2xl z-50" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        {/* 执行进度面板 */}
+        {executing && <div className="absolute bottom-4 right-4 w-[300px] rounded-xl shadow-2xl overflow-hidden z-30"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-t-[var(--accent)] border-[var(--border)] animate-spin" />
+                <span className="text-xs font-medium">正在执行</span></div>
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{Object.values(execStatus).filter((s: any) => s.status === 'completed').length}/{nodes.length}</span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg)' }}>
+              <div className="h-full rounded-full transition-all duration-500" style={{
+                width: `${(Object.values(execStatus).filter((s: any) => ['completed','failed'].includes(s.status)).length / Math.max(nodes.length, 1)) * 100}%`,
+                background: Object.values(execStatus).some((s: any) => s.status === 'failed') ? '#ef4444' : 'var(--accent)' }} /></div>
+          </div>
+          <div className="max-h-[200px] overflow-auto px-2 py-1">
+            {nodes.map(n => { const st = execStatus[n.id] as any; const lb = (n.data as any)?.label || n.id; return (
+              <div key={n.id} className="flex items-center gap-2 px-2 py-1.5 rounded text-xs">
+                {st?.status === 'completed' ? <span>✅</span> : st?.status === 'failed' ? <span>❌</span>
+                 : st?.status === 'running' ? <div className="w-3 h-3 rounded-full border-[1.5px] border-t-[var(--accent)] border-[var(--border)] animate-spin" />
+                 : <span style={{ color: 'var(--text-muted)' }}>○</span>}
+                <span className="flex-1 truncate" style={{ color: st ? 'var(--text)' : 'var(--text-muted)' }}>{lb}</span>
+                {st?.duration > 0 && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{st.duration.toFixed(1)}s</span>}
+              </div>) })}
+          </div>
+        </div>}
+        {/* 节点输出弹窗 */}
+        {!executing && resultPopup && <div className="absolute bottom-4 right-4 w-[350px] max-h-[400px] rounded-xl overflow-hidden shadow-2xl z-50" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
             <span className="text-xs font-medium">输出 <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] text-white" style={{ background: resultPopup.data.status === 'completed' ? 'var(--success)' : 'var(--error)' }}>{resultPopup.data.status}</span></span>
             <button onClick={() => setResultPopup(null)} className="p-1 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={14} /></button></div>

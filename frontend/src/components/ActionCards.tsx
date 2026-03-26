@@ -2,7 +2,7 @@
  * 富交互卡片：将工具调用结果渲染为可操作的 UI 卡片。
  */
 import { useState } from 'react'
-import { CheckCircle, Circle, Clock, Users,
+import { CheckCircle, Circle, Clock, Users, Download, Copy,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
 import toast from 'react-hot-toast'
@@ -14,6 +14,10 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
   try {
     const data = typeof resultStr === 'string' ? JSON.parse(resultStr) : resultStr
     if (!data || typeof data !== 'object') return null
+    // 文件操作结果
+    if ((data.status === 'converted' || (data.status === 'created' && data.path)) &&
+        ['document_converter', 'word_processor', 'excel_processor', 'pdf_processor', 'ppt_processor'].includes(toolName))
+      return { type: 'file', data, toolName }
     if (toolName === 'manage_priority' || toolName === 'manage_work_item') {
       if (data.priorities || data.work_items || data.status) return { type: 'task', data, toolName }
     }
@@ -33,6 +37,7 @@ export default function ActionCard({ card }: { card: CardData }) {
     case 'followup': return <FollowupCard data={card.data} />
     case 'search': return <SearchResultCard data={card.data} />
     case 'data': return <DataCard data={card.data} tool={card.toolName} />
+    case 'file': return <FilePreviewCard data={card.data} />
     default: return null
   }
 }
@@ -189,6 +194,74 @@ function DataCard({ data, tool }: { data: any; tool: string }) {
       <pre className="p-3 text-[10px] font-mono overflow-auto max-h-[150px]" style={{ color: 'var(--text-muted)' }}>
         {typeof resultVal === 'object' ? JSON.stringify(resultVal, null, 2) : String(resultVal)}
       </pre>
+    </div>
+  )
+}
+
+/* ── 文件预览卡片 ── */
+function FilePreviewCard({ data }: { data: any }) {
+  const [preview, setPreview] = useState(data.preview || '')
+  const [expanded, setExpanded] = useState(!!data.preview)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const name = data.filename || '文件'
+  const path = data.path || ''
+  const fmt = (data.format || path.split('.').pop() || '').toUpperCase()
+  const size = data.size || 0
+  const FI: Record<string, { icon: string; color: string }> = {
+    DOCX: { icon: '📄', color: '#2b579a' }, PDF: { icon: '📕', color: '#d32f2f' },
+    XLSX: { icon: '📗', color: '#217346' }, PPTX: { icon: '📙', color: '#d24726' },
+    CSV: { icon: '📊', color: '#22c55e' }, MD: { icon: '📝', color: '#6366f1' }, TXT: { icon: '📃', color: '#6b7280' },
+  }
+  const fi = FI[fmt] || { icon: '📎', color: 'var(--accent)' }
+  const sizeStr = size > 1048576 ? `${(size / 1048576).toFixed(1)} MB` : size > 1024 ? `${(size / 1024).toFixed(1)} KB` : `${size} B`
+
+  const loadPreview = async () => {
+    if (preview) { setExpanded(!expanded); return }
+    if (!path) return; setLoading(true)
+    try { const r: any = await client.get(`/files/preview/${path}`); setPreview(r.content || '(空)'); setExpanded(true) }
+    catch { setPreview('预览失败') } finally { setLoading(false) }
+  }
+  const dl = () => {
+    if (!path) return
+    const tk = localStorage.getItem('agentforge_token') || ''
+    fetch(`/api/v1/files/download/${path}`, { headers: { Authorization: `Bearer ${tk}` } })
+      .then(r => r.blob()).then(b => { const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); URL.revokeObjectURL(u) })
+      .catch(() => toast.error('下载失败'))
+  }
+  const cp = async () => {
+    let t = preview
+    if (!t && path) { try { const r: any = await client.get(`/files/preview/${path}`); t = r.content || '' } catch { toast.error('复制失败'); return } }
+    await navigator.clipboard.writeText(t); setCopied(true); toast.success('已复制'); setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[var(--bg-hover)]" onClick={loadPreview}>
+        <span className="text-lg">{fi.icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{name}</div>
+          <div className="text-[10px] flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-medium" style={{ background: `${fi.color}15`, color: fi.color }}>{fmt}</span>
+            <span>{sizeStr}</span>
+          </div>
+        </div>
+        <button onClick={e => { e.stopPropagation(); cp() }} className="p-1.5 rounded-lg hover:bg-[var(--bg)]" style={{ color: 'var(--text-muted)' }}>
+          {copied ? <CheckCircle size={14} style={{ color: '#22c55e' }} /> : <Copy size={14} />}
+        </button>
+        <button onClick={e => { e.stopPropagation(); dl() }} className="p-1.5 rounded-lg hover:bg-[var(--bg)]" style={{ color: 'var(--text-muted)' }}>
+          <Download size={14} />
+        </button>
+        {expanded ? <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
+      </div>
+      {expanded && (
+        <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+          {loading ? <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--text-muted)' }}>加载中...</div>
+           : preview ? <pre className="px-4 py-3 text-xs leading-relaxed overflow-auto max-h-[300px] whitespace-pre-wrap"
+              style={{ color: 'var(--text)', background: 'var(--bg)', margin: 0, fontFamily: 'inherit' }}>{preview}</pre>
+           : <div className="px-4 py-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>点击加载预览</div>}
+        </div>
+      )}
     </div>
   )
 }

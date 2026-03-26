@@ -69,7 +69,11 @@ async def _resolve_attachments(engine, request, body) -> list[dict]:
         if found:
             try:
                 text = await extract_text(str(found))
-                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": text[:5000] if text else ""})
+                try:
+                    rel = str(found.relative_to(engine.root_dir)).replace("\\", "/")
+                except ValueError:
+                    rel = str(found)
+                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": text[:5000] if text else "", "path": rel})
             except Exception as e:
                 attachments.append({"file_id": fid, "filename": found.name, "extracted_text": f"[解析失败: {e}]"})
     return attachments

@@ -2,7 +2,7 @@
  * Chat 页面子组件：SessionItem, ToolCalls, CollapsibleContent, CopyBtn, FeedbackBtn
  */
 import { useState, useRef, useEffect } from 'react'
-import { MessageSquare, Trash2, ChevronDown, ChevronRight, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { MessageSquare, Trash2, ChevronDown, ChevronRight, Copy, Check, ThumbsUp, ThumbsDown, AlertCircle } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
 import { parseCard } from './ActionCards'
 import client from '../api/client'
@@ -26,26 +26,69 @@ export function SessionItem({ sess, isActive, onSelect, onDelete }: {
     </div>)
 }
 
-/* ── ToolCalls (paired start/result) ── */
+/* ── Tool display names ── */
+const TD: Record<string, { label: string; icon: string; verb: string }> = {
+  calculator: { label: '计算器', icon: '🔢', verb: '正在计算' }, datetime: { label: '日期时间', icon: '🕐', verb: '获取时间' },
+  code_executor: { label: '代码执行', icon: '💻', verb: '执行代码' }, shell_executor: { label: '命令', icon: '⚡', verb: '执行命令' },
+  web_search: { label: '联网搜索', icon: '🌐', verb: '正在搜索' }, search_knowledge: { label: '知识库', icon: '📚', verb: '搜索知识库' },
+  manage_priority: { label: '待办', icon: '✅', verb: '管理待办' }, manage_schedule: { label: '日程', icon: '📅', verb: '查看日程' },
+  manage_followup: { label: '跟进', icon: '👥', verb: '管理跟进' }, manage_work_item: { label: '工作项', icon: '📋', verb: '管理工作项' },
+  document_converter: { label: '文档转换', icon: '🔄', verb: '转换文档' }, excel_processor: { label: 'Excel', icon: '📗', verb: '处理 Excel' },
+  word_processor: { label: 'Word', icon: '📄', verb: '处理文档' }, pdf_processor: { label: 'PDF', icon: '📕', verb: '处理 PDF' },
+  email_sender: { label: '邮件', icon: '✉️', verb: '发送邮件' }, http_request: { label: 'HTTP', icon: '🔗', verb: '请求数据' },
+  text_processor: { label: '文本', icon: '📝', verb: '处理文本' }, ppt_processor: { label: 'PPT', icon: '📙', verb: '处理 PPT' },
+}
+
+function _desc(name: string, input: any): string {
+  const a = typeof input === 'string' ? (() => { try { return JSON.parse(input) } catch { return {} } })() : (input || {})
+  if (name === 'document_converter') return a.target_format ? `→ ${a.target_format.toUpperCase()}` : ''
+  if (name === 'web_search' || name === 'search_knowledge') return a.query ? `"${a.query}"` : ''
+  if (name.startsWith('manage_')) return ({ list: '查看', add: `创建: ${a.title || ''}`, delete: '删除', update: '更新' })[a.action as string] || ''
+  if (name === 'calculator') return a.expression || ''
+  if (name === 'http_request') return a.url ? `${a.method || 'GET'} ${a.url.slice(0, 30)}` : ''
+  return ''
+}
+
+function _isOk(r: string): boolean {
+  if (!r || r.startsWith('执行错误') || r.startsWith('未找到工具') || r.startsWith('操作被安全') || r.startsWith('工具')) return false
+  try { if (JSON.parse(r).error) return false } catch {}; return true
+}
+
+/* ── ToolCalls (rich status) ── */
 export function ToolCalls({ tools }: { tools: Array<{ type: string; name: string; input?: any; result?: string }> }) {
-  const [open, setOpen] = useState(false)
+  const [detail, setDetail] = useState(false)
   const starts = tools.filter(t => t.type === 'tool_start'); const results = tools.filter(t => t.type === 'tool_result')
-  const pairs = starts.map((s, i) => ({ name: s.name, input: s.input, result: results[i]?.result, done: !!results[i] }))
-  const allDone = pairs.every(p => p.done); const Arr = open ? ChevronDown : ChevronRight
+  const pairs = starts.map((s, i) => ({ name: s.name, input: s.input, result: results[i]?.result, done: !!results[i], ok: results[i] ? _isOk(results[i].result || '') : false }))
+  const allDone = pairs.every(p => p.done)
+
   return (
-    <div className="mb-3 rounded-lg p-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-2 text-xs w-full hover:text-[var(--accent)]" style={{ color: 'var(--text-muted)' }}>
-        {allDone ? <Check size={12} style={{ color: 'var(--success)' }} /> : <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" />}
-        <span>使用了 {pairs.length} 个工具: {pairs.map(p => p.name).join(', ')}</span><Arr size={12} className="ml-auto" /></button>
-      {open && <div className="mt-2 space-y-2">{pairs.map((p, i) => <div key={i} className="text-xs pl-5">
-        <div className="flex items-center gap-1">
-          {p.done ? <Check size={10} style={{ color: 'var(--success)' }} /> : <div className="w-2.5 h-2.5 border border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" />}
-          <span className="font-medium" style={{ color: 'var(--accent)' }}>{p.name}</span></div>
-        {p.input && <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{typeof p.input === 'string' ? p.input : JSON.stringify(p.input, null, 2)}</pre>}
-        {p.result && (parseCard(p.name, p.result)
-          ? <div className="mt-1 text-[9px] opacity-50">↑ 已渲染为交互卡片</div>
-          : <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{p.result.slice(0, 500)}</pre>)}
-      </div>)}</div>}
+    <div className="mb-2 space-y-0.5">
+      {pairs.map((p, i) => {
+        const d = TD[p.name] || { label: p.name, icon: '🔧', verb: p.name }
+        const desc = _desc(p.name, p.input)
+        return (
+          <div key={i} className="flex items-center gap-2 py-0.5">
+            {p.done ? (p.ok ? <Check size={13} style={{ color: '#22c55e' }} /> : <AlertCircle size={13} style={{ color: '#ef4444' }} />)
+              : <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-t-[var(--accent)] border-[var(--border)] animate-spin" />}
+            <span className="text-[11px]">{d.icon}</span>
+            <span className="text-xs" style={{ color: p.done ? 'var(--text-muted)' : 'var(--text)' }}>{p.done ? d.label : d.verb}</span>
+            {desc && <span className="text-[10px] truncate max-w-[200px]" style={{ color: 'var(--text-muted)' }}>{desc}</span>}
+            {p.done && !p.ok && p.result && <span className="text-[9px] truncate max-w-[120px]" style={{ color: '#ef4444' }}>
+              {(() => { try { return JSON.parse(p.result!).error || '失败' } catch { return '失败' } })()}</span>}
+          </div>)
+      })}
+      {allDone && pairs.length > 0 && <>
+        <button onClick={() => setDetail(!detail)} className="flex items-center gap-1 text-[9px] pt-0.5" style={{ color: 'var(--text-muted)' }}>
+          {detail ? <ChevronDown size={10} /> : <ChevronRight size={10} />}{detail ? '收起' : '详情'}</button>
+        {detail && <div className="ml-5 space-y-2 border-l pl-3 mt-1" style={{ borderColor: 'var(--border)' }}>
+          {pairs.map((p, i) => <div key={i} className="text-[10px]">
+            <div className="font-mono" style={{ color: 'var(--accent)' }}>{p.name}</div>
+            {p.input && <pre className="mt-0.5 p-1.5 rounded overflow-x-auto" style={{ background: 'var(--bg)', color: 'var(--text-muted)', fontSize: 9 }}>
+              {typeof p.input === 'string' ? p.input : JSON.stringify(p.input, null, 2)}</pre>}
+            {p.result && !parseCard(p.name, p.result) && <pre className="mt-0.5 p-1.5 rounded overflow-x-auto"
+              style={{ background: 'var(--bg)', color: p.ok ? 'var(--text-muted)' : '#ef4444', fontSize: 9 }}>{p.result.slice(0, 300)}</pre>}
+          </div>)}</div>}
+      </>}
     </div>)
 }
 

@@ -125,7 +125,22 @@ async def handle_download(request: web.Request) -> web.Response:
     })
 
 
+async def handle_preview(request: web.Request) -> web.Response:
+    """GET /api/v1/files/preview/{path:.*} — 预览文件文本"""
+    raw = request.match_info.get("path", "")
+    engine = request.app["engine"]
+    fp = (engine.root_dir / raw).resolve()
+    if not str(fp).startswith(str(engine.root_dir)):
+        return _json({"error": "路径越界"}, 403)
+    if not fp.is_file():
+        return _json({"error": "文件不存在"}, 404)
+    from core.file_parser import extract_text
+    text = await extract_text(str(fp))
+    return _json({"filename": fp.name, "size": fp.stat().st_size, "content": text[:5000] if text else "", "format": fp.suffix.lstrip(".")})
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/files/upload", handle_upload)
     app.router.add_get("/api/v1/files", handle_list_files)
+    app.router.add_get("/api/v1/files/preview/{path:.*}", handle_preview)
     app.router.add_get("/api/v1/files/download/{path:.*}", handle_download)

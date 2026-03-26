@@ -60,7 +60,7 @@ export default function Chat() {
     const text = (ov || input).trim(); if (!text || store.streaming) return
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
     const ca = [...attachments]; setAttachments([])
-    store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true)
+    store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
     const ctrl = new AbortController(); store.setAbortController(ctrl)
     const token = localStorage.getItem('agentforge_token') || ''; let evt = ''
     try {
@@ -75,15 +75,21 @@ export default function Chat() {
         for (const l of lines) { if (l.startsWith('event: ')) { evt = l.slice(7).trim(); continue }
           if (!l.startsWith('data: ')) continue
           try { const d = JSON.parse(l.slice(6))
-            if (evt === 'thinking') store.setThinking(d.agent_name || d.model || '思考中')
-            else if (evt === 'delta') store.appendDelta(d.content || '')
-            else if (evt === 'tool_start') store.addToolCall({ type: 'tool_start', name: d.tool || '', input: d.input })
-            else if (evt === 'tool_result') store.addToolCall({ type: 'tool_result', name: d.tool || '', result: d.result })
-            else if (evt === 'done') { store.finishAssistant({ model: d.model, tokens_used: d.tokens_used, duration_ms: d.duration_ms }); if (d.session_id) { store.setSessionId(d.session_id); if (isFirstMsg.current) setTimeout(() => store.generateTitle(), 500) } }
-            else if (evt === 'error') store.appendDelta(`\n\n*错误: ${d.content || ''}*`)
+            if (evt === 'thinking') { store.setThinking((d.agent_name || '') + ' 正在思考...') }
+            else if (evt === 'delta') { store.setThinking(''); store.appendDelta(d.content || '') }
+            else if (evt === 'tool_start') {
+              const tl: Record<string, string> = { document_converter: '🔄 转换文档', web_search: '🌐 搜索中', search_knowledge: '📚 搜索知识库',
+                manage_priority: '✅ 管理待办', manage_schedule: '📅 查看日程', calculator: '🔢 计算中', excel_processor: '📗 处理 Excel',
+                word_processor: '📄 生成文档', datetime: '🕐 获取时间', code_executor: '💻 执行代码', email_sender: '✉️ 发送邮件' }
+              store.addToolCall({ type: 'tool_start', name: d.tool || '', input: d.input })
+              store.setThinking(tl[d.tool] || `🔧 ${d.tool}...`)
+            }
+            else if (evt === 'tool_result') { store.addToolCall({ type: 'tool_result', name: d.tool || '', result: d.result }); store.setThinking('继续生成中...') }
+            else if (evt === 'done') { store.setThinking(''); store.finishAssistant({ model: d.model, tokens_used: d.tokens_used, duration_ms: d.duration_ms }); if (d.session_id) { store.setSessionId(d.session_id); if (isFirstMsg.current) setTimeout(() => store.generateTitle(), 500) } }
+            else if (evt === 'error') { store.setThinking(''); store.appendDelta(`\n\n⚠️ ${d.content || '未知错误'}`) }
           } catch {}; evt = '' } }
-    } catch (e: any) { if (e.name !== 'AbortError') store.appendDelta('\n\n*请求失败，请重试。*') }
-    finally { store.setStreaming(false); store.setAbortController(null) }
+    } catch (e: any) { if (e.name !== 'AbortError') { store.appendDelta('\n\n⚠️ 请求出错，请重试。'); toast.error('对话请求失败') } }
+    finally { store.setThinking(''); store.setStreaming(false); store.setAbortController(null) }
   }
 
   const stopGen = () => { store.abortController?.abort(); store.setStreaming(false); store.setAbortController(null) }
@@ -158,6 +164,16 @@ export default function Chat() {
             </div>)}
 
           {store.messages.map((msg, i) => <MsgRow key={i} msg={msg} idx={i} isLast={i === store.messages.length - 1} streaming={store.streaming} onRegen={regen} pos={posInfo} />)}
+          {store.streaming && store.messages.length > 0 && store.messages[store.messages.length - 1]?.thinking && (
+            <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <div className="flex gap-0.5">
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '0ms' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '150ms' }} />
+                <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--accent)', animationDelay: '300ms' }} />
+              </div>
+              <span>{store.messages[store.messages.length - 1]?.thinking}</span>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
