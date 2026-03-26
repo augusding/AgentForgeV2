@@ -9,6 +9,7 @@ import Knowledge from './pages/Knowledge'
 import Workflows from './pages/Workflows'
 import WorkflowEditor from './pages/workflows/WorkflowEditor'
 import Settings from './pages/Settings'
+import NotificationBanner from './components/NotificationBanner'
 
 export default function App() {
   const { isAuthenticated, loading, checkAuth } = useAuthStore()
@@ -18,17 +19,20 @@ export default function App() {
   if (loading) return <div className="h-screen flex items-center justify-center text-[var(--text-muted)]">加载中...</div>
 
   return (
-    <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
-      <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" />}>
-        <Route path="/" element={<Workstation />} />
-        <Route path="/chat" element={<Chat />} />
-        <Route path="/knowledge" element={<Knowledge />} />
-        <Route path="/workflows" element={<Workflows />} />
-        <Route path="/workflows/:workflowId" element={<WorkflowEditor />} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <>
+      {isAuthenticated && <NotificationBanner />}
+      <Routes>
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
+        <Route element={isAuthenticated ? <MainLayout /> : <Navigate to="/login" />}>
+          <Route path="/" element={<Workstation />} />
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/workflows" element={<Workflows />} />
+          <Route path="/workflows/:workflowId" element={<WorkflowEditor />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </>
   )
 }

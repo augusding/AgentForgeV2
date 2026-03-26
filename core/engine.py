@@ -41,6 +41,8 @@ class ForgeEngine:
         self._trigger_manager = None
         self._wf_store = None
         self._wf_engine = None
+        self._gateway = None
+        self._proactive = None
         self._initialized = False
 
     async def init(self) -> None:
@@ -460,6 +462,13 @@ class ForgeEngine:
         await site.start()
         if self._scheduler:
             await self._scheduler.start()
+        # 主动推送引擎
+        self._gateway = app.get("gateway")
+        if self._gateway and self._scheduler:
+            from core.proactive_engine import ProactiveEngine
+            self._proactive = ProactiveEngine(self._work_item_store, self._wf_store, self._session_store, self._gateway)
+            self._scheduler.add_job("proactive_check", "AI 主动推送检查", "*/5 * * * *", self._proactive.check_all_users)
+            logger.info("主动推送引擎已启动（每 5 分钟检查）")
         logger.info("API 服务已启动: http://%s:%d", host, api_port)
         try:
             await asyncio.Event().wait()
