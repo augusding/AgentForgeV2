@@ -250,29 +250,6 @@ function JT({ data, depth = 0 }: { data: any; depth?: number }) {
       {ent.slice(0, 100).map(([k, v]) => <div key={k} className="flex items-start gap-1.5"><span className="text-[11px] font-mono shrink-0" style={{ color: 'var(--accent)' }}>{k}:</span><JT data={v} depth={depth + 1} /></div>)}</div>}</div>)
 }
 
-function FL({ data }: { data: any }) {
-  const fields = useMemo(() => {
-    const r: Array<{ path: string; type: string; preview: string }> = []
-    const target = Array.isArray(data) ? (data[0] || {}) : (data || {})
-    if (typeof target !== 'object') return r
-    for (const [k, v] of Object.entries(target)) {
-      const t = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
-      r.push({ path: k, type: t, preview: t === 'array' ? `[${(v as any[]).length}]` : t === 'object' ? '{…}' : String(v).slice(0, 25) })
-      if (t === 'object' && v) for (const [sk, sv] of Object.entries(v as Record<string, any>))
-        r.push({ path: `${k}.${sk}`, type: typeof sv, preview: String(sv).slice(0, 20) })
-    }
-    return r.slice(0, 30)
-  }, [data])
-  const tc: Record<string, string> = { string: '#22c55e', number: '#3b82f6', boolean: '#f59e0b', array: '#a855f7', object: '#06b6d4' }
-  return <div className="space-y-1">{fields.map(f => <button key={f.path}
-    onClick={() => { navigator.clipboard.writeText(`{{ $input.${f.path} }}`); toast.success('已复制') }}
-    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-[var(--bg-hover)] group">
-    <span className="text-[10px] font-mono" style={{ color: 'var(--accent)' }}>{f.path.includes('.') ? '  ' + f.path : f.path}</span>
-    <span className="text-[9px] px-1 rounded" style={{ color: tc[f.type] || 'var(--text-muted)', background: `${tc[f.type] || '#666'}15` }}>{f.type}</span>
-    <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{f.preview}</span>
-    <span className="text-[9px] opacity-0 group-hover:opacity-100" style={{ color: 'var(--accent)' }}>复制</span></button>)}</div>
-}
-
 function RPI({ param, value, onChange, inputData, nodeLabels }: { param: any; value: any; onChange: (v: any) => void; inputData?: any; nodeLabels?: string[] }) {
   const [fx, setFx] = useState(false)
   const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }

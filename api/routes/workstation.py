@@ -134,8 +134,116 @@ async def handle_assign(request: web.Request) -> web.Response:
     return _json({"status": "assigned", "position_id": position_id})
 
 
+async def handle_daily_brief(request: web.Request) -> web.Response:
+    """POST /api/v1/workstation/daily-brief — AI 生成今日行动建议"""
+    import datetime
+    import time as _time
+
+    engine = request.app["engine"]
+    user_id, org_id = _get_user(request)
+    position_id = ""
+    if engine.work_item_store:
+        position_id = await engine.work_item_store.get_assignment(user_id, org_id)
+
+    pos_name = ""
+    for bundle in engine._bundles.values():
+        pos = bundle.positions.get(position_id)
+        if pos:
+            pos_name = pos.display_name
+            break
+
+    now = datetime.datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+
+    # ── 收集数据 ──
+    priorities, schedules, followups = [], [], []
+    recent_sessions, workflow_execs = [], []
+    token_today = 0
+
+    try:
+        if engine.work_item_store:
+            priorities = await engine.work_item_store.get_priorities(user_id, org_id, position_id, status="active")
+            schedules = await engine.work_item_store.get_schedules(user_id, org_id)
+            followups = await engine.work_item_store.get_followups(user_id, org_id)
+    except Exception:
+        pass
+
+    try:
+        if engine.session_store:
+            recent_sessions = await engine.session_store.list_sessions(user_id=user_id, limit=5)
+    except Exception:
+        pass
+
+    try:
+        if engine.wf_store:
+            wfs = await engine.wf_store.list_workflows()
+            for wf in wfs[:10]:
+                try:
+                    execs = await engine.wf_store.get_executions(wf["id"], limit=1)
+                    if execs:
+                        ex = execs[0]
+                        ex["workflow_name"] = wf.get("name", "")
+                        ex["workflow_id"] = wf["id"]
+                        workflow_execs.append(ex)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    today_schedules = [s for s in schedules if (s.get("scheduled_time") or "").startswith(today_str)]
+    pending_followups = [f for f in followups if f.get("status") == "pending"]
+    failed_workflows = [e for e in workflow_execs if e.get("status") == "failed"]
+
+    stats = {
+        "pending_tasks": len(priorities),
+        "today_schedules": len(today_schedules),
+        "overdue_followups": len(pending_followups),
+        "failed_workflows": len(failed_workflows),
+        "today_tokens": token_today,
+        "total_workflows": len(workflow_execs),
+        "recent_sessions": len(recent_sessions),
+    }
+
+    greeting = "早上好" if now.hour < 12 else "下午好" if now.hour < 18 else "晚上好"
+    summary = f"今天有 {stats['pending_tasks']} 条待办、{stats['today_schedules']} 个日程"
+    if stats["failed_workflows"] > 0:
+        summary += f"、{stats['failed_workflows']} 个工作流需要处理"
+
+    # ── 生成行动建议（规则）──
+    actions = []
+    if failed_workflows:
+        for wf in failed_workflows[:2]:
+            actions.append({"title": f"修复工作流：{wf.get('workflow_name', '')}", "reason": str(wf.get("error", ""))[:50],
+                            "action": "查看并修复工作流", "type": "workflow", "urgency": "high",
+                            "metadata": {"workflowId": wf.get("workflow_id", "")}})
+    if priorities:
+        for p in priorities[:2]:
+            actions.append({"title": p["title"],
+                            "reason": f"{p.get('priority','P1')}" + (f" 截止 {p['due_date']}" if p.get("due_date") else ""),
+                            "action": "在 AI 对话中推进", "type": "chat", "urgency": "high" if p.get("priority") == "P0" else "medium",
+                            "metadata": {"prompt": f"帮我推进任务：{p['title']}"}})
+    if pending_followups:
+        for f in pending_followups[:1]:
+            actions.append({"title": f"跟进：{f['title']}", "reason": f"对象：{f.get('target', '')}",
+                            "action": "记录跟进进展", "type": "followup", "urgency": "medium"})
+    if not actions:
+        actions.append({"title": "开始你的第一个任务", "reason": "还没有待办事项",
+                        "action": "告诉 AI 你今天要做什么", "type": "chat", "urgency": "low",
+                        "metadata": {"prompt": "帮我规划今天的工作"}})
+
+    return _json({
+        "greeting": greeting, "summary": summary, "actions": actions[:5], "stats": stats,
+        "workflow_status": [{"name": e.get("workflow_name", ""), "status": e.get("status", ""),
+                             "error": str(e.get("error", ""))[:80], "workflow_id": e.get("workflow_id", ""),
+                             "executed_at": e.get("started_at", 0)} for e in workflow_execs[:6]],
+        "today_schedules": today_schedules[:5],
+        "recent_sessions": [{"id": s.get("id", ""), "title": s.get("title", "新对话")} for s in recent_sessions[:5]],
+    })
+
+
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workstation/home", handle_home)
     app.router.add_get("/api/v1/workstation/positions", handle_positions)
     app.router.add_get("/api/v1/workstation/positions/{position_id}", handle_position_detail)
     app.router.add_post("/api/v1/workstation/assign", handle_assign)
+    app.router.add_post("/api/v1/workstation/daily-brief", handle_daily_brief)

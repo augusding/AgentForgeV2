@@ -2,7 +2,7 @@
  * Chat 页面子组件：SessionItem, ToolCalls, CollapsibleContent, CopyBtn, FeedbackBtn
  */
 import { useState, useRef, useEffect } from 'react'
-import { MessageSquare, Trash2, Wrench, ChevronDown, ChevronRight, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { MessageSquare, Trash2, ChevronDown, ChevronRight, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
 import client from '../api/client'
 import toast from 'react-hot-toast'

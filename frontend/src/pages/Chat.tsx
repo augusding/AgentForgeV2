@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Send, Plus, MessageSquare, ChevronRight, Search, RefreshCw, Square,
          Paperclip, X, Sparkles, BookOpen, Zap, Wrench, Globe, RotateCcw } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
@@ -21,10 +22,17 @@ export default function Chat() {
   const [personality, setPersonality] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
   const isFirstMsg = useRef(true)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const filtered = searchQ.trim() ? store.sessions.filter(s => s.title.toLowerCase().includes(searchQ.toLowerCase())) : store.sessions
 
   useEffect(() => { store.loadSessions() }, [])
+
+  // URL ?prompt=xxx 自动发送
+  useEffect(() => {
+    const p = searchParams.get('prompt')
+    if (p) { setSearchParams({}, { replace: true }); setTimeout(() => send(p), 600) }
+  }, [])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
   useEffect(() => {
     if (user?.active_position) setPositionId(user.active_position)
