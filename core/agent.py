@@ -158,21 +158,62 @@ class AgentRuntime:
             )
 
     async def execute_stream(self, mission: Mission, context: ContextResult) -> AsyncIterator[dict]:
-        """流式执行：逐 token 返回 + 工具调用事件。"""
+        """流式执行：逐 token 返回 + 工具调用循环。
+
+        每轮：LLM stream → 收集文本+工具调用 → 执行工具 → 注入结果 → 再 stream。
+        """
+        self._user_context = mission.context
         tools = self._get_tools(mission)
         messages = list(context.messages)
         full_content = ""
+        model_used = ""
+        tracker = _ErrorTracker()
 
-        async for chunk in self._llm.stream(
-            system=context.system_prompt, messages=messages,
-            tools=tools, temperature=0.7, max_tokens=4096,
-        ):
-            if chunk.get("type") == "text":
-                full_content += chunk["text"]
-            yield chunk
+        for loop in range(MAX_TOOL_LOOPS + 1):
+            round_content = ""
+            round_tool_calls: list[dict] = []
+            stop_reason = ""
 
-        # 工具调用后续走非流式 (流式工具交互在 V2.1 增强)
-        yield {"type": "done", "mission_id": mission.id, "tokens_used": 0, "model": ""}
+            async for chunk in self._llm.stream(
+                system=context.system_prompt, messages=messages,
+                tools=tools, temperature=0.7,
+                max_tokens=mission.constraints.get("max_tokens", 4096),
+            ):
+                ct = chunk.get("type", "")
+                if ct == "text":
+                    round_content += chunk["text"]
+                    yield chunk
+                elif ct == "tool_call":
+                    round_tool_calls.append(chunk)
+                elif ct == "message_done":
+                    stop_reason = chunk.get("stop_reason", "")
+                    if chunk.get("model"):
+                        model_used = chunk["model"]
+
+            full_content = round_content
+
+            if not round_tool_calls or stop_reason not in ("tool_use", "tool_calls"):
+                break
+
+            logger.info("流式工具循环 #%d: %s", loop + 1, [tc["name"] for tc in round_tool_calls])
+
+            # 执行工具
+            tool_results = await self._execute_tools(round_tool_calls)
+            needs_rethink = tracker.record(tool_results)
+
+            # yield 工具事件给前端
+            for tr in tool_results:
+                yield {"type": "tool_start", "name": tr["name"], "arguments": round_tool_calls[0].get("arguments", {}) if round_tool_calls else {}}
+                yield {"type": "tool_result", "name": tr["name"], "result": tr["result"]}
+
+            # 注入工具结果到 messages 供下一轮 LLM
+            messages.append({"role": "assistant", "content": round_content or ""})
+            for tr in tool_results:
+                messages.append({"role": "user", "content": f"[工具 {tr['name']} 结果]\n{tr['result']}"})
+            if needs_rethink:
+                messages.append({"role": "user", "content": tracker.get_message()})
+
+        yield {"type": "done", "mission_id": mission.id, "tokens_used": 0, "model": model_used}
 
     # ── 工具循环 ──────────────────────────────────────────
 

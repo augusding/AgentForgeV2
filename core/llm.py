@@ -186,11 +186,37 @@ class _OpenAICompatAdapter:
             kwargs["tools"] = self._convert_tools(tools)
 
         stream = await self.client.chat.completions.create(**kwargs)
+        tool_acc: dict[int, dict] = {}  # index → {id, name, arg_parts}
+        finish = ""
         async for chunk in stream:
-            if chunk.choices:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield {"type": "text", "text": delta.content}
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            finish = chunk.choices[0].finish_reason or finish
+            if delta.content:
+                yield {"type": "text", "text": delta.content}
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_acc:
+                        tool_acc[idx] = {"id": tc.id or f"call_{idx}", "name": "", "arg_parts": []}
+                    if tc.id:
+                        tool_acc[idx]["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        tool_acc[idx]["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        tool_acc[idx]["arg_parts"].append(tc.function.arguments)
+        # 流结束后 yield 完整的工具调用
+        for idx in sorted(tool_acc):
+            ta = tool_acc[idx]
+            import json as _json
+            raw = "".join(ta["arg_parts"])
+            try:
+                args = _json.loads(raw) if raw else {}
+            except _json.JSONDecodeError:
+                args = {"raw": raw}
+            yield {"type": "tool_call", "id": ta["id"], "name": ta["name"], "arguments": args}
+        yield {"type": "message_done", "stop_reason": "tool_use" if tool_acc else (finish or "end_turn")}
 
     @staticmethod
     def _convert_tools(tools: list[dict]) -> list[dict]:
