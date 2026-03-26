@@ -133,7 +133,8 @@ class ForgeEngine:
         from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger, SystemGuard
         self._pre_tool_guard = PreToolGuard()
         self._exec_guard = ExecutionGuard()
-        self._audit_logger = AuditLogger()
+        self._audit_logger = AuditLogger(db_path=str(self.root_dir / "data" / "memories.db"))
+        await self._audit_logger.ensure_table()
         gr_cfg = self.config.guardrails if hasattr(self.config, 'guardrails') and self.config.guardrails else {}
         self._system_guard = SystemGuard(
             max_tokens_per_session=gr_cfg.get("max_tokens_per_session", 50000),
@@ -199,6 +200,8 @@ class ForgeEngine:
 
         await self._record_observability(msg, result)
         await self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id)
+        tc_list = [{"name": s.tool_calls[0]["name"]} for s in result.steps if s.tool_calls] if result.steps else []
+        asyncio.ensure_future(self._post_process(msg.content, result.content, tc_list, msg.user_id, msg.org_id, msg.position_id))
         await self._session_store.add_message(
             session_id, "assistant", result.content,
             tokens_used=result.tokens_used, model=result.model_used,
@@ -262,15 +265,21 @@ class ForgeEngine:
             "pre_tool": self._pre_tool_guard, "execution": self._exec_guard, "audit": self._audit_logger})
 
         full_content = ""
+        collected_tools: list[dict] = []
         async for chunk in runtime.execute_stream(mission, context):
-            if chunk.get("type") == "text":
+            ct = chunk.get("type", "")
+            if ct == "text":
                 full_content += chunk.get("text", "")
-            if chunk.get("type") == "done":
+            elif ct == "tool_result":
+                collected_tools.append({"name": chunk.get("name", "")})
+            if ct == "done":
                 chunk["session_id"] = session_id
             yield chunk
 
         if full_content:
             await self._session_store.add_message(session_id, "assistant", full_content)
+        asyncio.ensure_future(self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id))
+        asyncio.ensure_future(self._post_process(msg.content, full_content, collected_tools, msg.user_id, msg.org_id, msg.position_id))
 
     # ── 内部辅助 ─────────────────────────────────────────
 
@@ -417,19 +426,40 @@ class ForgeEngine:
         if not self._signal_store or not content:
             return
         import re
-        # 偏好信号
-        _pref_kw = ("以后", "每次", "总是", "不要", "记住", "偏好", "默认", "别再", "改成", "换成")
+        # 1. 偏好信号
+        _pref_kw = ("以后", "每次", "总是", "不要", "记住", "偏好", "默认", "别再", "改成", "换成", "我喜欢", "我习惯", "请用", "风格", "语气")
         if any(kw in content for kw in _pref_kw) and len(content) < 500:
-            await self._signal_store.add_signal(
-                user_id, org_id, position_id,
-                signal_type="preference", content=content[:200], source="chat")
-        # 话题信号
+            await self._signal_store.add_signal(user_id, org_id, position_id, signal_type="preference", content=content[:200], source="chat")
+        # 2. 话题信号（排除停用词）
+        _stop = {"这个", "那个", "什么", "怎么", "为什么", "可以", "需要", "帮我", "一下", "请问", "如何", "是否"}
         if len(content) > 10:
-            topics = re.findall(r'[\u4e00-\u9fff]{2,6}', content)
+            topics = [t for t in re.findall(r'[\u4e00-\u9fff]{2,8}', content) if t not in _stop]
             if topics:
-                await self._signal_store.add_signal(
-                    user_id, org_id, position_id,
-                    signal_type="topic", content=max(topics, key=len), source="chat")
+                await self._signal_store.add_signal(user_id, org_id, position_id, signal_type="topic", content=max(topics, key=len), source="chat")
+        # 3. 任务意图信号
+        _tasks = {"report": r"报告|汇报|总结|周报|月报", "analysis": r"分析|数据|对比|趋势",
+                  "planning": r"计划|规划|方案|策略", "communication": r"邮件|通知|发送|联系"}
+        for ttype, pat in _tasks.items():
+            if re.search(pat, content):
+                await self._signal_store.add_signal(user_id, org_id, position_id, signal_type="behavior", content=f"{ttype}", source="chat")
+                break
+
+    async def _post_process(self, user_input: str, ai_response: str, tool_calls: list[dict],
+                            user_id: str, org_id: str, position_id: str) -> None:
+        """对话完成后的异步后处理。"""
+        if not self._signal_store:
+            return
+        try:
+            if tool_calls:
+                names = list(set(tc.get("name", "") for tc in tool_calls if tc.get("name")))
+                if names:
+                    await self._signal_store.add_signal(user_id, org_id, position_id,
+                        signal_type="behavior", content=f"tool_usage: {', '.join(names)}", source="tool")
+            if len(user_input) > 500:
+                await self._signal_store.add_signal(user_id, org_id, position_id,
+                    signal_type="behavior", content=f"complex_input: {len(user_input)} chars", source="chat")
+        except Exception as e:
+            logger.warning("后处理信号收集失败: %s", e)
 
     # ── 查询接口 ──────────────────────────────────────────
 

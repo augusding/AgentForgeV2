@@ -266,8 +266,10 @@ async def handle_audit_logs(request):
     """GET /api/v1/audit-logs"""
     engine = request.app["engine"]
     limit = int(request.query.get("limit", "50"))
+    user_id = request.query.get("user_id", "")
     if engine._audit_logger:
-        return _json({"logs": engine._audit_logger.get_recent(limit)})
+        logs = await engine._audit_logger.get_recent_from_db(limit, user_id)
+        return _json({"logs": logs})
     return _json({"logs": []})
 
 

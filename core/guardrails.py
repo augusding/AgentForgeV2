@@ -132,24 +132,78 @@ class ExecutionGuard:
 # ── 审计日志 ──
 
 class AuditLogger:
-    """工具调用审计日志。"""
+    """工具调用审计日志。内存 + 可选 SQLite 持久化。"""
 
-    def __init__(self):
+    def __init__(self, db_path: str = ""):
         self._logs: list[dict] = []
+        self._db_path = db_path
+
+    async def ensure_table(self) -> None:
+        if not self._db_path:
+            return
+        try:
+            import aiosqlite
+            async with aiosqlite.connect(self._db_path) as db:
+                await db.execute("""CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp REAL, user_id TEXT DEFAULT '',
+                    tool_name TEXT DEFAULT '', args_summary TEXT DEFAULT '{}',
+                    result_status TEXT DEFAULT '', guard_action TEXT DEFAULT '',
+                    duration REAL DEFAULT 0, session_id TEXT DEFAULT '')""")
+                await db.commit()
+        except Exception as e:
+            logger.warning("审计表创建失败: %s", e)
 
     def record(self, user_id: str, tool_name: str, args: dict,
                result_status: str, guard_action: str, duration: float = 0, session_id: str = "") -> None:
-        self._logs.append({
-            "timestamp": time.time(), "user_id": user_id, "tool_name": tool_name,
-            "args_summary": self._sanitize(args), "result_status": result_status,
-            "guard_action": guard_action, "duration": round(duration, 3), "session_id": session_id,
-        })
+        import json as _json
+        entry = {"timestamp": time.time(), "user_id": user_id, "tool_name": tool_name,
+                 "args_summary": self._sanitize(args), "result_status": result_status,
+                 "guard_action": guard_action, "duration": round(duration, 3), "session_id": session_id}
+        self._logs.append(entry)
         if len(self._logs) > 1000:
             self._logs = self._logs[-500:]
         logger.info("AUDIT: user=%s tool=%s guard=%s status=%s dur=%.2fs", user_id, tool_name, guard_action, result_status, duration)
+        if self._db_path:
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self._write_db(entry))
+            except RuntimeError:
+                pass
+
+    async def _write_db(self, entry: dict) -> None:
+        try:
+            import aiosqlite, json as _json
+            async with aiosqlite.connect(self._db_path) as db:
+                await db.execute(
+                    "INSERT INTO audit_logs (timestamp,user_id,tool_name,args_summary,result_status,guard_action,duration,session_id) VALUES (?,?,?,?,?,?,?,?)",
+                    (entry["timestamp"], entry["user_id"], entry["tool_name"],
+                     _json.dumps(entry["args_summary"], ensure_ascii=False),
+                     entry["result_status"], entry["guard_action"], entry["duration"], entry["session_id"]))
+                await db.commit()
+        except Exception as e:
+            logger.warning("审计写库失败: %s", e)
 
     def get_recent(self, limit: int = 50) -> list[dict]:
         return list(reversed(self._logs[-limit:]))
+
+    async def get_recent_from_db(self, limit: int = 50, user_id: str = "") -> list[dict]:
+        if not self._db_path:
+            return self.get_recent(limit)
+        try:
+            import aiosqlite, json as _json
+            async with aiosqlite.connect(self._db_path) as db:
+                db.row_factory = aiosqlite.Row
+                q = "SELECT * FROM audit_logs"
+                p: list = []
+                if user_id:
+                    q += " WHERE user_id = ?"; p.append(user_id)
+                q += " ORDER BY timestamp DESC LIMIT ?"; p.append(limit)
+                cur = await db.execute(q, p)
+                return [{**dict(r), "args_summary": _json.loads(r["args_summary"] or "{}")} for r in await cur.fetchall()]
+        except Exception:
+            return self.get_recent(limit)
 
     @staticmethod
     def _sanitize(args: dict) -> dict:
