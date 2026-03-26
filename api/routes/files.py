@@ -66,7 +66,7 @@ async def handle_upload(request: web.Request) -> web.Response:
     extracted = await extract_text(str(file_path))
 
     result = {
-        "file_id": file_path.stem,
+        "file_id": file_path.name,
         "filename": file_field.filename,
         "size": file_path.stat().st_size,
         "path": str(file_path),

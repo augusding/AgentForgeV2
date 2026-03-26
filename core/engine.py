@@ -221,6 +221,8 @@ class ForgeEngine:
         )
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
+        if msg.metadata.get("web_search"):
+            daily_summary += "\n[联网搜索已开启] 优先使用 web_search 工具搜索最新信息来回答。"
         context = self._context_builder.build(
             position=position, mission=mission, history=history,
             rag_results=rag_results, daily_context=daily_summary,

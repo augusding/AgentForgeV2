@@ -122,7 +122,9 @@ class ContextBuilder:
             text = att.get("extracted_text", "")
             name = att.get("filename", "附件")
             if text:
-                parts.append(f"[附件: {name}]\n{text[:2000]}")
+                parts.append(f"[附件: {name}]\n{text[:3000]}")
+            else:
+                parts.append(f"[附件: {name}]（无法提取文本内容）")
         return "\n\n".join(parts)
 
     @staticmethod

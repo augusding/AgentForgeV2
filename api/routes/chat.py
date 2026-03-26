@@ -36,6 +36,39 @@ async def _resolve_position_id(engine, body) -> str:
     return position_id
 
 
+async def _resolve_attachments(engine, request, body) -> list[dict]:
+    """从 file_ids 解析附件内容。"""
+    file_ids = body.get("file_ids", [])
+    if not file_ids:
+        return []
+    from core.file_parser import extract_text
+    user = request.get("user") or {}
+    u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+    o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
+    # 按隔离目录查找，fallback 到全局
+    dirs = [engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id,
+            engine.root_dir / "data" / "uploads"]
+    attachments = []
+    for fid in file_ids[:5]:
+        found = None
+        for d in dirs:
+            if not d.is_dir():
+                continue
+            exact = d / fid
+            if exact.is_file():
+                found = exact; break
+            matches = list(d.glob(f"{fid}*"))
+            if matches:
+                found = matches[0]; break
+        if found:
+            try:
+                text = await extract_text(str(found))
+                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": text[:5000] if text else ""})
+            except Exception as e:
+                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": f"[解析失败: {e}]"})
+    return attachments
+
+
 async def handle_chat(request: web.Request) -> web.Response:
     """POST /api/v1/chat — 非流式对话"""
     engine = request.app["engine"]
@@ -45,19 +78,7 @@ async def handle_chat(request: web.Request) -> web.Response:
     if not content:
         return _json({"error": "content 不能为空"}, status=400)
 
-    # 处理附件文件
-    attachments = []
-    file_ids = body.get("file_ids", [])
-    if file_ids:
-        from core.file_parser import extract_text
-        upload_dir = engine.root_dir / "data" / "uploads"
-        for fid in file_ids[:5]:
-            matches = list(upload_dir.glob(f"{fid}*")) if upload_dir.exists() else []
-            if matches:
-                text = await extract_text(str(matches[0]))
-                if text:
-                    attachments.append({"filename": matches[0].name, "extracted_text": text[:5000]})
-
+    attachments = await _resolve_attachments(engine, request, body)
     position_id = await _resolve_position_id(engine, body)
 
     msg = UnifiedMessage(
@@ -87,6 +108,9 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
 
     position_id = await _resolve_position_id(engine, body)
 
+    # ── 附件处理 ──
+    attachments = await _resolve_attachments(engine, request, body)
+
     msg = UnifiedMessage(
         content=content,
         user_id=_get_user_field(request, body, "user_id", "anonymous"),
@@ -94,6 +118,8 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
         session_id=body.get("session_id", ""),
         position_id=position_id,
         channel="api",
+        attachments=attachments,
+        metadata={"web_search": body.get("web_search", False)},
     )
 
     resp = web.StreamResponse(headers={

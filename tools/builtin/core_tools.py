@@ -152,21 +152,51 @@ shell_executor = ToolDefinition(
 # ── Web 搜索 ─────────────────────────────────────────────
 
 async def _web_search_handler(args: dict) -> str:
-    query = args.get("query", "")
-    # 占位实现 — 实际接入搜索 API
-    return json.dumps({
-        "query": query,
-        "results": [],
-        "note": "Web 搜索功能需要配置搜索 API (如 Tavily, SerpAPI)",
-    }, ensure_ascii=False)
+    """联网搜索。优先 duckduckgo_search，fallback Tavily API。"""
+    query = args.get("query", "").strip()
+    if not query:
+        return json.dumps({"error": "搜索关键词不能为空"}, ensure_ascii=False)
+    max_results = min(args.get("max_results", 5), 10)
+
+    # 方案 1: duckduckgo_search
+    try:
+        from duckduckgo_search import DDGS
+        results = []
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=max_results):
+                results.append({"title": r.get("title", ""), "url": r.get("href", ""), "snippet": r.get("body", "")})
+        return json.dumps({"query": query, "results": results, "count": len(results)}, ensure_ascii=False)
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning("DuckDuckGo 搜索失败: %s", e)
+
+    # 方案 2: Tavily API
+    try:
+        import os, aiohttp
+        key = os.environ.get("TAVILY_API_KEY", "")
+        if key:
+            async with aiohttp.ClientSession() as session:
+                async with session.post("https://api.tavily.com/search",
+                    json={"query": query, "max_results": max_results, "api_key": key},
+                    timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    data = await resp.json()
+                    results = [{"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("content", "")} for r in data.get("results", [])]
+                    return json.dumps({"query": query, "results": results, "count": len(results)}, ensure_ascii=False)
+    except Exception as e:
+        logger.warning("Tavily 搜索失败: %s", e)
+
+    return json.dumps({"query": query, "results": [], "count": 0,
+        "note": "需要 pip install duckduckgo_search 或设置 TAVILY_API_KEY"}, ensure_ascii=False)
 
 web_search = ToolDefinition(
     name="web_search",
-    description="搜索互联网获取最新信息。",
+    description="搜索互联网获取最新信息。当用户询问实时信息（新闻、天气、股价）或知识库中没有的外部信息时使用。",
     input_schema={
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "搜索关键词"},
+            "query": {"type": "string", "description": "搜索关键词，尽量简洁精准"},
+            "max_results": {"type": "integer", "description": "最大结果数，默认5", "default": 5},
         },
         "required": ["query"],
     },
