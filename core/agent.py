@@ -96,10 +96,14 @@ class AgentRuntime:
         result = await runtime.execute(mission, context)
     """
 
-    def __init__(self, llm_client, tool_registry=None):
+    def __init__(self, llm_client, tool_registry=None, guardrails: dict | None = None):
         self._llm = llm_client
         self._tools = tool_registry
         self._user_context: dict = {}
+        g = guardrails or {}
+        self._pre_guard = g.get("pre_tool")
+        self._exec_guard = g.get("execution")
+        self._audit = g.get("audit")
 
     async def execute(self, mission: Mission, context: ContextResult) -> MissionResult:
         """执行任务：LLM 调用 → 工具循环 → 续问 → 返回结果。"""
@@ -274,27 +278,59 @@ class AgentRuntime:
         return content, total_tokens
 
     async def _execute_tools(self, tool_calls: list[dict]) -> list[dict]:
-        """执行工具调用列表。"""
+        """执行工具调用列表（带护栏检查）。"""
         results = []
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
-            # 工位工具自动注入用户上下文
+            start = time.time()
+            guard_action = "passed"
+
+            # 工位工具注入上下文
             if self._tools and self._user_context:
                 tool_def = self._tools.get(name)
                 if tool_def and tool_def.category == "workstation":
                     for key in ("user_id", "org_id", "position_id"):
                         args.setdefault(key, self._user_context.get(key, ""))
+
+            # H2: 调用前检查
+            if self._pre_guard:
+                check = self._pre_guard.check(name, args, self._user_context)
+                if check.modified_args:
+                    args = check.modified_args
+                if check.blocked:
+                    result = f"操作被安全护栏拦截: {check.reason}"
+                    guard_action = "blocked"
+                    self._log_audit(name, args, "blocked", guard_action, time.time() - start)
+                    results.append({"tool_call_id": tc.get("id", ""), "name": name, "result": result})
+                    continue
+                if check.needs_confirmation:
+                    guard_action = "auto_confirmed"
+                    logger.warning("护栏: 需确认 [%s] %s — 自动放行", name, check.reason)
+
+            # H3: 带护栏执行
             handler = self._tools.get_handler(name) if self._tools else None
             if handler:
-                try:
-                    result = await handler(args)
-                except Exception as e:
-                    result = f"执行错误: {e}"
+                if self._exec_guard:
+                    result = await self._exec_guard.execute(handler, args, name)
+                else:
+                    try:
+                        result = await handler(args)
+                    except Exception as e:
+                        result = f"执行错误: {e}"
             else:
                 result = f"未找到工具: {name}"
+
+            dur = time.time() - start
+            status = "error" if str(result).startswith(("执行错误", "未找到工具", "操作被安全", "工具")) else "success"
+            self._log_audit(name, args, status, guard_action, dur)
             results.append({"tool_call_id": tc.get("id", ""), "name": name, "result": result})
         return results
+
+    def _log_audit(self, name, args, status, action, dur):
+        if self._audit:
+            self._audit.record(user_id=self._user_context.get("user_id", ""),
+                tool_name=name, args=args, result_status=status, guard_action=action, duration=dur)
 
     def _get_tools(self, mission: Mission) -> list[dict] | None:
         """获取任务的工具列表。"""

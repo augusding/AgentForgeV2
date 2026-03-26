@@ -43,6 +43,9 @@ class ForgeEngine:
         self._wf_engine = None
         self._gateway = None
         self._proactive = None
+        self._pre_tool_guard = None
+        self._exec_guard = None
+        self._audit_logger = None
         self._initialized = False
 
     async def init(self) -> None:
@@ -125,6 +128,12 @@ class ForgeEngine:
         self._trigger_manager = TriggerManager(self._wf_store, self._wf_engine, self._scheduler, self._llm)
         await self._trigger_manager.load_triggers()
 
+        # 安全护栏
+        from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger
+        self._pre_tool_guard = PreToolGuard()
+        self._exec_guard = ExecutionGuard()
+        self._audit_logger = AuditLogger()
+
         self._initialized = True
         logger.info("ForgeEngine 初始化完成")
 
@@ -173,7 +182,8 @@ class ForgeEngine:
         )
 
         from core.agent import AgentRuntime
-        runtime = AgentRuntime(self._llm, self._tool_registry)
+        runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
+            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard, "audit": self._audit_logger})
         result = await runtime.execute(mission, context)
 
         await self._record_observability(msg, result)
@@ -229,7 +239,8 @@ class ForgeEngine:
         )
 
         from core.agent import AgentRuntime
-        runtime = AgentRuntime(self._llm, self._tool_registry)
+        runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
+            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard, "audit": self._audit_logger})
 
         full_content = ""
         async for chunk in runtime.execute_stream(mission, context):

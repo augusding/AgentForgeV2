@@ -262,8 +262,18 @@ async def handle_notification_read(request):
     return _json({"status": "ok"})
 
 
+async def handle_audit_logs(request):
+    """GET /api/v1/audit-logs"""
+    engine = request.app["engine"]
+    limit = int(request.query.get("limit", "50"))
+    if engine._audit_logger:
+        return _json({"logs": engine._audit_logger.get_recent(limit)})
+    return _json({"logs": []})
+
+
 def register(app: web.Application) -> None:
     r = app.router
+    r.add_get("/api/v1/audit-logs", handle_audit_logs)
     # Chat 兼容
     r.add_get("/api/v1/chat/sessions", handle_chat_sessions_list)
     r.add_get("/api/v1/chat/sessions/{session_id}/messages", handle_chat_session_messages)
