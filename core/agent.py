@@ -104,6 +104,7 @@ class AgentRuntime:
         self._pre_guard = g.get("pre_tool")
         self._exec_guard = g.get("execution")
         self._audit = g.get("audit")
+        self._log_collector = g.get("log")
 
     async def execute(self, mission: Mission, context: ContextResult) -> MissionResult:
         """执行任务：LLM 调用 → 工具循环 → 续问 → 返回结果。"""
@@ -172,6 +173,12 @@ class AgentRuntime:
         full_content = ""
         model_used = ""
         tracker = _ErrorTracker()
+
+        lc = self._log_collector
+        if lc:
+            lc.info("llm", "stream_execute_start", f"开始流式执行: mission={mission.id}",
+                    data={"tools": [t["name"] for t in (tools or [])]},
+                    user_id=mission.user_id, session_id=mission.session_id or "")
 
         for loop in range(MAX_TOOL_LOOPS + 1):
             round_content = ""

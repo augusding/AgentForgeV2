@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { User, Cpu, Briefcase, BarChart3, Brain, Server } from 'lucide-react'
+import { User, Cpu, Briefcase, BarChart3, Brain, Server, FileText } from 'lucide-react'
 import ProfileTab from './settings/ProfileTab'
 import LLMTab from './settings/LLMTab'
 import PositionsTab from './settings/PositionsTab'
 import UsageTab from './settings/UsageTab'
 import MemoryTab from './settings/MemoryTab'
 import SystemTab from './settings/SystemTab'
+import LogsTab from './settings/LogsTab'
 
-type TabId = 'profile' | 'llm' | 'positions' | 'usage' | 'memory' | 'system'
+type TabId = 'profile' | 'llm' | 'positions' | 'usage' | 'memory' | 'system' | 'logs'
 
 const TABS: Array<{ id: TabId; label: string; icon: any; desc: string }> = [
   { id: 'profile', label: '个人设置', icon: User, desc: '账号信息与密码' },
@@ -16,11 +17,12 @@ const TABS: Array<{ id: TabId; label: string; icon: any; desc: string }> = [
   { id: 'usage', label: '用量统计', icon: BarChart3, desc: 'Token 与调用量' },
   { id: 'memory', label: 'AI 记忆', icon: Brain, desc: '用户偏好与习惯' },
   { id: 'system', label: '系统信息', icon: Server, desc: '版本与运行状态' },
+  { id: 'logs', label: '系统日志', icon: FileText, desc: '结构化运行日志' },
 ]
 
 const COMPS: Record<TabId, React.FC> = {
   profile: ProfileTab, llm: LLMTab, positions: PositionsTab,
-  usage: UsageTab, memory: MemoryTab, system: SystemTab,
+  usage: UsageTab, memory: MemoryTab, system: SystemTab, logs: LogsTab,
 }
 
 export default function Settings() {

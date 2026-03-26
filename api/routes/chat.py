@@ -18,6 +18,12 @@ def _json(data: dict, status: int = 200) -> web.Response:
     )
 
 
+def _get_log(request):
+    """从 engine 获取 log_collector（可能为 None）。"""
+    engine = request.app.get("engine")
+    return getattr(engine, "_log_collector", None) if engine else None
+
+
 def _get_user_field(request, body, field, default=""):
     """从 body 或 JWT 用户信息中提取字段。"""
     key = "sub" if field == "user_id" else field
@@ -135,6 +141,11 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
         payload = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
         await resp.write(payload.encode("utf-8"))
 
+    lc = _get_log(request)
+    if lc:
+        lc.info("pipeline", "request_received", f"SSE 请求: {content[:60]}",
+                data={"position_id": position_id, "has_files": bool(body.get("file_ids"))},
+                user_id=msg.user_id, session_id=msg.session_id or "")
     try:
         position = engine._resolve_position(msg)
         await send_sse("thinking", {
@@ -167,6 +178,12 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
                 stream_session_id = chunk.get("session_id", "")
 
         duration_ms = int((time.time() - start_time) * 1000)
+        if lc:
+            lc.info("pipeline", "response_complete", "SSE 响应完成",
+                    data={"mission_id": mission_id, "tokens_used": tokens_used,
+                          "model": model_used, "duration_ms": duration_ms},
+                    user_id=msg.user_id, session_id=stream_session_id or "",
+                    duration=duration_ms / 1000)
         await send_sse("done", {
             "mission_id": mission_id,
             "session_id": stream_session_id,

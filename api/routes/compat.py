@@ -273,9 +273,23 @@ async def handle_audit_logs(request):
     return _json({"logs": []})
 
 
+async def handle_system_logs(request):
+    """GET /api/v1/system/logs"""
+    engine = request.app["engine"]
+    limit = int(request.query.get("limit", "100"))
+    category = request.query.get("category", "")
+    level = request.query.get("level", "")
+    lc = getattr(engine, "_log_collector", None)
+    if lc:
+        logs = await lc.get_from_db(limit=limit, category=category, level=level)
+        return _json({"logs": logs, "count": len(logs)})
+    return _json({"logs": [], "count": 0})
+
+
 def register(app: web.Application) -> None:
     r = app.router
     r.add_get("/api/v1/audit-logs", handle_audit_logs)
+    r.add_get("/api/v1/system/logs", handle_system_logs)
     # Chat 兼容
     r.add_get("/api/v1/chat/sessions", handle_chat_sessions_list)
     r.add_get("/api/v1/chat/sessions/{session_id}/messages", handle_chat_session_messages)

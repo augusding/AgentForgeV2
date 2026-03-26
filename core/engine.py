@@ -47,6 +47,7 @@ class ForgeEngine:
         self._exec_guard = None
         self._audit_logger = None
         self._system_guard = None
+        self._log_collector = None
         self._initialized = False
 
     async def init(self) -> None:
@@ -142,6 +143,15 @@ class ForgeEngine:
             max_input_length=gr_cfg.get("max_input_length", 50000),
         )
 
+        # 结构化日志收集器
+        from observability.log_collector import LogCollector
+        self._log_collector = LogCollector(
+            max_entries=2000,
+            db_path=str(self.root_dir / "data" / "memories.db"),
+        )
+        await self._log_collector.ensure_table()
+        self._log_collector.info("system", "engine_init", "ForgeEngine 初始化完成")
+
         self._initialized = True
         logger.info("ForgeEngine 初始化完成")
 
@@ -195,7 +205,8 @@ class ForgeEngine:
 
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
-            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard, "audit": self._audit_logger})
+            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
+            "audit": self._audit_logger, "log": self._log_collector})
         result = await runtime.execute(mission, context)
 
         await self._record_observability(msg, result)
@@ -219,9 +230,17 @@ class ForgeEngine:
 
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
+        lc = self._log_collector
+        _t0 = time.time()
+        if lc:
+            lc.info("pipeline", "request_start", f"收到消息: {msg.content[:80]}",
+                    data={"position_id": msg.position_id, "has_attachments": bool(msg.attachments)},
+                    user_id=msg.user_id, session_id=msg.session_id or "")
         if self._system_guard:
             for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
                 if not chk.passed:
+                    if lc:
+                        lc.warn("guard", "request_blocked", chk.reason, user_id=msg.user_id)
                     yield {"type": "text", "text": chk.reason}
                     yield {"type": "done"}
                     return
@@ -230,11 +249,17 @@ class ForgeEngine:
             yield {"type": "text", "text": "未找到岗位配置。"}
             yield {"type": "done"}
             return
+        if lc:
+            lc.info("pipeline", "position_resolved", f"岗位: {position.display_name}",
+                    user_id=msg.user_id)
 
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
         await self._session_store.add_message(session_id, "user", msg.content)
+        if lc:
+            lc.info("pipeline", "session_ready", f"会话: {session_id}",
+                    user_id=msg.user_id, session_id=session_id)
 
         history = await self._session_store.get_history_as_llm_messages(session_id, limit=20)
         if history and history[-1].get("role") == "user":
@@ -250,6 +275,9 @@ class ForgeEngine:
             attachments=msg.attachments,
         )
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
+        if lc:
+            lc.info("pipeline", "rag_done", f"RAG 检索: {len(rag_results)} 条",
+                    data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         if msg.metadata.get("web_search"):
             daily_summary += "\n[联网搜索已开启] 优先使用 web_search 工具搜索最新信息来回答。"
@@ -259,11 +287,19 @@ class ForgeEngine:
             position=position, mission=mission, history=history,
             rag_results=rag_results, daily_context=daily_summary,
         )
+        if lc:
+            lc.info("pipeline", "context_built", "上下文构建完成",
+                    data={"messages": len(context.messages)},
+                    user_id=msg.user_id, session_id=session_id)
 
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
-            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard, "audit": self._audit_logger})
+            "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
+            "audit": self._audit_logger, "log": self._log_collector})
 
+        if lc:
+            lc.info("pipeline", "stream_start", "开始流式生成",
+                    user_id=msg.user_id, session_id=session_id)
         full_content = ""
         collected_tools: list[dict] = []
         async for chunk in runtime.execute_stream(mission, context):
@@ -276,6 +312,11 @@ class ForgeEngine:
                 chunk["session_id"] = session_id
             yield chunk
 
+        if lc:
+            lc.info("pipeline", "stream_done", f"流式完成, 长度={len(full_content)}",
+                    data={"tools": [t["name"] for t in collected_tools]},
+                    user_id=msg.user_id, session_id=session_id,
+                    duration=time.time() - _t0)
         if full_content:
             await self._session_store.add_message(session_id, "assistant", full_content)
         asyncio.ensure_future(self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id))
@@ -490,6 +531,8 @@ class ForgeEngine:
                  "description": pos.description}
                 for b in targets for pos in b.positions.values()]
 
+    @property
+    def log_collector(self): return self._log_collector
     @property
     def session_store(self): return self._session_store
     @property
