@@ -340,13 +340,10 @@ class AgentRuntime:
                 tool_name=name, args=args, result_status=status, guard_action=action, duration=dur)
 
     def _get_tools(self, mission: Mission) -> list[dict] | None:
-        """获取任务的工具列表。"""
+        """获取任务的工具列表。所有内置工具对所有岗位可用。"""
         if not self._tools:
             return None
-        tool_names = mission.context.get("tool_names", [])
-        if not tool_names:
-            return None
-        tools = self._tools.get_tools_for_position(tool_names)
+        tools = self._tools.get_all_tools_for_llm()
         return tools if tools else None
 
     @staticmethod
