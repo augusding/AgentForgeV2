@@ -68,7 +68,7 @@ async def _convert_handler(args: dict) -> str:
 
 
 def _result(path: Path, fmt: str, source_text: str = "", **extra) -> str:
-    preview = source_text[:800] if source_text else ""
+    preview = source_text[:500] if source_text else ""
     if not preview and fmt in ("md", "txt", "csv"):
         try: preview = path.read_text(encoding="utf-8", errors="replace")[:800]
         except Exception: pass

@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { uploadChatFile, getQuickCommands } from '../api/chat'
 import { SessionItem, ToolCalls, Collapsible, CopyBtn, FeedbackBtn, timeAgo } from '../components/ChatWidgets'
 import ActionCard, { parseCard } from '../components/ActionCards'
+import FilePreviewPanel from '../components/FilePreviewPanel'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
 import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../components/SlashCommandMenu'
@@ -23,6 +24,7 @@ export default function Chat() {
   const [knowledgeScope, setKnowledgeScope] = useState<string[]>([]); const [hasKB, setHasKB] = useState(false)
   const [personality, setPersonality] = useState('')
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
+  const [previewFile, setPreviewFile] = useState<{ path: string; filename: string; format?: string; size?: number } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
   const slashRef = useRef<SlashMenuHandle>(null)
   const isFirstMsg = useRef(true); const pendingToolHint = useRef('')
@@ -114,8 +116,8 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Chat */}
-      <div className="flex-1 flex flex-col">
+      {/* Chat — narrows when preview open */}
+      <div className={`flex-1 flex flex-col min-w-0 ${previewFile ? 'max-w-[55%]' : ''} transition-all`}>
         {/* Top bar (#10 + #11) */}
         <div className="flex items-center justify-between px-4 py-2 border-b shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
           <div className="flex items-center gap-2">
@@ -163,7 +165,7 @@ export default function Chat() {
               </div>}
             </div>)}
 
-          {store.messages.map((msg, i) => <MsgRow key={i} msg={msg} idx={i} isLast={i === store.messages.length - 1} streaming={store.streaming} onRegen={regen} pos={posInfo} />)}
+          {store.messages.map((msg, i) => <MsgRow key={i} msg={msg} idx={i} isLast={i === store.messages.length - 1} streaming={store.streaming} onRegen={regen} pos={posInfo} onFileClick={setPreviewFile} />)}
           {store.streaming && store.messages.length > 0 && store.messages[store.messages.length - 1]?.thinking && (
             <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
               <div className="flex gap-0.5">
@@ -217,12 +219,14 @@ export default function Chat() {
           </div>
         </div>
       </div>
+      {/* Right preview panel */}
+      {previewFile && <div className="w-[45%] shrink-0 h-full"><FilePreviewPanel file={previewFile} onClose={() => setPreviewFile(null)} /></div>}
     </div>
   )
 }
 
 /* ── MsgRow (#6 #7 #8 #9) ── */
-function MsgRow({ msg, idx, isLast, streaming, onRegen, pos }: { msg: any; idx: number; isLast: boolean; streaming: boolean; onRegen: () => void; pos?: any }) {
+function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { msg: any; idx: number; isLast: boolean; streaming: boolean; onRegen: () => void; pos?: any; onFileClick?: (f: any) => void }) {
   const msgId = msg.id || `msg-${idx}`; const clr = pos?.color || 'var(--accent)'
 
   if (msg.role === 'user') return (
@@ -248,7 +252,7 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos }: { msg: any; idx: 
             {msg.content && <Collapsible><Markdown content={msg.content} /></Collapsible>}
             {!msg.content && !msg.thinking && <span style={{ color: 'var(--text-muted)' }}>思考中...</span>}
             {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
-              const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} /> : null
+              const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} onFileClick={onFileClick} /> : null
             })}
           </div>
           {msg.content && <div className="flex items-center gap-1 px-3 py-1.5 border-t opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: 'var(--border)' }}>
