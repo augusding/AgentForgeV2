@@ -25,7 +25,7 @@ export default function Chat() {
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
   const slashRef = useRef<SlashMenuHandle>(null)
-  const isFirstMsg = useRef(true)
+  const isFirstMsg = useRef(true); const pendingToolHint = useRef('')
   const [searchParams, setSearchParams] = useSearchParams()
 
   const filtered = searchQ.trim() ? store.sessions.filter(s => s.title.toLowerCase().includes(searchQ.toLowerCase())) : store.sessions
@@ -66,7 +66,9 @@ export default function Chat() {
     try {
       const resp = await fetch('/api/v1/chat/stream', { method: 'POST', signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: text, position_id: positionId || '', session_id: store.currentSessionId || undefined, file_ids: ca.map(a => a.file_id), web_search: webSearch || undefined }) })
+        body: JSON.stringify({ content: text, position_id: positionId || '', session_id: store.currentSessionId || undefined, file_ids: ca.map(a => a.file_id), web_search: webSearch || undefined,
+          ...(pendingToolHint.current ? { command_metadata: { tool_hint: pendingToolHint.current } } : {}) }) })
+      pendingToolHint.current = ''
       const reader = resp.body?.getReader(); const dec = new TextDecoder(); let buf = ''
       while (reader) { const { done, value } = await reader.read(); if (done) break
         buf += dec.decode(value, { stream: true }); const lines = buf.split('\n'); buf = lines.pop() || ''
@@ -181,6 +183,7 @@ export default function Chat() {
               <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
                 onSelect={(cmd: SlashCommand) => {
                   setShowSlash(false); setSlashQ('')
+                  if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
                   if (cmd.directSend) { setInput(''); send(cmd.prompt) }
                   else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const l = cmd.prompt.length; taRef.current?.setSelectionRange(l, l) }, 50) }
                 }} onClose={() => setShowSlash(false)} />

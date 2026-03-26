@@ -119,7 +119,8 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
         position_id=position_id,
         channel="api",
         attachments=attachments,
-        metadata={"web_search": body.get("web_search", False)},
+        metadata={"web_search": body.get("web_search", False),
+                  "tool_hint": (body.get("command_metadata") or {}).get("tool_hint", "")},
     )
 
     resp = web.StreamResponse(headers={

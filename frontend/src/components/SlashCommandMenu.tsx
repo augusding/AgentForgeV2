@@ -4,24 +4,24 @@ import { Target, Calendar, Users, Search, FileText, Zap,
 
 export interface SlashCommand {
   command: string; label: string; description: string; icon: any; group: string
-  prompt: string; directSend?: boolean
+  prompt: string; directSend?: boolean; toolHint?: string
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { command: '/task', label: '创建任务', description: '创建或查看待办事项', icon: Target, group: '📋 任务管理', prompt: '帮我创建一个任务：' },
-  { command: '/schedule', label: '查看日程', description: '查看今天的日程安排', icon: Calendar, group: '📋 任务管理', prompt: '查看我今天的日程安排', directSend: true },
-  { command: '/followup', label: '创建跟进', description: '创建跟进提醒', icon: Users, group: '📋 任务管理', prompt: '帮我创建一个跟进提醒：' },
-  { command: '/todo', label: '查看待办', description: '列出所有待办事项', icon: Target, group: '📋 任务管理', prompt: '列出我当前所有的待办事项和优先级', directSend: true },
-  { command: '/search', label: '搜索知识库', description: '在知识库中搜索信息', icon: Search, group: '📊 数据查询', prompt: '在知识库中搜索：' },
+  { command: '/task', label: '创建任务', description: '创建或查看待办事项', icon: Target, group: '📋 任务管理', prompt: '帮我创建一个任务：', toolHint: 'manage_priority' },
+  { command: '/schedule', label: '查看日程', description: '查看今天的日程安排', icon: Calendar, group: '📋 任务管理', prompt: '查看我今天的日程安排', directSend: true, toolHint: 'manage_schedule' },
+  { command: '/followup', label: '创建跟进', description: '创建跟进提醒', icon: Users, group: '📋 任务管理', prompt: '帮我创建一个跟进提醒：', toolHint: 'manage_followup' },
+  { command: '/todo', label: '查看待办', description: '列出所有待办事项', icon: Target, group: '📋 任务管理', prompt: '列出我当前所有的待办事项和优先级', directSend: true, toolHint: 'manage_priority' },
+  { command: '/search', label: '搜索知识库', description: '在知识库中搜索信息', icon: Search, group: '📊 数据查询', prompt: '在知识库中搜索：', toolHint: 'search_knowledge' },
   { command: '/data', label: '查询数据', description: '查询系统统计数据', icon: BarChart3, group: '📊 数据查询', prompt: '查询我的工作数据统计，包括本周的对话数、Token 用量和工作流执行情况', directSend: true },
   { command: '/report', label: '生成报告', description: '用 AI 生成工作报告', icon: FileText, group: '📊 数据查询', prompt: '帮我生成一份工作报告，内容包括：' },
   { command: '/summary', label: '总结工作', description: '总结最近的工作内容', icon: Repeat, group: '📊 数据查询', prompt: '总结我最近的工作内容和进展', directSend: true },
   { command: '/workflow', label: '运行工作流', description: '触发执行工作流', icon: Zap, group: '⚡ 自动化', prompt: '帮我运行工作流：' },
   { command: '/notify', label: '发送通知', description: '通过飞书/钉钉/邮件发送通知', icon: Bell, group: '⚡ 自动化', prompt: '帮我发送一条通知：' },
-  { command: '/excel', label: '处理 Excel', description: '创建、读取或分析 Excel 文件', icon: Table, group: '🛠️ 工具', prompt: '帮我处理 Excel：' },
-  { command: '/doc', label: '生成文档', description: '生成 Word 或 PDF 文档', icon: FileText, group: '🛠️ 工具', prompt: '帮我生成一份文档：' },
-  { command: '/code', label: '执行代码', description: '运行 Python 代码', icon: Code, group: '🛠️ 工具', prompt: '帮我执行以下代码：' },
-  { command: '/web', label: '搜索网页', description: '搜索互联网获取最新信息', icon: Globe, group: '🛠️ 工具', prompt: '帮我搜索：' },
+  { command: '/excel', label: '处理 Excel', description: '创建、读取或分析 Excel 文件', icon: Table, group: '🛠️ 工具', prompt: '帮我处理 Excel：', toolHint: 'excel_processor' },
+  { command: '/doc', label: '生成文档', description: '生成 Word 或 PDF 文档', icon: FileText, group: '🛠️ 工具', prompt: '帮我生成一份文档：', toolHint: 'word_processor' },
+  { command: '/code', label: '执行代码', description: '运行 Python 代码', icon: Code, group: '🛠️ 工具', prompt: '帮我执行以下代码：', toolHint: 'code_executor' },
+  { command: '/web', label: '搜索网页', description: '搜索互联网获取最新信息', icon: Globe, group: '🛠️ 工具', prompt: '帮我搜索：', toolHint: 'web_search' },
 ]
 
 export interface SlashMenuHandle { handleKey: (e: KeyboardEvent | React.KeyboardEvent) => boolean }
