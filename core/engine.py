@@ -268,21 +268,115 @@ class ForgeEngine:
             )
 
     async def _get_daily_summary(self, user_id: str, org_id: str, position_id: str) -> str:
-        """获取每日上下文摘要。"""
-        if not self._work_item_store:
-            return ""
-        priorities = await self._work_item_store.get_priorities(user_id, org_id, position_id)
-        schedules = await self._work_item_store.get_schedules(user_id, org_id)
-        followups = await self._work_item_store.get_followups(user_id, org_id)
-        parts = []
-        if priorities:
-            parts.append("今日优先事项: " + "; ".join(p["title"] for p in priorities[:5]))
-        if schedules:
-            parts.append("今日日程: " + "; ".join(
-                f"{s['title']}({s.get('scheduled_time', '')})" for s in schedules[:5]))
-        if followups:
-            parts.append("待跟进: " + "; ".join(f["title"] for f in followups[:5]))
-        return "\n".join(parts)
+        """获取完整的用户工作上下文，注入到 LLM system prompt。"""
+        import datetime
+        now = datetime.datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        weekday = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday()]
+        parts = [f"当前时间: {now.strftime('%Y-%m-%d %H:%M')} {weekday}"]
+
+        # 1. 待办事项（含优先级、截止日期、逾期提醒）
+        if self._work_item_store:
+            try:
+                pris = await self._work_item_store.get_priorities(user_id, org_id, position_id, status="active")
+                if pris:
+                    items = []
+                    for p in pris[:5]:
+                        s = f"[{p.get('priority', 'P1')}] {p['title']}"
+                        if p.get("due_date"):
+                            try:
+                                dl = (datetime.datetime.strptime(p["due_date"], "%Y-%m-%d") - now).days
+                                tag = "⚠️已逾期" if dl < 0 else "⚠️今天截止" if dl == 0 else f"还剩{dl}天" if dl <= 2 else ""
+                                s += f"（截止: {p['due_date']}{', ' + tag if tag else ''}）"
+                            except Exception:
+                                s += f"（截止: {p['due_date']}）"
+                        items.append(s)
+                    parts.append(f"待办事项（{len(pris)} 条）:\n  " + "\n  ".join(items))
+            except Exception:
+                pass
+
+        # 2. 今日日程
+        if self._work_item_store:
+            try:
+                scheds = await self._work_item_store.get_schedules(user_id, org_id)
+                today = [s for s in scheds if (s.get("scheduled_time") or "").startswith(today_str)]
+                if today:
+                    items = [f"{(s.get('scheduled_time') or '').split(' ')[-1][:5]} {s['title']}"
+                             + (f"（{s['duration_minutes']}分钟）" if s.get("duration_minutes") else "")
+                             for s in today]
+                    parts.append(f"今日日程（{len(today)} 条）:\n  " + "\n  ".join(items))
+            except Exception:
+                pass
+
+        # 3. 待跟进
+        if self._work_item_store:
+            try:
+                fups = await self._work_item_store.get_followups(user_id, org_id)
+                pending = [f for f in fups if f.get("status") == "pending"]
+                if pending:
+                    items = []
+                    for f in pending[:5]:
+                        s = f["title"]
+                        if f.get("target"):
+                            s += f"（对象: {f['target']}）"
+                        created = f.get("created_at", 0)
+                        if created:
+                            days = int((time.time() - created) / 86400)
+                            if days > 0:
+                                s += f" - {days}天前创建"
+                        items.append(s)
+                    parts.append(f"待跟进（{len(pending)} 条）:\n  " + "\n  ".join(items))
+            except Exception:
+                pass
+
+        # 4. 进行中的工作项
+        if self._work_item_store:
+            try:
+                witems = await self._work_item_store.get_work_items(user_id, org_id, status="")
+                active = [w for w in witems if w.get("status") in ("todo", "in_progress")]
+                if active:
+                    items = [f"[{w.get('status', 'todo')}] {w['title']}" for w in active[:5]]
+                    parts.append(f"工作项（{len(active)} 条进行中）:\n  " + "\n  ".join(items))
+            except Exception:
+                pass
+
+        # 5. 工作流最近状态
+        if self._wf_store:
+            try:
+                wfs = await self._wf_store.list_workflows(org_id=org_id)
+                wf_lines = []
+                for wf in wfs[:5]:
+                    try:
+                        execs = await self._wf_store.get_executions(wf["id"], limit=1)
+                        if execs:
+                            icon = "✅" if execs[0].get("status") == "completed" else "❌"
+                            wf_lines.append(f"{icon} {wf.get('name', '')}（{execs[0].get('status', '')}）")
+                    except Exception:
+                        pass
+                if wf_lines:
+                    parts.append("工作流状态:\n  " + "\n  ".join(wf_lines))
+            except Exception:
+                pass
+
+        # 6. 最近对话主题
+        if self._session_store:
+            try:
+                sess = await self._session_store.list_sessions(user_id, org_id, limit=3)
+                titles = [s.get("title", "") for s in sess if s.get("title")]
+                if titles:
+                    parts.append(f"最近对话: {'; '.join(titles[:3])}")
+            except Exception:
+                pass
+
+        # 7. AI 使用指导
+        if len(parts) > 1:
+            parts.append(
+                "\n[指导] 基于以上工作上下文主动提供建议。"
+                "用户提到相关事项时优先使用这些信息。"
+                "发现紧急或逾期事项时主动提醒。"
+            )
+
+        return "\n".join(parts) if len(parts) > 1 else ""
 
     async def _collect_signals(self, content: str, user_id: str, org_id: str, position_id: str) -> None:
         """从用户消息中用规则提取信号。"""
