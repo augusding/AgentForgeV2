@@ -91,8 +91,13 @@ async def _ppt_handler(args: dict) -> str:
     except ImportError:
         return json.dumps({"error": "需要安装 python-pptx: pip install python-pptx"}, ensure_ascii=False)
 
-    action = args.get("action", "")
+    action = args.get("action", "create")
     raw_path = args.get("path", "")
+    if not raw_path and action == "create":
+        import uuid
+        title = args.get("title", "演示文稿")
+        safe = "".join(c for c in str(title) if c.isalnum() or c in "-_ ")[:30].strip() or "演示文稿"
+        raw_path = f"data/outputs/{uuid.uuid4().hex[:8]}_{safe}.pptx"
     if not raw_path:
         return json.dumps({"error": "缺少 path 参数"}, ensure_ascii=False)
 
@@ -114,7 +119,11 @@ async def _ppt_handler(args: dict) -> str:
                     slide.placeholders[1].text = s.get("content", "")
             path.parent.mkdir(parents=True, exist_ok=True)
             prs.save(str(path))
-            return json.dumps({"status": "created", "path": raw_path, "slides": len(slides)}, ensure_ascii=False)
+            try:
+                rel = str(path.relative_to(_ROOT)).replace("\\", "/")
+            except ValueError:
+                rel = str(path)
+            return json.dumps({"status": "created", "path": rel, "filename": path.name, "size": path.stat().st_size, "slides": len(slides)}, ensure_ascii=False)
 
         elif action == "read":
             if not path.is_file():
@@ -150,7 +159,7 @@ ppt_processor = ToolDefinition(
             "path": {"type": "string", "description": "文件路径(.pptx)"},
             "slides": {"type": "string", "description": "JSON 数组，如 [{\"title\":\"...\",\"content\":\"...\"}]"},
         },
-        "required": ["action", "path"],
+        "required": ["action"],
     },
     handler=_ppt_handler,
     category="document",

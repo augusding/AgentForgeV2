@@ -24,7 +24,7 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if (toolName === 'manage_schedule') return { type: 'schedule', data, toolName }
     if (toolName === 'manage_followup') return { type: 'followup', data, toolName }
     if (toolName === 'search_knowledge' && data.results) return { type: 'search', data, toolName }
-    if (['calculator', 'datetime_tool'].includes(toolName)) return { type: 'data', data, toolName }
+    if (['calculator', 'datetime'].includes(toolName)) return { type: 'data', data, toolName }
     return null
   } catch { return null }
 }
@@ -173,7 +173,7 @@ function SearchResultCard({ data }: { data: any }) {
 
 /* ── 数据/计算结果卡片 ── */
 function DataCard({ data, tool }: { data: any; tool: string }) {
-  const label = tool === 'calculator' ? '计算结果' : tool === 'datetime_tool' ? '日期时间' : '数据'
+  const label = tool === 'calculator' ? '计算结果' : tool === 'datetime' ? '日期时间' : '数据'
   const resultVal = data.result ?? data.value ?? data
 
   if (typeof resultVal === 'number' || (typeof resultVal === 'string' && !resultVal.startsWith('{'))) {

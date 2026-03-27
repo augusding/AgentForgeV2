@@ -155,22 +155,41 @@ async def _search_sogou(query: str, max_results: int) -> list[dict]:
     """搜狗搜索（国内稳定可用，无需 API Key）。"""
     import aiohttp, re as _re
     from urllib.parse import quote
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
     url = f"https://www.sogou.com/web?query={quote(query)}"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10), allow_redirects=True) as resp:
             html = await resp.text()
     results = []
-    for block in _re.findall(r'<h3[^>]*>(.*?)</h3>', html, _re.DOTALL)[:max_results]:
-        m = _re.search(r'href="([^"]+)"[^>]*>(.*?)(?:</a>|$)', block, _re.DOTALL)
-        if not m:
+    blocks = _re.split(r'<h3[^>]*>', html)[1:]
+    for block in blocks[:max_results + 2]:
+        lm = _re.search(r'href=["\']([^"\']+)["\'][^>]*>(.*?)(?:</a>)', block, _re.DOTALL)
+        if not lm:
             continue
-        link, title = m.group(1), _re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        link = lm.group(1)
+        title = _re.sub(r'<[^>]+>', '', lm.group(2)).strip()
         if not title:
             continue
         if link.startswith("/link?"):
             link = f"https://www.sogou.com{link}"
-        results.append({"title": title, "url": link, "snippet": ""})
+        snippet = ""
+        for pat in [r'<p[^>]*>(.*?)</p>', r'<div[^>]*class="[^"]*space-txt[^"]*"[^>]*>(.*?)</div>']:
+            sm = _re.search(pat, block, _re.DOTALL)
+            if sm:
+                snippet = _re.sub(r'<[^>]+>', '', sm.group(1)).strip()
+                if len(snippet) > 15:
+                    break
+                snippet = ""
+        if not snippet:
+            text = _re.sub(r'<[^>]+>', ' ', block[:800]).strip().replace(title, '').strip()
+            if len(text) > 20:
+                snippet = text[:200]
+        results.append({"title": title, "url": link, "snippet": snippet[:200]})
+        if len(results) >= max_results:
+            break
     return results
 
 
@@ -251,7 +270,7 @@ async def _web_search_handler(args: dict) -> str:
         logger.warning("DuckDuckGo 搜索失败: %s", e)
 
     return json.dumps({"query": query, "results": [], "count": 0,
-        "note": "搜索暂时不可用。可设置 TAVILY_API_KEY 获得更稳定的搜索。"}, ensure_ascii=False)
+        "note": "搜索未返回有效结果。请尝试更换关键词，或直接告诉用户你无法联网搜索。"}, ensure_ascii=False)
 
 web_search = ToolDefinition(
     name="web_search",
