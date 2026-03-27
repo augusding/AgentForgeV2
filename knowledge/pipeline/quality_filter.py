@@ -104,9 +104,16 @@ class QualityFilter:
 
     @staticmethod
     def _detect_lang(text: str) -> str:
-        sample = text[:500]
+        """精准语言检测：优先 langdetect，回退字符统计。"""
+        sample = text[:1000].strip()
         if not sample:
             return ""
+        try:
+            from langdetect import detect
+            lang = detect(sample)
+            return "zh" if lang in ("zh-cn", "zh-tw", "zh") else lang
+        except Exception:
+            pass
         zh = sum(1 for c in sample if "\u4e00" <= c <= "\u9fff")
         if zh / len(sample) > 0.15:
             return "zh"
