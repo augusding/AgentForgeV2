@@ -63,10 +63,10 @@ export default function Chat() {
     setUploading(false)
   }
 
-  const send = async (ov?: string) => {
+  const send = async (ov?: string, extraFiles?: Array<{ file_id: string; filename: string }>) => {
     const text = (ov || input).trim(); if (!text || store.streaming) return
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
-    const ca = [...attachments]; setAttachments([])
+    const ca = [...attachments, ...(extraFiles || [])]; setAttachments([])
     store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
     const ctrl = new AbortController(); store.setAbortController(ctrl)
     const token = localStorage.getItem('agentforge_token') || ''; let evt = ''
@@ -197,10 +197,9 @@ export default function Chat() {
             {activeTool && (
               <ToolPanel tool={activeTool}
                 onSubmit={(prompt, toolFiles, toolHint) => {
-                  if (toolFiles.length) setAttachments(prev => [...prev, ...toolFiles])
                   if (toolHint) pendingToolHint.current = toolHint
                   setActiveTool(null); setToolboxOpen(false)
-                  setTimeout(() => send(prompt), 100)
+                  send(prompt, toolFiles)
                 }}
                 onClose={() => setActiveTool(null)} />
             )}

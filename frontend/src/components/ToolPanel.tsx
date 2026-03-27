@@ -39,7 +39,7 @@ export default function ToolPanel({ tool, onSubmit, onClose }: Props) {
     for (const [k, v] of Object.entries(values)) {
       prompt = prompt.replace(new RegExp(`\\{${k}\\}`, 'g'), v.trim() || '')
     }
-    prompt = prompt.replace(/\n{3,}/g, '\n\n').trim()
+    prompt = prompt.replace(/\{[a-z_]+\}/g, '').replace(/\n{3,}/g, '\n\n').trim()
     if (tool.suffix) prompt += '\n' + tool.suffix
     setSubmitting(true)
     onSubmit(prompt, files, tool.tool_hint)
