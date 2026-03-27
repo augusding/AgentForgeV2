@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { PenLine, BarChart3, FileText, Database, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { PenLine, BarChart3, FileText, Database, ChevronUp, ChevronDown, Wrench } from 'lucide-react'
 import client from '../api/client'
 
 export interface ToolField {
@@ -15,53 +15,67 @@ interface Category { id: string; label: string; icon: string; sort: number }
 
 const ICON_MAP: Record<string, any> = { PenLine, BarChart3, FileText, Database }
 
-interface Props { onSelectTool: (tool: ToolDef) => void }
+interface Props { onSelectTool: (tool: ToolDef) => void; expanded: boolean; onToggle: () => void }
 
-export default function Toolbox({ onSelectTool }: Props) {
+export default function Toolbox({ onSelectTool, expanded, onToggle }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [tools, setTools] = useState<ToolDef[]>([])
-  const [openCat, setOpenCat] = useState<string | null>(null)
+  const [activeCat, setActiveCat] = useState('')
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     client.get('/toolbox/tools').then((data: any) => {
-      setCategories(data.categories || []); setTools(data.tools || [])
+      const cats = data.categories || []
+      setCategories(cats); setTools(data.tools || [])
+      if (cats.length) setActiveCat(cats[0].id)
     }).catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!expanded) return
+    const h = (e: MouseEvent) => { if (panelRef.current && !panelRef.current.contains(e.target as HTMLElement)) onToggle() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [expanded, onToggle])
+
   if (!categories.length) return null
+  const catTools = tools.filter(t => t.category === activeCat)
+
   return (
-    <div className="flex items-center gap-1 px-1">
-      {categories.map(cat => {
-        const Icon = ICON_MAP[cat.icon] || FileText
-        const catTools = tools.filter(t => t.category === cat.id)
-        const isOpen = openCat === cat.id
-        if (!catTools.length) return null
-        return (
-          <div key={cat.id} className="relative">
-            <button onClick={() => setOpenCat(isOpen ? null : cat.id)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] transition-colors"
-              style={{ color: isOpen ? 'var(--accent)' : 'var(--text-muted)', background: isOpen ? 'var(--accent)10' : 'transparent' }}>
-              <Icon size={13} /><span>{cat.label}</span>
-              <ChevronDown size={10} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isOpen && (
-              <div className="absolute bottom-full left-0 mb-1 w-[220px] rounded-xl shadow-xl overflow-hidden z-50"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                {catTools.map(tool => (
-                  <button key={tool.id} onClick={() => { onSelectTool(tool); setOpenCat(null) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--bg-hover)] transition-colors">
-                    <span className="text-base">{tool.icon}</span>
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: 'var(--text)' }}>{tool.label}</div>
-                      <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{tool.description}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+    <div ref={panelRef}>
+      {expanded && (
+        <div className="mb-2 rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-1 px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+            {categories.map(cat => {
+              const Icon = ICON_MAP[cat.icon] || FileText
+              const isActive = activeCat === cat.id
+              return (
+                <button key={cat.id} onClick={() => setActiveCat(cat.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                  style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)', background: isActive ? 'var(--accent)10' : 'transparent', fontWeight: isActive ? 600 : 400 }}>
+                  <Icon size={13} /><span>{cat.label}</span>
+                  <span className="text-[9px] opacity-60">({tools.filter(t => t.category === cat.id).length})</span>
+                </button>
+              )
+            })}
           </div>
-        )
-      })}
+          <div className="grid grid-cols-4 gap-1 p-2">
+            {catTools.map(tool => (
+              <button key={tool.id} onClick={() => { onSelectTool(tool); onToggle() }}
+                className="flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg hover:bg-[var(--bg-hover)] transition-colors text-center">
+                <span className="text-xl">{tool.icon}</span>
+                <span className="text-[11px] leading-tight" style={{ color: 'var(--text)' }}>{tool.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <button onClick={onToggle}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] transition-colors"
+        style={{ color: expanded ? 'var(--accent)' : 'var(--text-muted)', background: expanded ? 'var(--accent)10' : 'transparent' }}>
+        <Wrench size={13} /><span>工具箱</span>
+        {expanded ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
+      </button>
     </div>
   )
 }

@@ -208,6 +208,15 @@ class AgentRuntime:
 
             logger.info("流式工具循环 #%d: %s", loop + 1, [tc["name"] for tc in round_tool_calls])
 
+            # ★ 立即通知前端：即将执行工具（消除空白等待期）
+            first = round_tool_calls[0]["name"] if round_tool_calls else ""
+            _TL = {"document_converter": "🔄 正在转换文档...", "web_search": "🌐 正在搜索...",
+                    "word_processor": "📄 正在生成文档...", "excel_processor": "📗 正在处理 Excel...",
+                    "search_knowledge": "📚 正在搜索知识库...", "manage_priority": "✅ 正在处理待办...",
+                    "manage_schedule": "📅 正在处理日程...", "code_executor": "💻 正在执行代码...",
+                    "calculator": "🔢 正在计算...", "chart_generator": "📈 正在生成图表..."}
+            yield {"type": "thinking", "content": _TL.get(first, f"🔧 正在执行 {first}...")}
+
             # 逐个执行：start → execute → result（用户实时看到进度）
             tool_results = []
             for tc in round_tool_calls:

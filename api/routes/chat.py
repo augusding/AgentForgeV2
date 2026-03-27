@@ -165,6 +165,8 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
             chunk_type = chunk.get("type", "")
             if chunk_type == "text":
                 await send_sse("delta", {"content": chunk.get("text", "")})
+            elif chunk_type == "thinking":
+                await send_sse("thinking", {"content": chunk.get("content", ""), "agent_name": chunk.get("agent_name", "")})
             elif chunk_type == "tool_start":
                 await send_sse("tool_start", {
                     "tool": chunk.get("name", ""),

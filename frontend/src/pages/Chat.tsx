@@ -29,6 +29,7 @@ export default function Chat() {
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const [previewFile, setPreviewFile] = useState<{ path: string; filename: string; format?: string; size?: number } | null>(null)
   const [activeTool, setActiveTool] = useState<ToolDef | null>(null)
+  const [toolboxOpen, setToolboxOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
   const slashRef = useRef<SlashMenuHandle>(null)
   const isFirstMsg = useRef(true); const pendingToolHint = useRef('')
@@ -81,7 +82,7 @@ export default function Chat() {
         for (const l of lines) { if (l.startsWith('event: ')) { evt = l.slice(7).trim(); continue }
           if (!l.startsWith('data: ')) continue
           try { const d = JSON.parse(l.slice(6))
-            if (evt === 'thinking') { store.setThinking((d.agent_name || '') + ' 正在思考...') }
+            if (evt === 'thinking') { store.setThinking(d.content || ((d.agent_name || '') + ' 正在思考...')) }
             else if (evt === 'delta') { store.setThinking(''); store.appendDelta(d.content || '') }
             else if (evt === 'tool_start') {
               const tl: Record<string, string> = { document_converter: '🔄 转换文档', web_search: '🌐 搜索中', search_knowledge: '📚 搜索知识库',
@@ -186,57 +187,59 @@ export default function Chat() {
         {/* Input area */}
         <div className="px-4 pb-4 pt-2">
           <div className="max-w-[900px] mx-auto">
-            {activeTool && (
-              <ToolPanel tool={activeTool}
-                onSubmit={(prompt, toolFiles, toolHint) => {
-                  if (toolFiles.length) setAttachments(prev => [...prev, ...toolFiles])
-                  if (toolHint) pendingToolHint.current = toolHint
-                  setActiveTool(null)
-                  setTimeout(() => send(prompt), 100)
-                }}
-                onClose={() => setActiveTool(null)} />
-            )}
-            {attachments.length > 0 && <div className="flex gap-2 mb-2 px-3">
+            {attachments.length > 0 && <div className="flex gap-2 mb-2 flex-wrap">
               {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                 <Paperclip size={10} style={{ color: 'var(--accent)' }} />
                 <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
                 <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
               </div>)}</div>}
+            {activeTool && (
+              <ToolPanel tool={activeTool}
+                onSubmit={(prompt, toolFiles, toolHint) => {
+                  if (toolFiles.length) setAttachments(prev => [...prev, ...toolFiles])
+                  if (toolHint) pendingToolHint.current = toolHint
+                  setActiveTool(null); setToolboxOpen(false)
+                  setTimeout(() => send(prompt), 100)
+                }}
+                onClose={() => setActiveTool(null)} />
+            )}
+            {!activeTool && (
+              <Toolbox onSelectTool={tool => setActiveTool(tool)} expanded={toolboxOpen} onToggle={() => setToolboxOpen(!toolboxOpen)} />
+            )}
             <div className="rounded-2xl overflow-hidden transition-shadow" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: input.trim() ? '0 2px 12px rgba(0,0,0,0.08)' : 'none' }}>
               <div className="relative">
                 <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
                   onSelect={(cmd: SlashCommand) => { setShowSlash(false); setSlashQ('')
                     if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
                     if (cmd.mode === 'direct') { setInput(''); send(cmd.prompt) }
-                    else { setInput(cmd.mode === 'template' ? (cmd.template || cmd.prompt) : cmd.prompt); setTimeout(() => { taRef.current?.focus(); adjustH() }, 50) }
+                    else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const len = cmd.prompt.length; taRef.current?.setSelectionRange(len, len) }, 50) }
                   }} onClose={() => setShowSlash(false)} />
               </div>
               <textarea ref={taRef} value={input}
-                onChange={e => { const v = e.target.value; setInput(v); adjustH(); if (v.startsWith('/')) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
+                onChange={e => { const v = e.target.value; setInput(v); adjustH()
+                  if (v === '/' || (v.startsWith('/') && v.length <= 20 && !v.includes(' '))) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
                 onKeyDown={e => { if (showSlash && slashRef.current?.handleKey(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
                 placeholder="输入消息，/ 呼出命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
                 className="w-full px-4 pt-3 pb-2 text-sm outline-none resize-none bg-transparent" style={{ color: 'var(--text)', maxHeight: 200 }} />
               <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
                 <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="上传附件"><Paperclip size={16} /></button>
-                <Toolbox onSelectTool={tool => setActiveTool(tool)} />
-                <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
                 <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px]"
-                  style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }} title="联网搜索">
+                  style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }}>
                   <Globe size={14} /><span className="hidden sm:inline">{webSearch ? '联网 ✓' : '联网'}</span></button>
                 <button onClick={() => { setInput('/'); setShowSlash(true); setSlashQ(''); taRef.current?.focus() }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="快捷命令">
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
                   <span className="font-mono font-bold text-xs">/</span><span className="hidden sm:inline">命令</span></button>
                 <div className="flex-1" />
                 <VoiceInputButton onTranscript={t => { setInput(p => p + t); setTimeout(adjustH, 50) }} />
                 {store.streaming
-                  ? <button onClick={stopGen} className="p-2 rounded-xl" style={{ background: 'var(--error)' }} title="停止"><Square size={16} className="text-white" /></button>
+                  ? <button onClick={stopGen} className="p-2 rounded-xl" style={{ background: 'var(--error)' }}><Square size={16} className="text-white" /></button>
                   : <button onClick={() => send()} disabled={!input.trim() && !attachments.length} className="p-2 rounded-xl"
-                      style={{ background: input.trim() || attachments.length ? 'var(--accent)' : 'var(--border)' }} title="发送"><Send size={16} className="text-white" /></button>}
+                      style={{ background: input.trim() || attachments.length ? 'var(--accent)' : 'var(--border)' }}><Send size={16} className="text-white" /></button>}
               </div>
             </div>
-            <div className="text-center mt-1.5"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AI 回复仅供参考，请核实重要信息</span></div>
+            <div className="text-center mt-1.5"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AI 回复仅供参考</span></div>
           </div>
         </div>
       </div>

@@ -130,8 +130,29 @@ async def handle_download(request: web.Request) -> web.Response:
         return web.Response(status=403, text="路径越界")
     if not file_path.is_file():
         return web.Response(status=404, text="文件不存在")
+
+    _MIME = {
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".ppt": "application/vnd.ms-powerpoint",
+        ".pdf": "application/pdf",
+        ".csv": "text/csv; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+        ".md": "text/markdown; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp",
+        ".zip": "application/zip",
+    }
+    from urllib.parse import quote
+    ct = _MIME.get(file_path.suffix.lower(), "application/octet-stream")
+    encoded = quote(file_path.name, safe='')
     return web.FileResponse(file_path, headers={
-        "Content-Disposition": f"attachment; filename*=UTF-8''{file_path.name}",
+        "Content-Type": ct,
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
     })
 
 
