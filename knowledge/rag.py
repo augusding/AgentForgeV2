@@ -190,18 +190,45 @@ class KnowledgeBase:
 
         return output
 
-    def delete_document(self, doc_id: str, org_id: str = "") -> None:
-        """删除文档的所有分块。"""
+    def delete_document(self, doc_id: str, org_id: str = "") -> int:
+        """删除文档的所有分块。返回删除数。"""
         if not self._collection:
-            return
+            return 0
         try:
             where: dict[str, Any] = {"doc_id": doc_id}
             if org_id:
                 where["org_id"] = org_id
-            self._collection.delete(where=where)
-            logger.info("文档已删除: %s", doc_id)
+            result = self._collection.get(where=where, include=[])
+            ids = result.get("ids", [])
+            if not ids and org_id:
+                result = self._collection.get(where={"doc_id": doc_id}, include=[])
+                ids = result.get("ids", [])
+            if ids:
+                self._collection.delete(ids=ids)
+                logger.info("文档已删除: %s (%d chunks)", doc_id, len(ids))
+            return len(ids)
         except Exception as e:
             logger.error("删除文档失败: %s", e)
+            return 0
+
+    def clear_all(self, org_id: str = "") -> int:
+        """清空知识库。返回删除的 chunk 数。"""
+        if not self._collection:
+            return 0
+        try:
+            if org_id:
+                result = self._collection.get(where={"org_id": org_id}, include=[])
+            else:
+                result = self._collection.get(include=[])
+            ids = result.get("ids", [])
+            if ids:
+                for i in range(0, len(ids), 500):
+                    self._collection.delete(ids=ids[i:i + 500])
+                logger.info("知识库已清空: %d chunks", len(ids))
+            return len(ids)
+        except Exception as e:
+            logger.error("清空知识库失败: %s", e)
+            return 0
 
     def get_stats(self) -> dict:
         """获取知识库统计信息。"""

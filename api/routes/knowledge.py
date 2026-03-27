@@ -158,10 +158,13 @@ async def handle_knowledge_files(request: web.Request) -> web.Response:
 
         files: list[dict] = []
         if kb and kb._collection:
-            result = kb._collection.get(
-                where={"org_id": o_id} if o_id != "_default" else None,
-                include=["metadatas"],
-            )
+            try:
+                result = kb._collection.get(
+                    where={"org_id": o_id} if o_id != "_default" else None,
+                    include=["metadatas"],
+                )
+            except Exception:
+                result = kb._collection.get(include=["metadatas"])
             seen: dict[str, dict] = {}
             for meta in (result.get("metadatas") or []):
                 doc_id = meta.get("doc_id", "")
@@ -196,9 +199,34 @@ async def handle_knowledge_files(request: web.Request) -> web.Response:
         return _json({"error": str(e), "files": []}, status=500)
 
 
+async def handle_knowledge_clear(request: web.Request) -> web.Response:
+    """POST /api/v1/knowledge/clear — 清空知识库"""
+    try:
+        engine = request.app["engine"]
+        kb = engine.knowledge_base
+        user = request.get("user") or {}
+        u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+        o_id = _org_id(request) or "_default"
+
+        chunks = kb.clear_all(org_id=o_id if o_id != "_default" else "") if kb else 0
+        files_deleted = 0
+        for base in ("data/knowledge", "data/uploads"):
+            d = engine.root_dir / base / o_id / u_id
+            if d.is_dir():
+                for f in d.iterdir():
+                    if f.is_file():
+                        f.unlink()
+                        files_deleted += 1
+        return _json({"status": "cleared", "chunks_deleted": chunks, "files_deleted": files_deleted})
+    except Exception as e:
+        traceback.print_exc()
+        return _json({"error": str(e)}, status=500)
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/knowledge/search", handle_knowledge_search)
     app.router.add_post("/api/v1/knowledge/add", handle_knowledge_add)
     app.router.add_delete("/api/v1/knowledge/{doc_id}", handle_knowledge_delete)
     app.router.add_get("/api/v1/knowledge/stats", handle_knowledge_stats)
     app.router.add_get("/api/v1/knowledge/files", handle_knowledge_files)
+    app.router.add_post("/api/v1/knowledge/clear", handle_knowledge_clear)

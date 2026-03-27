@@ -51,13 +51,21 @@ export default function Knowledge() {
     catch { toast.error('删除失败') }
   }
 
+  const clearAll = async () => {
+    if (!confirm('确定清空知识库？所有文档将被删除，此操作不可恢复。')) return
+    try { await client.post('/knowledge/clear'); toast.success('知识库已清空'); await loadFiles(); await loadStats() } catch { toast.error('清空失败') }
+  }
   const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(false); handleUpload(e.dataTransfer.files) }, [])
 
   const fmtSize = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`
 
   return (
     <div className="h-full flex flex-col p-6 max-w-[1000px] mx-auto">
-      <h1 className="text-lg font-bold mb-1">知识库</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-lg font-bold">知识库</h1>
+        {files.length > 0 && <button onClick={clearAll} className="text-xs px-3 py-1.5 rounded-lg hover:bg-[#ef444410]"
+          style={{ color: '#ef4444', border: '1px solid #ef444430' }}>清空知识库</button>}
+      </div>
       <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>上传文档让 AI 参考回答，支持 PDF、Word、TXT、Markdown</p>
 
       {stats && (
