@@ -27,7 +27,7 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if (['calculator', 'datetime'].includes(toolName)) return { type: 'data', data, toolName }
     if (toolName === 'chart_generator' && data.type === 'echarts' && data.option) return { type: 'chart', data, toolName }
     if (toolName === 'list_workflows' && data.workflows) return { type: 'workflow_list', data, toolName }
-    if (toolName === 'run_workflow' && data.action === 'confirm_run') return { type: 'workflow_confirm', data, toolName }
+    if (toolName === 'run_workflow' && (data.action === 'confirm_run' || data.workflow_id)) return { type: 'workflow_confirm', data, toolName }
     return null
   } catch { return null }
 }

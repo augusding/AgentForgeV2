@@ -41,11 +41,12 @@ def create_workflow_tools(wf_store, trigger_manager=None) -> list[ToolDefinition
                                    "suggestion": "可以用 list_workflows 查看所有可用工作流"}, ensure_ascii=False)
             if not matched.get("enabled", True):
                 return json.dumps({"error": f"工作流 '{matched['name']}' 已禁用"}, ensure_ascii=False)
-            return json.dumps({"action": "confirm_run", "workflow_id": matched["id"],
+            return json.dumps({"action": "confirm_run", "status": "pending_confirmation",
+                               "workflow_id": matched["id"],
                                "workflow_name": matched.get("name", ""),
                                "description": matched.get("description", ""),
                                "node_count": matched.get("node_count", 0),
-                               "message": f"找到工作流「{matched['name']}」，请确认是否执行。"}, ensure_ascii=False)
+                               "instruction": "【重要】工作流尚未执行！请告诉用户：已找到该工作流，需要点击下方卡片中的「确认执行」按钮才会真正执行。不要说已经触发或已经执行。"}, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": f"查找工作流失败: {e}"}, ensure_ascii=False)
 
@@ -60,7 +61,7 @@ def create_workflow_tools(wf_store, trigger_manager=None) -> list[ToolDefinition
         ),
         ToolDefinition(
             name="run_workflow",
-            description="触发执行指定的工作流。当用户要求'执行/运行/触发某个工作流'时使用。返回确认信息，用户确认后才执行。",
+            description="查找并推荐工作流给用户确认。注意：此工具不会执行工作流，只返回信息供用户确认。你必须告诉用户需要点击确认按钮才能执行。",
             input_schema={"type": "object", "properties": {
                 "name": {"type": "string", "description": "工作流名称（模糊匹配）"},
                 "workflow_id": {"type": "string", "description": "工作流 ID（精确匹配）"},
