@@ -628,6 +628,14 @@ class ForgeEngine:
             self._proactive = ProactiveEngine(self._work_item_store, self._wf_store, self._session_store, self._gateway)
             self._scheduler.add_job("proactive_check", "AI 主动推送检查", "*/5 * * * *", self._proactive.check_all_users)
             logger.info("主动推送引擎已启动（每 5 分钟检查）")
+
+        if self._knowledge_base:
+            async def _purge_deleted_docs():
+                result = self._knowledge_base.purge_deleted_documents(retain_days=30)
+                logger.info("定时清理软删除文档: %s", result)
+            self._scheduler.add_job("purge_deleted_docs", "软删除物理清理", "0 3 * * *", _purge_deleted_docs)
+            logger.info("软删除清理任务已注册（每日 03:00，保留 30 天）")
+
         logger.info("API 服务已启动: http://%s:%d", host, api_port)
         try:
             await asyncio.Event().wait()

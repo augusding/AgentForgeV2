@@ -270,6 +270,45 @@ class KnowledgeBase:
             logger.error("软删除失败: %s", e)
             return 0
 
+    def purge_deleted_documents(self, retain_days: int = 30) -> dict:
+        """物理清理到期的软删除文档。每日定时任务调用。"""
+        if not self._collection:
+            return {"purged_chunks": 0, "purged_docs": 0, "skipped": 0}
+        import time
+        cutoff = time.time() - retain_days * 86400
+        try:
+            result = self._collection.get(where={"deleted": True}, include=["metadatas"])
+        except Exception:
+            try:
+                result = self._collection.get(include=["metadatas"])
+            except Exception as e:
+                logger.error("purge 查询失败: %s", e)
+                return {"purged_chunks": 0, "purged_docs": 0, "skipped": 0}
+        ids_to_purge: list[str] = []
+        skipped = 0
+        purged_doc_ids: set[str] = set()
+        for chunk_id, meta in zip(result.get("ids", []), result.get("metadatas", [])):
+            if not meta.get("deleted"):
+                continue
+            deleted_at = meta.get("deleted_at", 0)
+            if deleted_at and float(deleted_at) <= cutoff:
+                ids_to_purge.append(chunk_id)
+                if meta.get("doc_id"):
+                    purged_doc_ids.add(meta["doc_id"])
+            else:
+                skipped += 1
+        if not ids_to_purge:
+            return {"purged_chunks": 0, "purged_docs": 0, "skipped": skipped}
+        total = 0
+        for i in range(0, len(ids_to_purge), 500):
+            try:
+                self._collection.delete(ids=ids_to_purge[i:i + 500])
+                total += len(ids_to_purge[i:i + 500])
+            except Exception as e:
+                logger.error("分批删除失败: %s", e)
+        logger.info("purge 完成: chunks=%d docs=%d skipped=%d", total, len(purged_doc_ids), skipped)
+        return {"purged_chunks": total, "purged_docs": len(purged_doc_ids), "skipped": skipped}
+
     def get_stats(self) -> dict:
         """获取知识库统计信息。"""
         if not self._collection:
