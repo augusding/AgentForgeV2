@@ -34,6 +34,8 @@ class ForgeEngine:
         self._tool_registry = None
         self._context_builder = None
         self._knowledge_base = None
+        self._connector_store = None
+        self._sync_manager = None
         self._token_tracker = None
         self._mission_tracer = None
         self._work_item_store = None
@@ -100,6 +102,15 @@ class ForgeEngine:
         if kb_cfg.get("enabled", True):
             await self._knowledge_base.init()
             logger.info("知识库初始化完成: %s", self._knowledge_base.get_stats())
+
+        # 企业连接器体系
+        from knowledge.connectors.store import ConnectorStore
+        from knowledge.sync_manager import SyncManager
+        self._connector_store = ConnectorStore(data_dir=str(self.root_dir / "data"))
+        await self._connector_store.init()
+        if self._knowledge_base:
+            self._sync_manager = SyncManager(self._connector_store, self._knowledge_base)
+            logger.info("ConnectorStore + SyncManager 初始化完成")
 
         # 动态工具注册
         if self._knowledge_base:
@@ -590,6 +601,10 @@ class ForgeEngine:
     def wf_store(self): return self._wf_store
     @property
     def wf_engine(self): return self._wf_engine
+    @property
+    def connector_store(self): return self._connector_store
+    @property
+    def sync_manager(self): return self._sync_manager
 
     # ── 生命周期 ──────────────────────────────────────────
 

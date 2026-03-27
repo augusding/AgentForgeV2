@@ -8,6 +8,7 @@ import Workstation from './pages/Workstation'
 import Knowledge from './pages/Knowledge'
 import Workflows from './pages/Workflows'
 import WorkflowEditor from './pages/workflows/WorkflowEditor'
+import Connectors from './pages/Connectors'
 import Settings from './pages/Settings'
 import NotificationBanner from './components/NotificationBanner'
 
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/" element={<Workstation />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/knowledge" element={<Knowledge />} />
+          <Route path="/connectors" element={<Connectors />} />
           <Route path="/workflows" element={<Workflows />} />
           <Route path="/workflows/:workflowId" element={<WorkflowEditor />} />
           <Route path="/settings" element={<Settings />} />

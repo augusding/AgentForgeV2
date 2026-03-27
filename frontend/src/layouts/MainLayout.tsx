@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { MessageSquare, LayoutDashboard, BookOpen, Zap, Settings, LogOut } from 'lucide-react'
+import { MessageSquare, LayoutDashboard, BookOpen, Zap, Database, Settings, LogOut } from 'lucide-react'
 import { useAuthStore } from '../stores/useAuthStore'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 
@@ -8,6 +8,7 @@ const NAV = [
   { path: '/chat', label: 'AI 对话', icon: MessageSquare },
   { path: '/knowledge', label: '知识库', icon: BookOpen },
   { path: '/workflows', label: '工作流', icon: Zap },
+  { path: '/connectors', label: '数据源', icon: Database },
   { path: '/settings', label: '设置', icon: Settings },
 ]
 

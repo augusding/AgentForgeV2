@@ -101,6 +101,9 @@ def create_app(engine: ForgeEngine) -> web.Application:
     reg_workstation(app)
     reg_org(app)
 
+    from api.routes.connectors import register as reg_connectors
+    reg_connectors(app)
+
     from api.routes.toolbox import register as reg_toolbox
     reg_toolbox(app)
 
