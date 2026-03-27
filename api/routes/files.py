@@ -220,39 +220,22 @@ def _preview_csv(fp):
 
 
 def _preview_pptx(fp):
+    """PPT → 幻灯片列表。直接读 ZIP 内 XML，绕过 python-pptx rId bug。"""
+    import zipfile, re
     try:
-        from pptx import Presentation
-        prs = Presentation(str(fp))
         slides = []
-        for i, slide in enumerate(prs.slides[:30], 1):
-            title, parts = "", []
-            title_shape_id = None
-            try:
-                if slide.shapes.title is not None:
-                    title_shape_id = slide.shapes.title.shape_id
-            except Exception:
-                pass
-            for shape in slide.shapes:
-                if not shape.has_text_frame:
-                    continue
-                is_title = False
-                try:
-                    if title_shape_id is not None and shape.shape_id == title_shape_id:
-                        is_title = True
-                    elif hasattr(shape, 'placeholder_format') and shape.placeholder_format and shape.placeholder_format.idx == 0:
-                        is_title = True
-                except Exception:
-                    pass
-                for p in shape.text_frame.paragraphs:
-                    t = p.text.strip()
-                    if not t:
-                        continue
-                    if is_title and not title:
-                        title = t
-                    else:
-                        parts.append(t)
-            slides.append({"number": i, "title": title or f"幻灯片 {i}", "content": parts})
-        return {"slides": slides, "total": len(prs.slides)}
+        with zipfile.ZipFile(str(fp)) as z:
+            slide_files = sorted(
+                [n for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+                key=lambda n: int(m.group(1)) if (m := re.search(r'slide(\d+)', n)) else 0,
+            )
+            for idx, sf in enumerate(slide_files[:30], 1):
+                xml = z.read(sf).decode("utf-8", errors="replace")
+                texts = [t.strip() for t in re.findall(r'<a:t>([^<]+)</a:t>', xml) if t.strip()]
+                title = texts[0] if texts else f"幻灯片 {idx}"
+                content = texts[1:] if len(texts) > 1 else []
+                slides.append({"number": idx, "title": title, "content": content})
+        return {"slides": slides, "total": len(slides)}
     except Exception as e:
         return {"error": str(e)}
 
