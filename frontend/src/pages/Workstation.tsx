@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Target, Calendar, Users, AlertCircle, Plus, RefreshCw, Sparkles,
          Loader2, CheckCircle2, Clock, ChevronRight } from 'lucide-react'
 import { useWorkstationStore } from '../stores/useWorkstationStore'
@@ -50,9 +50,12 @@ export default function Workstation() {
   const [scheduleRange, setScheduleRange] = useState<TimeRange>('today')
   const [followupRange, setFollowupRange] = useState<TimeRange>('week')
 
+  const location = useLocation()
   const assignPosition = async (pid: string) => { await rawAssign(pid); setActivePosition(pid) }
   useEffect(() => { loadHome() }, [])
   useEffect(() => { if (home?.assigned) loadBrief() }, [home?.assigned])
+  // 从其他页面（如 AI 对话）导航回来时，重新加载数据
+  useEffect(() => { if (location.pathname === '/' && home?.assigned) loadBrief() }, [location.pathname])
 
   const loadBrief = async () => {
     setLoadingBrief(true)
