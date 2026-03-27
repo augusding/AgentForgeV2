@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Send, Plus, MessageSquare, ChevronRight, Search, RefreshCw, Square,
-         Paperclip, X, Sparkles, BookOpen, Zap, Wrench, Globe, RotateCcw } from 'lucide-react'
+         Paperclip, X, Sparkles, BookOpen, Zap, Wrench, RotateCcw } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { uploadChatFile, getQuickCommands } from '../api/chat'
@@ -20,7 +20,7 @@ export default function Chat() {
   const store = useChatStore()
   const { user } = useAuthStore()
   const [input, setInput] = useState(''); const [positionId, setPositionId] = useState('')
-  const [uploading, setUploading] = useState(false); const [webSearch, setWebSearch] = useState(false)
+  const [uploading, setUploading] = useState(false); const [webSearch] = useState(true)
   const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string }>>([])
   const [quickCmds, setQuickCmds] = useState<string[]>([])
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
@@ -219,17 +219,11 @@ export default function Chat() {
                 onChange={e => { const v = e.target.value; setInput(v); adjustH()
                   if (v === '/' || (v.startsWith('/') && v.length <= 20 && !v.includes(' '))) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
                 onKeyDown={e => { if (showSlash && slashRef.current?.handleKey(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="输入消息，/ 呼出命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
+                placeholder="输入消息，/ 快捷命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
                 className="w-full px-4 pt-3 pb-2 text-sm outline-none resize-none bg-transparent" style={{ color: 'var(--text)', maxHeight: 200 }} />
               <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
                 <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="上传附件"><Paperclip size={16} /></button>
-                <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px]"
-                  style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }}>
-                  <Globe size={14} /><span className="hidden sm:inline">{webSearch ? '联网 ✓' : '联网'}</span></button>
-                <button onClick={() => { setInput('/'); setShowSlash(true); setSlashQ(''); taRef.current?.focus() }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
-                  <span className="font-mono font-bold text-xs">/</span><span className="hidden sm:inline">命令</span></button>
                 <div className="flex-1" />
                 <VoiceInputButton onTranscript={t => { setInput(p => p + t); setTimeout(adjustH, 50) }} />
                 {store.streaming

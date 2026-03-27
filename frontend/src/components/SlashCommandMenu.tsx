@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react'
-import { Target, Calendar, Users, Search, Globe } from 'lucide-react'
+import { Target, Calendar, Users, Search, Zap, BookOpen } from 'lucide-react'
 
 export interface SlashCommand {
   command: string; label: string; description: string; icon: any; group: string
@@ -8,12 +8,14 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { command: '/todo', label: '查看待办', description: '列出所有待办事项和优先级', icon: Target, group: '📋 工作管理', mode: 'direct', prompt: '列出我当前所有的待办事项，按优先级排列', toolHint: 'manage_priority' },
-  { command: '/task', label: '创建任务', description: '快速创建新的待办事项', icon: Target, group: '📋 工作管理', mode: 'input', prompt: '帮我创建一个任务：', toolHint: 'manage_priority' },
-  { command: '/schedule', label: '查看日程', description: '查看今天的日程安排', icon: Calendar, group: '📋 工作管理', mode: 'direct', prompt: '查看我今天的日程安排', toolHint: 'manage_schedule' },
-  { command: '/followup', label: '跟进提醒', description: '创建待跟进事项', icon: Users, group: '📋 工作管理', mode: 'input', prompt: '帮我创建一个跟进提醒：', toolHint: 'manage_followup' },
-  { command: '/search', label: '搜索知识库', description: '在知识库文档中搜索', icon: Search, group: '🔍 信息查询', mode: 'input', prompt: '在知识库中搜索：', toolHint: 'search_knowledge' },
-  { command: '/web', label: '联网搜索', description: '搜索互联网获取最新信息', icon: Globe, group: '🔍 信息查询', mode: 'input', prompt: '搜索最新信息：', toolHint: 'web_search' },
+  { command: '/todo', label: '查看待办', description: '列出当前所有待办事项', icon: Target, group: '📋 我的工位', mode: 'direct', prompt: '列出我当前所有的待办事项，按优先级排列', toolHint: 'manage_priority' },
+  { command: '/task', label: '创建任务', description: '快速创建待办', icon: Target, group: '📋 我的工位', mode: 'input', prompt: '帮我创建一个任务：', toolHint: 'manage_priority' },
+  { command: '/schedule', label: '查看日程', description: '查看今天的日程', icon: Calendar, group: '📋 我的工位', mode: 'direct', prompt: '查看我今天的日程安排', toolHint: 'manage_schedule' },
+  { command: '/followup', label: '跟进事项', description: '创建跟进提醒', icon: Users, group: '📋 我的工位', mode: 'input', prompt: '帮我创建一个跟进提醒：', toolHint: 'manage_followup' },
+  { command: '/workflow', label: '工作流列表', description: '查看可用的工作流', icon: Zap, group: '⚡ 工作流', mode: 'direct', prompt: '列出当前可用的工作流', toolHint: 'list_workflows' },
+  { command: '/run', label: '执行工作流', description: '执行指定的工作流', icon: Zap, group: '⚡ 工作流', mode: 'input', prompt: '帮我执行工作流：', toolHint: 'run_workflow' },
+  { command: '/kb', label: '知识库文档', description: '查看知识库中的文档', icon: BookOpen, group: '📚 知识库', mode: 'direct', prompt: '列出知识库中的所有文档', toolHint: 'list_knowledge_files' },
+  { command: '/search', label: '搜索知识库', description: '搜索知识库内容', icon: Search, group: '📚 知识库', mode: 'input', prompt: '在知识库中搜索：', toolHint: 'search_knowledge' },
 ]
 
 const MB: Record<string, { text: string; color: string; bg: string }> = {
