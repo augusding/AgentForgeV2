@@ -173,6 +173,14 @@ class AgentRuntime:
         full_content = ""
         model_used = ""
         tracker = _ErrorTracker()
+        any_tool_called = False
+
+        # tool_hint → tool_choice（首轮强制调用指定工具）
+        tool_hint = (mission.context or {}).get("tool_hint", "")
+        tool_choice = None
+        if tool_hint and tools:
+            if any(t["name"] == tool_hint for t in tools):
+                tool_choice = {"type": "function", "function": {"name": tool_hint}}
 
         lc = self._log_collector
         if lc:
@@ -189,6 +197,7 @@ class AgentRuntime:
                 system=context.system_prompt, messages=messages,
                 tools=tools, temperature=0.7,
                 max_tokens=mission.constraints.get("max_tokens", 4096),
+                tool_choice=tool_choice if loop == 0 else None,
             ):
                 ct = chunk.get("type", "")
                 if ct == "text":
@@ -216,6 +225,7 @@ class AgentRuntime:
                     "manage_schedule": "📅 正在处理日程...", "code_executor": "💻 正在执行代码...",
                     "calculator": "🔢 正在计算...", "chart_generator": "📈 正在生成图表..."}
             yield {"type": "thinking", "content": _TL.get(first, f"🔧 正在执行 {first}...")}
+            any_tool_called = True
 
             # 逐个执行：start → execute → result（用户实时看到进度）
             tool_results = []
@@ -232,6 +242,17 @@ class AgentRuntime:
                 messages.append({"role": "user", "content": f"[工具 {tr['name']} 结果]\n{tr['result']}"})
             if needs_rethink:
                 messages.append({"role": "user", "content": tracker.get_message()})
+
+        # ── 漏网检测：LLM 声称创建文件但没调工具 ──
+        _FILE_KW = ("已创建", "已生成", "已保存", "文件路径", ".docx", ".xlsx", ".pptx")
+        if not any_tool_called and full_content and any(kw in full_content for kw in _FILE_KW):
+            logger.warning("检测到 LLM 虚拟执行：声称创建文件但未调用工具")
+            if self._tools and self._tools.get_handler("word_processor"):
+                yield {"type": "text", "text": "\n\n⚠️ 正在创建真实文件...\n"}
+                yield {"type": "thinking", "content": "📄 正在创建文件..."}
+                yield {"type": "tool_start", "name": "word_processor", "arguments": {"action": "create", "content": full_content}}
+                tr = await self._execute_single_tool({"name": "word_processor", "arguments": {"action": "create", "content": full_content}})
+                yield {"type": "tool_result", "name": "word_processor", "result": tr["result"]}
 
         yield {"type": "done", "mission_id": mission.id, "tokens_used": 0, "model": model_used}
 

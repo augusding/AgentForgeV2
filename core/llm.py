@@ -92,6 +92,7 @@ class _AnthropicAdapter:
         self, model: str, system: str, messages: list[dict],
         tools: list[dict] | None = None,
         temperature: float = 0.7, max_tokens: int = 4096,
+        tool_choice: str | dict | None = None,
     ) -> AsyncIterator[dict]:
         kwargs: dict[str, Any] = {
             "model": model,
@@ -102,6 +103,8 @@ class _AnthropicAdapter:
         }
         if tools:
             kwargs["tools"] = tools
+            if tool_choice:
+                kwargs["tool_choice"] = tool_choice
 
         async with self.client.messages.stream(**kwargs) as stream:
             async for event in stream:
@@ -173,6 +176,7 @@ class _OpenAICompatAdapter:
         self, model: str, system: str, messages: list[dict],
         tools: list[dict] | None = None,
         temperature: float = 0.7, max_tokens: int = 4096,
+        tool_choice: str | dict | None = None,
     ) -> AsyncIterator[dict]:
         full_messages = [{"role": "system", "content": system}] + messages
         kwargs: dict[str, Any] = {
@@ -184,6 +188,8 @@ class _OpenAICompatAdapter:
         }
         if tools:
             kwargs["tools"] = self._convert_tools(tools)
+            if tool_choice:
+                kwargs["tool_choice"] = tool_choice
 
         stream = await self.client.chat.completions.create(**kwargs)
         tool_acc: dict[int, dict] = {}  # index → {id, name, arg_parts}
@@ -350,6 +356,7 @@ class LLMClient:
         self, system: str, messages: list[dict],
         tools: list[dict] | None = None,
         temperature: float = 0.7, max_tokens: int = 4096,
+        tool_choice: str | dict | None = None,
     ) -> AsyncIterator[dict]:
         """流式调用，自动选择第一个可用 Tier。"""
         for tier in self._tiers:
@@ -362,6 +369,7 @@ class LLMClient:
                 async for chunk in adapter.stream(
                     model=tier["model"], system=system, messages=messages,
                     tools=tools, temperature=temperature, max_tokens=max_tokens,
+                    tool_choice=tool_choice,
                 ):
                     yield chunk
                 return

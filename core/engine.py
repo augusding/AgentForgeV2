@@ -186,7 +186,8 @@ class ForgeEngine:
             session_id=session_id,
             context={"tool_names": position.tools,
                      "user_id": msg.user_id, "org_id": msg.org_id,
-                     "position_id": msg.position_id},
+                     "position_id": msg.position_id,
+                     "tool_hint": msg.metadata.get("tool_hint", "")},
             attachments=msg.attachments,
         )
 
@@ -271,7 +272,8 @@ class ForgeEngine:
             org_id=msg.org_id, session_id=session_id,
             context={"tool_names": position.tools,
                      "user_id": msg.user_id, "org_id": msg.org_id,
-                     "position_id": msg.position_id},
+                     "position_id": msg.position_id,
+                     "tool_hint": msg.metadata.get("tool_hint", "")},
             attachments=msg.attachments,
         )
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
