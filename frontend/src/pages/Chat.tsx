@@ -31,6 +31,7 @@ export default function Chat() {
   const [activeTool, setActiveTool] = useState<ToolDef | null>(null)
   const [toolboxOpen, setToolboxOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
+  const lastEventTime = useRef(0); const idleTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const slashRef = useRef<SlashMenuHandle>(null)
   const isFirstMsg = useRef(true); const pendingToolHint = useRef('')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -68,6 +69,14 @@ export default function Chat() {
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
     const ca = [...attachments, ...(extraFiles || [])]; setAttachments([])
     store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
+    lastEventTime.current = Date.now()
+    if (idleTimer.current) clearInterval(idleTimer.current)
+    idleTimer.current = setInterval(() => {
+      if (Date.now() - lastEventTime.current > 1500) {
+        const msgs = useChatStore.getState().messages; const last = msgs[msgs.length - 1]
+        if (last?.role === 'assistant' && !last.thinking) store.setThinking('正在思考...')
+      }
+    }, 500)
     const ctrl = new AbortController(); store.setAbortController(ctrl)
     const token = localStorage.getItem('agentforge_token') || ''; let evt = ''
     try {
@@ -81,7 +90,7 @@ export default function Chat() {
         buf += dec.decode(value, { stream: true }); const lines = buf.split('\n'); buf = lines.pop() || ''
         for (const l of lines) { if (l.startsWith('event: ')) { evt = l.slice(7).trim(); continue }
           if (!l.startsWith('data: ')) continue
-          try { const d = JSON.parse(l.slice(6))
+          try { const d = JSON.parse(l.slice(6)); lastEventTime.current = Date.now()
             if (evt === 'thinking') { store.setThinking(d.content || ((d.agent_name || '') + ' 正在思考...')) }
             else if (evt === 'delta') { store.setThinking(''); store.appendDelta(d.content || '') }
             else if (evt === 'tool_start') {
@@ -96,7 +105,7 @@ export default function Chat() {
             else if (evt === 'error') { store.setThinking(''); store.appendDelta(`\n\n⚠️ ${d.content || '未知错误'}`) }
           } catch {}; evt = '' } }
     } catch (e: any) { if (e.name !== 'AbortError') { store.appendDelta('\n\n⚠️ 请求出错，请重试。'); toast.error('对话请求失败') } }
-    finally { store.setThinking(''); store.setStreaming(false); store.setAbortController(null) }
+    finally { store.setThinking(''); store.setStreaming(false); store.setAbortController(null); if (idleTimer.current) { clearInterval(idleTimer.current); idleTimer.current = null } }
   }
 
   const stopGen = () => { store.abortController?.abort(); store.setStreaming(false); store.setAbortController(null) }
