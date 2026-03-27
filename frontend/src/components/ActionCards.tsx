@@ -1,7 +1,7 @@
 /**
  * 富交互卡片：将工具调用结果渲染为可操作的 UI 卡片。
  */
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { CheckCircle, Circle, Clock, Users, Download,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
@@ -25,6 +25,7 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if (toolName === 'manage_followup') return { type: 'followup', data, toolName }
     if (toolName === 'search_knowledge' && data.results) return { type: 'search', data, toolName }
     if (['calculator', 'datetime'].includes(toolName)) return { type: 'data', data, toolName }
+    if (toolName === 'chart_generator' && data.type === 'echarts' && data.option) return { type: 'chart', data, toolName }
     return null
   } catch { return null }
 }
@@ -38,6 +39,7 @@ export default function ActionCard({ card, onFileClick }: { card: CardData; onFi
     case 'search': return <SearchResultCard data={card.data} />
     case 'data': return <DataCard data={card.data} tool={card.toolName} />
     case 'file': return <FileCard2 data={card.data} onFileClick={onFileClick} />
+    case 'chart': return <ChartCard data={card.data} />
     default: return null
   }
 }
@@ -233,6 +235,48 @@ function FileCard2({ data, onFileClick }: { data: any; onFileClick?: (f: any) =>
           <Download size={16} />
         </button>
       </div>
+    </div>
+  )
+}
+
+/* ── 图表卡片（ECharts 渲染） ── */
+function ChartCard({ data }: { data: any }) {
+  const chartRef = useRef<HTMLDivElement>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!data?.option || !chartRef.current) return
+    const load = () => new Promise<void>((res, rej) => {
+      if ((window as any).echarts) { res(); return }
+      const s = document.createElement('script')
+      s.src = 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'
+      s.onload = () => res(); s.onerror = () => rej(new Error('ECharts 加载失败'))
+      document.head.appendChild(s)
+    })
+    let chart: any = null; let ro: ResizeObserver | null = null
+    load().then(() => {
+      const ec = (window as any).echarts
+      if (!ec || !chartRef.current) return
+      chart = ec.init(chartRef.current)
+      const dark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches
+      const opt = { ...data.option, backgroundColor: 'transparent', textStyle: { color: dark ? '#e0e0e0' : '#333' } }
+      if (opt.xAxis) opt.xAxis = { ...opt.xAxis, axisLine: { lineStyle: { color: dark ? '#555' : '#ccc' } } }
+      if (opt.yAxis) opt.yAxis = { ...opt.yAxis, axisLine: { lineStyle: { color: dark ? '#555' : '#ccc' } } }
+      chart.setOption(opt)
+      ro = new ResizeObserver(() => chart?.resize()); ro.observe(chartRef.current!)
+    }).catch(e => setError(e.message))
+    return () => { ro?.disconnect(); chart?.dispose() }
+  }, [data?.option])
+
+  return (
+    <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-base">📈</span>
+        <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{data?.option?.title?.text || '图表'}</span>
+      </div>
+      {error
+        ? <div className="px-4 py-6 text-center text-xs" style={{ color: '#ef4444' }}>{error}</div>
+        : <div ref={chartRef} style={{ width: '100%', height: 300 }} />}
     </div>
   )
 }
