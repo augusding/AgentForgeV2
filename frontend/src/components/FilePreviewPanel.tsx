@@ -84,6 +84,8 @@ function TableView({ data }: { data: any }) {
 
 function SlidesView({ data }: { data: any }) {
   const [i, setI] = useState(0); const slides = data?.slides || []
+  if (data?.error) return <div className="p-6 text-sm" style={{ color: '#ef4444' }}>预览失败: {data.error}</div>
+  if (!slides.length && data?.fallback_text) return <pre className="px-6 py-4 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)', fontFamily: 'inherit', margin: 0 }}>{data.fallback_text}</pre>
   if (!slides.length) return <div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>空演示文稿</div>
   const s = slides[i]
   return (<div className="flex flex-col h-full">

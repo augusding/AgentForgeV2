@@ -226,13 +226,31 @@ def _preview_pptx(fp):
         slides = []
         for i, slide in enumerate(prs.slides[:30], 1):
             title, parts = "", []
+            title_shape_id = None
+            try:
+                if slide.shapes.title is not None:
+                    title_shape_id = slide.shapes.title.shape_id
+            except Exception:
+                pass
             for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for p in shape.text_frame.paragraphs:
-                        t = p.text.strip()
-                        if t:
-                            if shape == slide.shapes.title: title = t
-                            else: parts.append(t)
+                if not shape.has_text_frame:
+                    continue
+                is_title = False
+                try:
+                    if title_shape_id is not None and shape.shape_id == title_shape_id:
+                        is_title = True
+                    elif hasattr(shape, 'placeholder_format') and shape.placeholder_format and shape.placeholder_format.idx == 0:
+                        is_title = True
+                except Exception:
+                    pass
+                for p in shape.text_frame.paragraphs:
+                    t = p.text.strip()
+                    if not t:
+                        continue
+                    if is_title and not title:
+                        title = t
+                    else:
+                        parts.append(t)
             slides.append({"number": i, "title": title or f"幻灯片 {i}", "content": parts})
         return {"slides": slides, "total": len(prs.slides)}
     except Exception as e:
