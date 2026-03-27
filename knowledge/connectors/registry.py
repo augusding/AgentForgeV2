@@ -58,6 +58,16 @@ def _auto_register() -> None:
         get_registry().register(WebAdapter)
     except ImportError:
         pass
+    try:
+        from knowledge.connectors.adapters.confluence import ConfluenceAdapter
+        get_registry().register(ConfluenceAdapter)
+    except ImportError:
+        pass
+    try:
+        from knowledge.connectors.adapters.sql import SQLAdapter
+        get_registry().register(SQLAdapter)
+    except ImportError:
+        pass
 
 
 _auto_register()
