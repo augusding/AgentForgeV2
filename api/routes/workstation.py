@@ -191,51 +191,72 @@ async def handle_daily_brief(request: web.Request) -> web.Response:
     except Exception:
         pass
 
-    today_schedules = [s for s in schedules if (s.get("scheduled_time") or "").startswith(today_str)]
     pending_followups = [f for f in followups if f.get("status") == "pending"]
     failed_workflows = [e for e in workflow_execs if e.get("status") == "failed"]
 
-    stats = {
-        "pending_tasks": len(priorities),
-        "today_schedules": len(today_schedules),
-        "overdue_followups": len(pending_followups),
-        "failed_workflows": len(failed_workflows),
-        "today_tokens": token_today,
-        "total_workflows": len(workflow_execs),
-        "recent_sessions": len(recent_sessions),
-    }
-
     greeting = "早上好" if now.hour < 12 else "下午好" if now.hour < 18 else "晚上好"
-    summary = f"今天有 {stats['pending_tasks']} 条待办、{stats['today_schedules']} 个日程"
-    if stats["failed_workflows"] > 0:
-        summary += f"、{stats['failed_workflows']} 个工作流需要处理"
 
-    # ── 生成行动建议（规则）──
+    # ── AI 建议引擎（按优先级排序）──
     actions = []
-    if failed_workflows:
-        for wf in failed_workflows[:2]:
-            actions.append({"title": f"修复工作流：{wf.get('workflow_name', '')}", "reason": str(wf.get("error", ""))[:50],
-                            "action": "查看并修复工作流", "type": "workflow", "urgency": "high",
-                            "metadata": {"workflowId": wf.get("workflow_id", "")}})
-    if priorities:
-        for p in priorities[:2]:
-            actions.append({"title": p["title"],
-                            "reason": f"{p.get('priority','P1')}" + (f" 截止 {p['due_date']}" if p.get("due_date") else ""),
-                            "action": "在 AI 对话中推进", "type": "chat", "urgency": "high" if p.get("priority") == "P0" else "medium",
-                            "metadata": {"prompt": f"帮我推进任务：{p['title']}"}})
-    if pending_followups:
-        for f in pending_followups[:1]:
-            actions.append({"title": f"跟进：{f['title']}", "reason": f"对象：{f.get('target', '')}",
-                            "action": "记录跟进进展", "type": "followup", "urgency": "medium"})
+
+    # 1. 逾期任务（最高优先级）
+    for p in priorities:
+        if p.get("due_date") and p["due_date"] < today_str:
+            days = (now - datetime.datetime.strptime(p["due_date"], "%Y-%m-%d")).days
+            actions.append({"title": p["title"], "reason": f"已逾期 {days} 天",
+                            "category": "overdue", "urgency": "high",
+                            "prompt": f"帮我推进逾期任务：{p['title']}"})
+
+    # 2. 逾期跟进
+    for f in pending_followups:
+        if f.get("due_date") and f["due_date"] < today_str:
+            days = (now - datetime.datetime.strptime(f["due_date"], "%Y-%m-%d")).days
+            actions.append({"title": f"跟进{f.get('target', '')}：{f['title']}", "reason": f"已逾期 {days} 天",
+                            "category": "overdue", "urgency": "high",
+                            "prompt": f"帮我跟进：{f['title']}"})
+
+    # 3. 今天截止的任务
+    for p in priorities:
+        if p.get("due_date") == today_str:
+            actions.append({"title": p["title"], "reason": "今天截止",
+                            "category": "due_today", "urgency": "medium",
+                            "prompt": f"帮我完成今天截止的任务：{p['title']}"})
+
+    # 4. P0 任务（即使没到期也要推进）
+    for p in priorities:
+        if p.get("priority") == "P0" and not any(a["title"] == p["title"] for a in actions):
+            actions.append({"title": p["title"], "reason": "P0 高优先级",
+                            "category": "high_priority", "urgency": "medium",
+                            "prompt": f"帮我推进 P0 任务：{p['title']}"})
+
+    # 5. 失败的工作流
+    for wf in failed_workflows[:2]:
+        actions.append({"title": f"修复工作流：{wf.get('workflow_name', '')}", "reason": str(wf.get("error", ""))[:50],
+                        "category": "workflow_error", "urgency": "high",
+                        "prompt": f"帮我排查工作流问题：{wf.get('workflow_name', '')}"})
+
+    # 6. 明天有重要日程时提醒准备
+    tomorrow_str = (now + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    tomorrow_schedules = [s for s in schedules if (s.get("scheduled_time") or "").startswith(tomorrow_str)]
+    if tomorrow_schedules:
+        actions.append({"title": f"明天有 {len(tomorrow_schedules)} 个日程，建议提前准备",
+                        "reason": "、".join(s["title"] for s in tomorrow_schedules[:3]),
+                        "category": "prepare", "urgency": "low",
+                        "prompt": f"帮我准备明天的日程：{tomorrow_schedules[0]['title']}"})
+
+    # 7. 空闲时的建议
     if not actions:
-        actions.append({"title": "开始你的第一个任务", "reason": "还没有待办事项",
-                        "action": "告诉 AI 你今天要做什么", "type": "chat", "urgency": "low",
-                        "metadata": {"prompt": "帮我规划今天的工作"}})
+        actions.append({"title": "规划今天的工作", "reason": "暂无紧急事项，可以做些规划",
+                        "category": "plan", "urgency": "low",
+                        "prompt": "帮我规划今天的工作"})
 
     return _json({
-        "greeting": greeting, "summary": summary, "actions": actions[:5], "stats": stats,
+        "greeting": greeting, "actions": actions[:6], "stats": {
+            "pending_tasks": len(priorities), "total_work_items": len(work_items),
+            "overdue_followups": len(pending_followups), "failed_workflows": len(failed_workflows),
+        },
         "priorities": priorities, "work_items": work_items,
-        "today_schedules": today_schedules[:10], "followups": followups,
+        "schedules": schedules, "followups": followups,
     })
 
 
