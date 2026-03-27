@@ -180,8 +180,10 @@ class KnowledgeBase:
             metadatas = results.get("metadatas", [[]])[0]
 
             for i, doc in enumerate(docs):
-                score = 1 - distances[i] if i < len(distances) else 0  # cosine distance → similarity
+                score = 1 - distances[i] if i < len(distances) else 0
                 meta = metadatas[i] if i < len(metadatas) else {}
+                if meta.get("deleted"):
+                    continue
                 output.append({
                     "content": doc,
                     "score": round(score, 4),
@@ -228,6 +230,44 @@ class KnowledgeBase:
             return len(ids)
         except Exception as e:
             logger.error("清空知识库失败: %s", e)
+            return 0
+
+    def list_doc_ids_by_source(self, source_type: str, org_id: str = "") -> set[str]:
+        """获取 ChromaDB 中指定 source_type 的所有 doc_id（对账用）。"""
+        if not self._collection:
+            return set()
+        try:
+            where: dict[str, Any] = {"source_type": source_type}
+            if org_id:
+                where["org_id"] = org_id
+            result = self._collection.get(where=where, include=["metadatas"])
+            return {m.get("doc_id", "") for m in (result.get("metadatas") or []) if m.get("doc_id")}
+        except Exception as e:
+            logger.error("list_doc_ids_by_source 失败: %s", e)
+            return set()
+
+    def soft_delete_document(self, doc_id: str, org_id: str = "") -> int:
+        """软删除：标记 deleted=true，不物理删除。返回标记的 chunk 数。"""
+        if not self._collection:
+            return 0
+        try:
+            where: dict[str, Any] = {"doc_id": doc_id}
+            if org_id:
+                where["org_id"] = org_id
+            result = self._collection.get(where=where, include=["metadatas"])
+            ids = result.get("ids", [])
+            if not ids:
+                return 0
+            import time as _t
+            metadatas = result.get("metadatas", [])
+            for m in metadatas:
+                m["deleted"] = True
+                m["deleted_at"] = _t.time()
+            self._collection.update(ids=ids, metadatas=metadatas)
+            logger.info("软删除: doc_id=%s chunks=%d", doc_id, len(ids))
+            return len(ids)
+        except Exception as e:
+            logger.error("软删除失败: %s", e)
             return 0
 
     def get_stats(self) -> dict:

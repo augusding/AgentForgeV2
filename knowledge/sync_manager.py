@@ -150,6 +150,7 @@ class SyncManager:
 
         cursor = None if force_full else cfg.get("last_cursor")
         last_cursor = cursor
+        _synced_ids: set[str] = set()
         logger.info("同步开始: %s type=%s cursor=%s", cid, cfg["connector_type"], cursor)
 
         try:
@@ -165,6 +166,7 @@ class SyncManager:
                 try:
                     await self._index_retry(fr.doc, org_id)
                     r.indexed += 1
+                    _synced_ids.add(fr.doc.doc_id)
                     if r.indexed % 10 == 0 and raw.extra_meta.get("cursor"):
                         last_cursor = raw.extra_meta["cursor"]
                         await self._store.update_sync_result(cid, "running", r.indexed, last_cursor)
@@ -177,6 +179,12 @@ class SyncManager:
             r.status = "error"
             r.errors.append(f"extract 异常: {e}")
 
+        # 全量同步对账：清理孤儿文档
+        if force_full and r.status != "error":
+            orphans = await self._reconcile(cid, org_id, cfg["connector_type"], _synced_ids)
+            if orphans:
+                logger.info("对账清理孤儿文档: connector=%s count=%d", cid, orphans)
+
         r.duration_seconds = round(time.time() - t0, 2)
         r.status = "success" if not r.errors else "partial"
         r.cursor = last_cursor
@@ -184,6 +192,24 @@ class SyncManager:
         logger.info("同步完成: %s total=%d indexed=%d skipped=%d filtered=%d failed=%d cost=%.1fs",
                     cid, r.total, r.indexed, r.skipped, r.filtered, r.failed, r.duration_seconds)
         return r
+
+    async def _reconcile(self, connector_id: str, org_id: str,
+                          source_type: str, synced_doc_ids: set[str]) -> int:
+        """对账：软删除 ChromaDB 中存在但本次未拉取到的孤儿文档。"""
+        if not self._kb:
+            return 0
+        try:
+            existing = self._kb.list_doc_ids_by_source(source_type, org_id)
+            orphans = existing - synced_doc_ids
+            if not orphans:
+                return 0
+            for doc_id in orphans:
+                self._kb.soft_delete_document(doc_id, org_id)
+            logger.info("对账: connector=%s 孤儿=%d", connector_id, len(orphans))
+            return len(orphans)
+        except Exception as e:
+            logger.error("对账失败: %s", e)
+            return 0
 
     async def _index_retry(self, doc, org_id: str) -> None:
         exc = None

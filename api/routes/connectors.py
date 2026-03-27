@@ -138,6 +138,73 @@ async def handle_types(req: web.Request) -> web.Response:
     return _j({"types": get_registry().list_types()})
 
 
+async def handle_sync_history(req: web.Request) -> web.Response:
+    """GET /api/v1/connectors/{id}/history — 操作历史"""
+    cid = req.match_info["id"]
+    store = getattr(req.app["engine"], "connector_store", None)
+    if not store: return _j({"history": []})
+    try:
+        import aiosqlite
+        limit = int(req.rel_url.query.get("limit", "20"))
+        async with aiosqlite.connect(store._db) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT action, detail, created_at FROM connector_audit_log "
+                "WHERE connector_id=? ORDER BY created_at DESC LIMIT ?", (cid, limit)
+            ) as cur:
+                rows = await cur.fetchall()
+        return _j({"history": [dict(r) for r in rows]})
+    except Exception as e:
+        return _j({"error": str(e)}, 500)
+
+
+async def handle_dlq_list(req: web.Request) -> web.Response:
+    """GET /api/v1/connectors/{id}/dlq — 死信队列"""
+    cid = req.match_info["id"]
+    store = getattr(req.app["engine"], "connector_store", None)
+    if not store: return _j({"failures": []})
+    try:
+        import aiosqlite
+        async with aiosqlite.connect(store._db) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT id, doc_id, source_url, error_msg, retry_count, max_retries, "
+                "next_retry_at, resolved, created_at, updated_at FROM sync_failures "
+                "WHERE connector_id=? ORDER BY resolved ASC, created_at DESC LIMIT 100", (cid,)
+            ) as cur:
+                rows = await cur.fetchall()
+        return _j({"failures": [dict(r) for r in rows]})
+    except Exception as e:
+        return _j({"error": str(e)}, 500)
+
+
+async def handle_dlq_retry(req: web.Request) -> web.Response:
+    """POST /api/v1/connectors/{id}/dlq/{failure_id}/retry"""
+    cid = req.match_info["id"]
+    fid = req.match_info["failure_id"]
+    store = getattr(req.app["engine"], "connector_store", None)
+    if not store: return _j({"error": "未启用"}, 503)
+    try:
+        import time as _t, aiosqlite
+        async with aiosqlite.connect(store._db) as db:
+            await db.execute("UPDATE sync_failures SET next_retry_at=?, updated_at=? WHERE id=? AND connector_id=?",
+                             (_t.time(), _t.time(), fid, cid))
+            await db.commit()
+        return _j({"status": "scheduled", "failure_id": fid})
+    except Exception as e:
+        return _j({"error": str(e)}, 500)
+
+
+async def handle_reconcile(req: web.Request) -> web.Response:
+    """POST /api/v1/connectors/{id}/reconcile — 全量同步+对账"""
+    cid = req.match_info["id"]
+    org, _ = _org_actor(req)
+    sm = getattr(req.app["engine"], "sync_manager", None)
+    if not sm: return _j({"error": "SyncManager 未初始化"}, 503)
+    asyncio.create_task(sm.sync(cid, org_id=org, force_full=True))
+    return _j({"status": "started", "note": "全量同步+对账已触发"})
+
+
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/connectors", handle_list)
     app.router.add_post("/api/v1/connectors", handle_create)
@@ -147,4 +214,8 @@ def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/connectors/{id}/test", handle_test)
     app.router.add_post("/api/v1/connectors/{id}/sync", handle_sync)
     app.router.add_get("/api/v1/connectors/{id}/status", handle_status)
+    app.router.add_get("/api/v1/connectors/{id}/history", handle_sync_history)
+    app.router.add_get("/api/v1/connectors/{id}/dlq", handle_dlq_list)
+    app.router.add_post("/api/v1/connectors/{id}/dlq/{failure_id}/retry", handle_dlq_retry)
+    app.router.add_post("/api/v1/connectors/{id}/reconcile", handle_reconcile)
     app.router.add_get("/api/v1/connector-types", handle_types)

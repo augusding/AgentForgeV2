@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Play, Trash2, TestTube, RefreshCw, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Plus, Play, Trash2, TestTube, RefreshCw, CheckCircle, XCircle, AlertCircle, BarChart2 } from 'lucide-react'
+import ConnectorMonitor from '../components/ConnectorMonitor'
 import toast from 'react-hot-toast'
 import { listConnectors, getConnectorTypes, createConnector, deleteConnector,
          testConnector, triggerSync, getSyncStatus,
@@ -18,6 +19,7 @@ export default function Connectors() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', connector_type: '', config: {} as Record<string, string>, interval: 60 })
   const [testing, setTesting] = useState<string | null>(null)
+  const [expandedMonitor, setExpandedMonitor] = useState<string | null>(null)
 
   const load = async () => {
     const [c, t] = await Promise.all([listConnectors(), getConnectorTypes()])
@@ -74,11 +76,11 @@ export default function Connectors() {
       <div className="space-y-3">
         {!list.length && <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>暂无连接器，点击右上角添加</div>}
         {list.map(c => {
-          const st = statuses[c.id]; const running = st?.running
+          const st = statuses[c.id]; const running = st?.running; const _k = c.id
           const lastSt = st?.last_sync_status || c.last_sync_status
           const circuit = st?.circuit?.state || 'closed'
-          return (
-            <div key={c.id} className="p-4 rounded-xl flex items-center gap-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          return (<div key={_k} className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div className="p-4 flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-medium">{c.name}</span>
@@ -96,12 +98,19 @@ export default function Connectors() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
+                <button onClick={() => setExpandedMonitor(expandedMonitor === c.id ? null : c.id)} title="监控"
+                  className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><BarChart2 size={15} style={{ color: expandedMonitor === c.id ? 'var(--accent)' : 'var(--text-muted)' }} /></button>
                 <button onClick={() => handleTest(c.id)} disabled={testing === c.id} title="测试" className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><TestTube size={15} style={{ color: 'var(--text-muted)' }} /></button>
                 <button onClick={() => handleSync(c.id)} disabled={running} title="同步" className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]"><Play size={15} style={{ color: running ? 'var(--border)' : 'var(--accent)' }} /></button>
                 <button onClick={() => handleDel(c)} title="删除" className="p-1.5 rounded-lg hover:bg-[#ef444410]"><Trash2 size={15} style={{ color: '#ef4444' }} /></button>
               </div>
             </div>
-          )
+            {expandedMonitor === c.id && (
+              <div className="px-4 pb-4" style={{ borderTop: '1px solid var(--border)' }}>
+                <ConnectorMonitor connectorId={c.id} connectorName={c.name} />
+              </div>
+            )}
+          </div>)
         })}
       </div>
 
