@@ -1,0 +1,44 @@
+id: report
+label: 周报/月报
+description: 生成工作报告
+icon: "📝"
+category: report
+sort: 1
+tool_hint: word_processor
+fields:
+  - key: type
+    label: 报告类型
+    type: select
+    options: [周报, 月报, 项目报告, 季度总结]
+    default: 周报
+  - key: period
+    label: 时间范围
+    type: text
+    placeholder: "如：3月第4周"
+  - key: work
+    label: 主要工作
+    type: textarea
+    placeholder: 每行一项
+    required: true
+  - key: results
+    label: 关键成果
+    type: textarea
+    placeholder: 量化数据优先
+  - key: issues
+    label: 问题与风险
+    type: textarea
+    placeholder: 遇到的问题
+  - key: plan
+    label: 下期计划
+    type: textarea
+    placeholder: 下阶段计划
+prompt_template: |
+  帮我写{type}：
+  时间范围：{period}
+  主要工作：
+  {work}
+  关键成果：{results}
+  问题与风险：{issues}
+  下期计划：{plan}
+
+  请生成 Word 文档。

@@ -1,0 +1,33 @@
+id: okr
+label: OKR 助手
+description: 制定/拆解 OKR
+icon: "🎯"
+category: report
+sort: 3
+fields:
+  - key: period
+    label: 周期
+    type: select
+    options: [Q1, Q2, Q3, Q4, 半年度, 年度]
+  - key: role
+    label: 角色/方向
+    type: text
+    placeholder: "如：策略产品经理"
+  - key: challenges
+    label: 当前挑战
+    type: textarea
+    placeholder: 每行一个
+  - key: goals
+    label: 期望目标
+    type: textarea
+    placeholder: 每行一个
+    required: true
+prompt_template: |
+  帮我制定 OKR：
+  周期：{period}
+  角色：{role}
+  当前挑战：{challenges}
+  期望目标：
+  {goals}
+
+  请生成 O（目标）和 KR（关键结果），KR 需包含可量化指标。

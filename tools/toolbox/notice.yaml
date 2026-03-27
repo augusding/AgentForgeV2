@@ -1,0 +1,32 @@
+id: notice
+label: 写通知
+description: 起草通知/公告
+icon: "📢"
+category: writing
+sort: 3
+fields:
+  - key: audience
+    label: 通知对象
+    type: text
+    placeholder: 全员 / XX部门
+  - key: subject
+    label: 主题
+    type: text
+    placeholder: 通知主题
+    required: true
+  - key: content
+    label: 内容要点
+    type: textarea
+    placeholder: 每行一个要点
+    required: true
+  - key: effective_date
+    label: 生效时间
+    type: text
+    placeholder: 即日起 / 2025-04-01
+prompt_template: |
+  帮我写一份通知：
+  通知对象：{audience}
+  主题：{subject}
+  内容要点：
+  {content}
+  生效时间：{effective_date}

@@ -1,0 +1,28 @@
+id: reply
+label: 写回复
+description: 针对消息/邮件起草回复
+icon: "💬"
+category: writing
+sort: 2
+fields:
+  - key: original
+    label: 原文
+    type: textarea
+    placeholder: 粘贴要回复的原文
+    required: true
+  - key: tone
+    label: 语气
+    type: select
+    options: [正式, 友好, 简洁, 委婉]
+    default: 友好
+  - key: points
+    label: 回复要点
+    type: textarea
+    placeholder: 你想表达的核心内容
+prompt_template: |
+  帮我写一个回复：
+  原文：
+  {original}
+
+  回复要点：{points}
+  语气：{tone}

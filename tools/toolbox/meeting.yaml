@@ -1,0 +1,45 @@
+id: meeting
+label: 会议纪要
+description: 整理会议记录并提取待办
+icon: "📋"
+category: report
+sort: 2
+tool_hint: word_processor
+fields:
+  - key: title
+    label: 会议主题
+    type: text
+    placeholder: 会议主题
+    required: true
+  - key: date
+    label: 日期
+    type: text
+    placeholder: "2025-03-27"
+  - key: attendees
+    label: 参会人
+    type: text
+    placeholder: 逗号分隔
+  - key: points
+    label: 讨论要点
+    type: textarea
+    placeholder: 每行一个
+    required: true
+  - key: decisions
+    label: 决议事项
+    type: textarea
+    placeholder: 每行一个
+  - key: todos
+    label: 待办跟进
+    type: textarea
+    placeholder: "任务 - 负责人 - 截止日期"
+prompt_template: |
+  帮我整理会议纪要：
+  会议主题：{title}
+  日期：{date}
+  参会人：{attendees}
+  讨论要点：
+  {points}
+  决议事项：{decisions}
+  待办跟进：{todos}
+
+  请生成 Word 文档，并将待办事项创建为任务。

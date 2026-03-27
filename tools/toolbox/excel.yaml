@@ -1,0 +1,24 @@
+id: excel
+label: 处理表格
+description: 创建/分析 Excel
+icon: "📗"
+category: document
+sort: 4
+tool_hint: excel_processor
+fields:
+  - key: action
+    label: 操作
+    type: select
+    options: [创建新表格, 分析数据, 修改表格, 数据汇总, 数据清洗]
+    required: true
+  - key: description
+    label: 说明
+    type: textarea
+    placeholder: 描述需求
+    required: true
+  - key: attachment
+    label: 上传文件
+    type: file
+prompt_template: |
+  帮我{action}：
+  {description}

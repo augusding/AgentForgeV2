@@ -1,0 +1,24 @@
+id: chart
+label: 数据图表
+description: 数据可视化
+icon: "📈"
+category: report
+sort: 4
+tool_hint: chart_generator
+fields:
+  - key: chart_type
+    label: 图表类型
+    type: select
+    options: [柱状图, 折线图, 饼图, 对比图, 趋势图]
+    default: 柱状图
+  - key: description
+    label: 数据说明
+    type: textarea
+    placeholder: 描述数据，或直接粘贴数据
+    required: true
+  - key: attachment
+    label: 上传数据文件
+    type: file
+prompt_template: |
+  帮我画一个{chart_type}：
+  {description}

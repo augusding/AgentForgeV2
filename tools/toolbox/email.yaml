@@ -1,0 +1,36 @@
+id: email
+label: 写邮件
+description: 起草工作邮件
+icon: "✉️"
+category: writing
+sort: 1
+fields:
+  - key: to
+    label: 收件人
+    type: text
+    placeholder: 姓名或邮箱
+  - key: subject
+    label: 主题
+    type: text
+    placeholder: 邮件主题
+    required: true
+  - key: tone
+    label: 语气
+    type: select
+    options: [正式, 友好, 简洁, 严肃]
+    default: 正式
+  - key: points
+    label: 核心要点
+    type: textarea
+    placeholder: 每行一个要点
+    required: true
+  - key: attachment
+    label: 参考文件
+    type: file
+prompt_template: |
+  帮我写一封工作邮件：
+  收件人：{to}
+  主题：{subject}
+  语气要求：{tone}
+  核心要点：
+  {points}

@@ -1,0 +1,18 @@
+id: convert
+label: 文件转换
+description: 格式互转
+icon: "🔄"
+category: document
+sort: 3
+tool_hint: document_converter
+fields:
+  - key: target_format
+    label: 目标格式
+    type: select
+    options: [Word, PDF, Excel, PPT, CSV, Markdown]
+    required: true
+  - key: attachment
+    label: 上传文件
+    type: file
+prompt_template: |
+  将上传的文件转换为{target_format}格式。

@@ -1,0 +1,13 @@
+categories:
+  - id: writing
+    label: 写作
+    icon: PenLine
+    sort: 1
+  - id: report
+    label: 报告
+    icon: BarChart3
+    sort: 2
+  - id: document
+    label: 文档
+    icon: FileText
+    sort: 3

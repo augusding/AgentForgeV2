@@ -1,0 +1,26 @@
+id: extract
+label: 信息提取
+description: 从文档中提取结构化信息
+icon: "🔍"
+category: document
+sort: 2
+fields:
+  - key: extract_type
+    label: 提取类型
+    type: select
+    options: [合同条款, 人员信息, 财务数据, 关键指标, 会议要点, 自定义]
+  - key: output_format
+    label: 输出格式
+    type: select
+    options: [表格, 列表, JSON]
+    default: 表格
+  - key: custom
+    label: 补充说明
+    type: textarea
+    placeholder: 补充说明需要提取什么
+  - key: attachment
+    label: 上传文件
+    type: file
+prompt_template: |
+  从上传的文档中提取{extract_type}信息，输出为{output_format}格式。
+  补充说明：{custom}

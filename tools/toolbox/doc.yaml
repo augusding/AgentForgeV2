@@ -1,0 +1,32 @@
+id: doc
+label: 生成文档
+description: 生成 Word 文档
+icon: "📄"
+category: document
+sort: 1
+tool_hint: word_processor
+fields:
+  - key: doc_type
+    label: 文档类型
+    type: select
+    options: [方案, 报告, 规范, 通知, 合同, 其他]
+  - key: title
+    label: 主题
+    type: text
+    placeholder: 文档主题
+    required: true
+  - key: outline
+    label: 要点/大纲
+    type: textarea
+    placeholder: 每行一个要点
+    required: true
+  - key: attachment
+    label: 参考文件
+    type: file
+prompt_template: |
+  帮我生成一份{doc_type}文档：
+  主题：{title}
+  要点：
+  {outline}
+
+  请生成 Word 文档。

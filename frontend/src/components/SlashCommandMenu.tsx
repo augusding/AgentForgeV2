@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from 'react'
-import { Target, Calendar, Users, Search, Globe, FileText, Table, Repeat } from 'lucide-react'
+import { Target, Calendar, Users, Search, Globe } from 'lucide-react'
 
 export interface SlashCommand {
   command: string; label: string; description: string; icon: any; group: string
@@ -14,14 +14,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/followup', label: '跟进提醒', description: '创建待跟进事项', icon: Users, group: '📋 工作管理', mode: 'input', prompt: '帮我创建一个跟进提醒：', toolHint: 'manage_followup' },
   { command: '/search', label: '搜索知识库', description: '在知识库文档中搜索', icon: Search, group: '🔍 信息查询', mode: 'input', prompt: '在知识库中搜索：', toolHint: 'search_knowledge' },
   { command: '/web', label: '联网搜索', description: '搜索互联网获取最新信息', icon: Globe, group: '🔍 信息查询', mode: 'input', prompt: '搜索最新信息：', toolHint: 'web_search' },
-  { command: '/doc', label: '生成文档', description: '创建 Word/PDF 等文档', icon: FileText, group: '📄 内容生成', mode: 'template', prompt: '', toolHint: 'word_processor',
-    template: '帮我生成一份文档：\n\n文档类型：（如：方案、报告、会议纪要、制度、通知）\n主题：\n要点：\n- \n- \n- ' },
-  { command: '/report', label: '工作报告', description: '生成周报/月报/项目报告', icon: FileText, group: '📄 内容生成', mode: 'template', prompt: '', toolHint: 'word_processor',
-    template: '帮我生成工作报告：\n\n报告类型：（周报/月报/项目报告）\n时间范围：\n主要工作：\n- \n- \n关键成果：\n- \n下阶段计划：\n- ' },
-  { command: '/excel', label: '处理表格', description: '创建、分析 Excel 数据', icon: Table, group: '📄 内容生成', mode: 'template', prompt: '', toolHint: 'excel_processor',
-    template: '帮我处理 Excel 表格：\n\n操作：（创建/分析/修改）\n说明：\n\n💡 提示：如需处理已有文件，请先用左下角📎按钮上传' },
-  { command: '/convert', label: '文件转换', description: 'PDF/Word/Excel/PPT 格式互转', icon: Repeat, group: '📄 内容生成', mode: 'template', prompt: '', toolHint: 'document_converter',
-    template: '帮我转换文件格式：\n\n目标格式：（Word/PDF/Excel/PPT/CSV）\n\n💡 提示：请先用左下角📎按钮上传要转换的文件' },
 ]
 
 const MB: Record<string, { text: string; color: string; bg: string }> = {

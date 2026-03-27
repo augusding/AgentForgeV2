@@ -75,3 +75,17 @@
 - [ ] 查询按 org_id + user_id 过滤？
 - [ ] API handler 从 JWT 提取了 org_id？
 - [ ] 文件存到了隔离目录？
+
+## 开发流程（Claude Code 必须遵守）
+
+### 每次完成任务后必须执行
+1. `python -m pytest tests/ -v`（确认测试通过）
+2. 如果改了前端：`cd frontend && npm run build && cd ..`（确认构建通过）
+3. `git add -A && git commit -m "合适的描述" && git push origin master`
+4. 告知用户改动摘要和文件列表
+
+### Commit Message 规范
+- `feat: xxx` — 新功能
+- `fix: xxx` — 修复 bug
+- `refactor: xxx` — 重构
+- `chore: xxx` — 杂项

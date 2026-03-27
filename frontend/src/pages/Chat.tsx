@@ -11,6 +11,8 @@ import FilePreviewPanel from '../components/FilePreviewPanel'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
 import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../components/SlashCommandMenu'
+import Toolbox, { type ToolDef } from '../components/Toolbox'
+import ToolPanel from '../components/ToolPanel'
 import VoiceInputButton from '../components/VoiceInputButton'
 import toast from 'react-hot-toast'
 
@@ -26,6 +28,7 @@ export default function Chat() {
   const [personality, setPersonality] = useState('')
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const [previewFile, setPreviewFile] = useState<{ path: string; filename: string; format?: string; size?: number } | null>(null)
+  const [activeTool, setActiveTool] = useState<ToolDef | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
   const slashRef = useRef<SlashMenuHandle>(null)
   const isFirstMsg = useRef(true); const pendingToolHint = useRef('')
@@ -183,6 +186,16 @@ export default function Chat() {
         {/* Input area */}
         <div className="px-4 pb-4 pt-2">
           <div className="max-w-[900px] mx-auto">
+            {activeTool && (
+              <ToolPanel tool={activeTool}
+                onSubmit={(prompt, toolFiles, toolHint) => {
+                  if (toolFiles.length) setAttachments(prev => [...prev, ...toolFiles])
+                  if (toolHint) pendingToolHint.current = toolHint
+                  setActiveTool(null)
+                  setTimeout(() => send(prompt), 100)
+                }}
+                onClose={() => setActiveTool(null)} />
+            )}
             {attachments.length > 0 && <div className="flex gap-2 mb-2 px-3">
               {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
@@ -207,6 +220,8 @@ export default function Chat() {
               <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
                 <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="上传附件"><Paperclip size={16} /></button>
+                <Toolbox onSelectTool={tool => setActiveTool(tool)} />
+                <div className="w-px h-4 mx-1" style={{ background: 'var(--border)' }} />
                 <button onClick={() => setWebSearch(!webSearch)} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px]"
                   style={{ color: webSearch ? 'var(--accent)' : 'var(--text-muted)', background: webSearch ? 'var(--accent)10' : 'transparent' }} title="联网搜索">
                   <Globe size={14} /><span className="hidden sm:inline">{webSearch ? '联网 ✓' : '联网'}</span></button>
