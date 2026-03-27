@@ -156,7 +156,7 @@ async def handle_daily_brief(request: web.Request) -> web.Response:
     today_str = now.strftime("%Y-%m-%d")
 
     # ── 收集数据 ──
-    priorities, schedules, followups = [], [], []
+    priorities, schedules, followups, work_items = [], [], [], []
     recent_sessions, workflow_execs = [], []
     token_today = 0
 
@@ -165,6 +165,7 @@ async def handle_daily_brief(request: web.Request) -> web.Response:
             priorities = await engine.work_item_store.get_priorities(user_id, org_id, position_id, status="active")
             schedules = await engine.work_item_store.get_schedules(user_id, org_id)
             followups = await engine.work_item_store.get_followups(user_id, org_id)
+            work_items = await engine.work_item_store.get_work_items(user_id, org_id, position_id)
     except Exception:
         pass
 
@@ -233,11 +234,8 @@ async def handle_daily_brief(request: web.Request) -> web.Response:
 
     return _json({
         "greeting": greeting, "summary": summary, "actions": actions[:5], "stats": stats,
-        "workflow_status": [{"name": e.get("workflow_name", ""), "status": e.get("status", ""),
-                             "error": str(e.get("error", ""))[:80], "workflow_id": e.get("workflow_id", ""),
-                             "executed_at": e.get("started_at", 0)} for e in workflow_execs[:6]],
-        "today_schedules": today_schedules[:5],
-        "recent_sessions": [{"id": s.get("id", ""), "title": s.get("title", "新对话")} for s in recent_sessions[:5]],
+        "priorities": priorities, "work_items": work_items,
+        "today_schedules": today_schedules[:10], "followups": followups,
     })
 
 

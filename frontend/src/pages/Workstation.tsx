@@ -1,32 +1,21 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, BookOpen, Zap, Target, Users,
-         CheckCircle, XCircle, Loader2, RefreshCw, ArrowRight, Sparkles,
-         BarChart3, FileText, Calendar } from 'lucide-react'
+import { Target, Calendar, Users, AlertCircle, Plus, RefreshCw, Sparkles, Loader2, CheckCircle2, Clock } from 'lucide-react'
 import { useWorkstationStore } from '../stores/useWorkstationStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import client from '../api/client'
 
-interface ActionItem {
-  title: string; reason: string; action: string
-  type: 'chat' | 'workflow' | 'followup' | 'task'
-  urgency: 'high' | 'medium' | 'low'
-  metadata?: Record<string, any>
-}
-
 interface BriefData {
-  greeting: string; summary: string; actions: ActionItem[]
+  greeting: string; summary: string
+  actions: Array<{ title: string; reason: string; urgency: string }>
   stats: Record<string, number>
-  workflow_status: Array<{ name: string; status: string; error: string; workflow_id: string }>
-  today_schedules: Array<{ title: string; scheduled_time: string }>
-  recent_sessions: Array<{ id: string; title: string }>
+  today_schedules: Array<{ id: string; title: string; scheduled_time: string; duration_minutes: number }>
+  priorities: Array<{ id: string; title: string; priority: string; status: string; due_date: string }>
+  work_items: Array<{ id: string; title: string; status: string; priority: string; due_date: string }>
+  followups: Array<{ id: string; title: string; target: string; status: string; due_date: string }>
 }
 
-const urgencyStyle = (u: string) => ({
-  high: { bg: '#ef444415', border: '#ef444440', color: '#ef4444', icon: '🔴' },
-  medium: { bg: '#f59e0b15', border: '#f59e0b40', color: '#f59e0b', icon: '🟡' },
-  low: { bg: '#22c55e15', border: '#22c55e40', color: '#22c55e', icon: '🟢' },
-}[u] || { bg: 'var(--bg-surface)', border: 'var(--border)', color: 'var(--text-muted)', icon: '⚪' })
+const P_ICON: Record<string, string> = { P0: '🔴', P1: '🟡', P2: '🔵', P3: '⚪' }
 
 export default function Workstation() {
   const { home, positions, loading: homeLoading, loadHome, assignPosition: rawAssign } = useWorkstationStore()
@@ -36,7 +25,6 @@ export default function Workstation() {
   const [loadingBrief, setLoadingBrief] = useState(false)
 
   const assignPosition = async (pid: string) => { await rawAssign(pid); setActivePosition(pid) }
-
   useEffect(() => { loadHome() }, [])
   useEffect(() => { if (home?.assigned) loadBrief() }, [home?.assigned])
 
@@ -46,22 +34,13 @@ export default function Workstation() {
     finally { setLoadingBrief(false) }
   }
 
-  const handleAction = (a: ActionItem) => {
-    if (a.type === 'chat') navigate(`/chat?prompt=${encodeURIComponent(a.metadata?.prompt || a.title)}`)
-    else if (a.type === 'workflow') navigate(a.metadata?.workflowId ? `/workflows/${a.metadata.workflowId}` : '/workflows')
-    else navigate(`/chat?prompt=${encodeURIComponent(`帮我处理：${a.title}`)}`)
-  }
-
-  // ── Loading ──
   if (homeLoading) return <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" size={24} style={{ color: 'var(--accent)' }} /></div>
 
-  // ── 未选岗位 ──
   if (!home?.assigned) {
     return (
       <div className="p-8 max-w-[900px] mx-auto text-center">
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--accent)15' }}>
-          <Sparkles size={32} style={{ color: 'var(--accent)' }} />
-        </div>
+          <Sparkles size={32} style={{ color: 'var(--accent)' }} /></div>
         <h1 className="text-xl font-bold mb-2">选择您的工位岗位</h1>
         <p className="text-sm mb-8" style={{ color: 'var(--text-muted)' }}>选择岗位后，AI 助手将根据职责提供定制化支持</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-left">
@@ -71,8 +50,7 @@ export default function Workstation() {
               style={{ background: 'var(--bg-surface)', border: '2px solid var(--border)' }}>
               <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3 text-lg"
                 style={{ background: `${pos.color || 'var(--accent)'}20`, color: pos.color || 'var(--accent)' }}>
-                {pos.icon === 'bot' ? '🤖' : '💼'}
-              </div>
+                {pos.icon === 'bot' ? '🤖' : '💼'}</div>
               <h3 className="font-medium text-sm mb-0.5">{pos.display_name}</h3>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{pos.department}</p>
             </button>
@@ -82,159 +60,167 @@ export default function Workstation() {
     )
   }
 
-  // ── AI 驾驶舱 ──
   const pos = home.position
-  return (
-    <div className="p-6 max-w-[1000px] mx-auto space-y-6">
-      {/* 顶部 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-            style={{ background: `${pos?.color || 'var(--accent)'}20`, color: pos?.color || 'var(--accent)' }}>✦</div>
-          <div>
-            <h1 className="text-lg font-bold">{pos?.display_name || '工位'}</h1>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-            </p>
-          </div>
-        </div>
-        <button onClick={loadBrief} disabled={loadingBrief} className="p-2 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
-          <RefreshCw size={16} className={loadingBrief ? 'animate-spin' : ''} />
-        </button>
-      </div>
+  const allTasks = [
+    ...(brief?.priorities || []).map(t => ({ ...t, source: 'priority' })),
+    ...(brief?.work_items || []).map(t => ({ ...t, source: 'work_item' })),
+  ]
+  const todoTasks = allTasks.filter(t => ['active', 'todo', 'pending'].includes(t.status))
+  const doingTasks = allTasks.filter(t => ['in_progress', 'doing'].includes(t.status))
+  const doneTasks = allTasks.filter(t => ['completed', 'done'].includes(t.status))
+  const schedules = brief?.today_schedules || []
+  const followups = (brief?.followups || []).filter(f => f.status !== 'done')
+  const overdue = todoTasks.filter(t => t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()))
 
-      {/* AI 行动建议 */}
-      <div className="rounded-xl p-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles size={16} style={{ color: 'var(--accent)' }} />
-          <h2 className="text-sm font-bold">{brief?.greeting || '你好'}，今日行动</h2>
-          {loadingBrief && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--accent)' }} />}
-        </div>
-        {brief?.summary && <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{brief.summary}</p>}
-        {brief?.actions?.length ? (
-          <div className="space-y-2">
-            {brief.actions.map((a, i) => {
-              const us = urgencyStyle(a.urgency)
-              return (
-                <button key={i} onClick={() => handleAction(a)}
-                  className="w-full flex items-start gap-3 p-3 rounded-lg text-left transition-all hover:shadow-md group"
-                  style={{ background: us.bg, border: `1px solid ${us.border}` }}>
-                  <span className="text-sm mt-0.5">{us.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium" style={{ color: 'var(--text)' }}>{a.title}</div>
-                    <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{a.reason}</div>
-                    <div className="text-[10px] mt-1 flex items-center gap-1" style={{ color: us.color }}>
-                      {a.type === 'chat' && <MessageSquare size={10} />}
-                      {a.type === 'workflow' && <Zap size={10} />}
-                      {a.type === 'followup' && <Users size={10} />}
-                      {a.type === 'task' && <Target size={10} />}
-                      {a.action}
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="shrink-0 mt-1 opacity-0 group-hover:opacity-100" style={{ color: us.color }} />
-                </button>
-              )
-            })}
+  return (
+    <div className="h-full overflow-auto">
+      <div className="p-6 max-w-[1000px] mx-auto space-y-5">
+        {/* 顶栏 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
+              style={{ background: `${pos?.color || 'var(--accent)'}15`, color: pos?.color || 'var(--accent)' }}>✦</div>
+            <div>
+              <h1 className="text-lg font-bold" style={{ color: 'var(--text)' }}>{pos?.display_name || '工位'}</h1>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+              </p>
+            </div>
           </div>
-        ) : !loadingBrief ? (
-          <div className="text-center py-6">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>暂无行动建议</p>
-            <button onClick={() => navigate('/chat?prompt=' + encodeURIComponent('帮我规划今天的工作'))}
-              className="mt-2 text-xs px-3 py-1.5 rounded-lg" style={{ color: 'var(--accent)', border: '1px solid var(--accent)' }}>
-              告诉 AI 你今天要做什么
-            </button>
+          <button onClick={loadBrief} disabled={loadingBrief} className="p-2 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
+            <RefreshCw size={16} className={loadingBrief ? 'animate-spin' : ''} /></button>
+        </div>
+
+        {/* ① 概览条 */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { icon: Target, label: '待办', value: todoTasks.length, color: '#3b82f6', bg: '#3b82f610' },
+            { icon: Calendar, label: '今日日程', value: schedules.length, color: '#22c55e', bg: '#22c55e10' },
+            { icon: Users, label: '跟进', value: followups.length, color: '#a855f7', bg: '#a855f710' },
+            { icon: AlertCircle, label: '逾期', value: overdue.length, color: overdue.length > 0 ? '#ef4444' : '#6b7280', bg: overdue.length > 0 ? '#ef444410' : 'var(--bg-surface)' },
+          ].map(({ icon: Icon, label, value, color, bg }) => (
+            <div key={label} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: bg, border: '1px solid var(--border)' }}>
+              <Icon size={18} style={{ color }} />
+              <div><div className="text-xl font-bold" style={{ color }}>{value}</div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</div></div>
+            </div>
+          ))}
+        </div>
+
+        {/* ② 任务看板 */}
+        <div className="rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-2">
+              <Target size={16} style={{ color: 'var(--accent)' }} />
+              <h2 className="text-sm font-bold" style={{ color: 'var(--text)' }}>任务</h2>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{allTasks.length}</span>
+            </div>
+            <button onClick={() => navigate('/chat?prompt=' + encodeURIComponent('帮我创建一个任务'))}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px]" style={{ color: 'var(--accent)', border: '1px solid var(--accent)30' }}>
+              <Plus size={12} /> 新建</button>
+          </div>
+          <div className="grid grid-cols-3 gap-0 min-h-[160px]">
+            <TaskCol title="待处理" count={todoTasks.length} color="#f59e0b" tasks={todoTasks} nav={navigate} />
+            <TaskCol title="进行中" count={doingTasks.length} color="#3b82f6" tasks={doingTasks} nav={navigate} border />
+            <TaskCol title="已完成" count={doneTasks.length} color="#22c55e" tasks={doneTasks.slice(0, 5)} nav={navigate} border done />
+          </div>
+        </div>
+
+        {/* ③④ 日程 + 跟进 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <Calendar size={14} style={{ color: '#22c55e' }} />
+              <h3 className="text-xs font-bold" style={{ color: 'var(--text)' }}>今日日程</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{schedules.length}</span>
+            </div>
+            <div className="px-4 py-3">
+              {schedules.length ? <div className="space-y-2">{schedules.map((s, i) => {
+                const time = s.scheduled_time?.split(' ')[1]?.slice(0, 5) || ''
+                return (<div key={i} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className="w-2 h-2 rounded-full mt-1.5" style={{ background: '#22c55e' }} />
+                    {i < schedules.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'var(--border)' }} />}
+                  </div>
+                  <div className="flex-1 pb-2">
+                    <div className="text-xs font-medium" style={{ color: 'var(--text)' }}>{s.title}</div>
+                    <div className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                      <Clock size={10} /> {time}{s.duration_minutes ? ` · ${s.duration_minutes}分钟` : ''}</div>
+                  </div>
+                </div>)
+              })}</div> : <div className="text-center py-6 text-[11px]" style={{ color: 'var(--text-muted)' }}>今天没有日程安排</div>}
+            </div>
+          </div>
+
+          <div className="rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <Users size={14} style={{ color: '#a855f7' }} />
+              <h3 className="text-xs font-bold" style={{ color: 'var(--text)' }}>跟进提醒</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{followups.length}</span>
+            </div>
+            <div className="px-4 py-3">
+              {followups.length ? <div className="space-y-2">{followups.map((f, i) => {
+                const isOD = f.due_date && new Date(f.due_date) < new Date(new Date().toDateString())
+                const dl = f.due_date ? Math.ceil((new Date(f.due_date).getTime() - Date.now()) / 86400000) : null
+                return (<div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-lg" style={{ background: isOD ? '#ef444408' : 'var(--bg)' }}>
+                  <span className="text-sm mt-0.5">{f.target ? '👤' : '📋'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>{f.target ? `${f.target} — ` : ''}{f.title}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: isOD ? '#ef4444' : 'var(--text-muted)' }}>
+                      {isOD ? `逾期 ${Math.abs(dl!)} 天` : dl !== null ? (dl === 0 ? '今天到期' : `${dl} 天后`) : ''}</div>
+                  </div>
+                </div>)
+              })}</div> : <div className="text-center py-6 text-[11px]" style={{ color: 'var(--text-muted)' }}>暂无跟进事项</div>}
+            </div>
+          </div>
+        </div>
+
+        {/* ⑤ AI 建议 */}
+        {brief?.actions?.length ? (
+          <div className="rounded-xl px-5 py-3 flex items-start gap-3" style={{ background: 'var(--accent)08', border: '1px dashed var(--accent)30' }}>
+            <Sparkles size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--accent)' }} />
+            <div>
+              <div className="text-xs font-medium mb-1" style={{ color: 'var(--text)' }}>AI 建议</div>
+              <div className="text-[11px] space-y-1" style={{ color: 'var(--text-muted)' }}>
+                {brief.actions.slice(0, 3).map((a, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span>{a.urgency === 'high' ? '🔴' : a.urgency === 'medium' ? '🟡' : '🟢'}</span>
+                    <span>{a.title}</span>
+                    <button onClick={() => navigate(`/chat?prompt=${encodeURIComponent(`帮我处理：${a.title}`)}`)}
+                      className="text-[10px] ml-1 underline" style={{ color: 'var(--accent)' }}>处理</button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
       </div>
+    </div>
+  )
+}
 
-      {/* 工作流状态 + 今日概览 */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5"><Zap size={14} style={{ color: 'var(--accent)' }} /><h3 className="text-xs font-bold">工作流状态</h3></div>
-            <button onClick={() => navigate('/workflows')} className="text-[10px]" style={{ color: 'var(--accent)' }}>查看全部</button>
-          </div>
-          {brief?.workflow_status?.length ? (
-            <div className="space-y-1.5">
-              {brief.workflow_status.slice(0, 4).map((wf, i) => (
-                <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-[var(--bg-hover)]"
-                  onClick={() => wf.workflow_id && navigate(`/workflows/${wf.workflow_id}`)}>
-                  {wf.status === 'completed' ? <CheckCircle size={12} style={{ color: '#22c55e' }} /> : <XCircle size={12} style={{ color: '#ef4444' }} />}
-                  <span className="text-xs flex-1 truncate">{wf.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : <div className="text-center py-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>暂无工作流</div>}
-        </div>
-
-        <div className="rounded-xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-1.5 mb-3"><BarChart3 size={14} style={{ color: 'var(--accent)' }} /><h3 className="text-xs font-bold">今日概览</h3></div>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { icon: Target, label: '待办', value: brief?.stats?.pending_tasks ?? '-', color: '#3b82f6' },
-              { icon: Calendar, label: '日程', value: brief?.stats?.today_schedules ?? '-', color: '#22c55e' },
-              { icon: Users, label: '跟进', value: brief?.stats?.overdue_followups ?? '-', color: (brief?.stats?.overdue_followups || 0) > 0 ? '#ef4444' : '#6b7280' },
-              { icon: Zap, label: '工作流', value: brief?.stats?.total_workflows ?? '-', color: '#a855f7' },
-            ].map(({ icon: Icon, label, value, color }) => (
-              <div key={label} className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg)' }}>
-                <Icon size={14} style={{ color }} />
-                <div><div className="text-sm font-bold">{value}</div><div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{label}</div></div>
-              </div>
-            ))}
-          </div>
-        </div>
+function TaskCol({ title, count, color, tasks, nav, border, done }: {
+  title: string; count: number; color: string; tasks: any[]; nav: any; border?: boolean; done?: boolean
+}) {
+  return (
+    <div className={`px-4 py-3 ${border ? 'border-l' : ''}`} style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-[11px] font-medium" style={{ color: 'var(--text)' }}>{title}</span>
+        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{count}</span>
       </div>
-
-      {/* 今日日程 */}
-      {brief?.today_schedules?.length ? (
-        <div className="rounded-xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-1.5 mb-3"><Calendar size={14} style={{ color: 'var(--accent)' }} /><h3 className="text-xs font-bold">今日日程</h3></div>
-          <div className="space-y-1.5">
-            {brief.today_schedules.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="font-mono text-[10px] shrink-0" style={{ color: 'var(--accent)' }}>{s.scheduled_time?.split(' ')[1]?.slice(0, 5) || ''}</span>
-                <span>{s.title}</span>
-              </div>
-            ))}
+      {tasks.length ? <div className="space-y-1.5">{tasks.map((t, i) => (
+        <div key={i} className="px-2.5 py-2 rounded-lg cursor-pointer hover:bg-[var(--bg-hover)]" style={{ background: 'var(--bg)' }}
+          onClick={() => nav(`/chat?prompt=${encodeURIComponent(`查看任务详情：${t.title}`)}`)}>
+          <div className="flex items-center gap-1.5">
+            {done ? <CheckCircle2 size={11} style={{ color: '#22c55e' }} /> : <span className="text-[10px]">{P_ICON[t.priority] || '⚪'}</span>}
+            <span className={`text-xs flex-1 truncate ${done ? 'line-through' : ''}`}
+              style={{ color: done ? 'var(--text-muted)' : 'var(--text)' }}>{t.title}</span>
           </div>
+          {!done && t.due_date && <div className="text-[9px] mt-1 ml-4" style={{
+            color: new Date(t.due_date) < new Date(new Date().toDateString()) ? '#ef4444' : 'var(--text-muted)' }}>截止 {t.due_date}</div>}
         </div>
-      ) : null}
-
-      {/* 快捷操作 */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { to: '/chat', icon: MessageSquare, label: '对话', desc: 'AI 助手', color: '#3b82f6' },
-          { to: '/knowledge', icon: BookOpen, label: '知识库', desc: '文档检索', color: '#22c55e' },
-          { to: '/workflows', icon: Zap, label: '工作流', desc: '自动化', color: '#a855f7' },
-          { to: '/chat?prompt=' + encodeURIComponent('帮我创建一个任务'), icon: FileText, label: '新任务', desc: '快速创建', color: '#f59e0b' },
-        ].map(({ to, icon: Icon, label, desc, color }) => (
-          <button key={label} onClick={() => navigate(to)}
-            className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all hover:shadow-md hover:border-[var(--accent)]"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${color}15`, color }}><Icon size={20} /></div>
-            <div className="text-xs font-medium">{label}</div>
-            <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{desc}</div>
-          </button>
-        ))}
-      </div>
-
-      {/* 最近对话 */}
-      {brief?.recent_sessions?.length ? (
-        <div className="rounded-xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5"><MessageSquare size={14} style={{ color: 'var(--accent)' }} /><h3 className="text-xs font-bold">最近对话</h3></div>
-            <button onClick={() => navigate('/chat')} className="text-[10px]" style={{ color: 'var(--accent)' }}>查看全部</button>
-          </div>
-          <div className="space-y-1">
-            {brief.recent_sessions.map((s, i) => (
-              <button key={i} onClick={() => navigate('/chat')}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
-                <MessageSquare size={12} /><span className="truncate">{s.title || '新对话'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      ))}</div> : <div className="text-center py-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>{done ? '暂无完成' : '暂无任务'}</div>}
     </div>
   )
 }
