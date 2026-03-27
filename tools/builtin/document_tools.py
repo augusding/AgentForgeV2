@@ -29,16 +29,30 @@ def _safe_path(raw: str) -> Path:
 
 # ── Excel 处理 ────────────────────────────────────────────
 
+def _auto_path(raw: str, title: str, ext: str) -> str:
+    """path 为空时自动生成到 data/outputs/。"""
+    if raw:
+        return raw
+    import uuid
+    safe = "".join(c for c in str(title or "文档") if c.isalnum() or c in "-_ ")[:30].strip() or "文档"
+    return f"data/outputs/{uuid.uuid4().hex[:8]}_{safe}.{ext}"
+
+
+def _rel_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(_ROOT)).replace("\\", "/")
+    except ValueError:
+        return str(path)
+
+
 async def _excel_handler(args: dict) -> str:
     try:
         import openpyxl
     except ImportError:
         return json.dumps({"error": "需要安装 openpyxl: pip install openpyxl"}, ensure_ascii=False)
 
-    action = args.get("action", "")
-    raw_path = args.get("path", "")
-    if not raw_path:
-        return json.dumps({"error": "缺少 path 参数"}, ensure_ascii=False)
+    action = args.get("action", "create")
+    raw_path = _auto_path(args.get("path", ""), args.get("title", "数据"), "xlsx")
 
     try:
         path = _safe_path(raw_path)
@@ -58,7 +72,7 @@ async def _excel_handler(args: dict) -> str:
                 ws.append(row if isinstance(row, list) else [row])
             path.parent.mkdir(parents=True, exist_ok=True)
             wb.save(str(path))
-            return json.dumps({"status": "created", "path": raw_path, "rows": len(rows)}, ensure_ascii=False)
+            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "rows": len(rows)}, ensure_ascii=False)
 
         elif action == "read":
             if not path.is_file():
@@ -113,7 +127,7 @@ excel_processor = ToolDefinition(
             "data": {"type": "string", "description": "JSON 二维数组，如 [[\"A\",\"B\"],[1,2]]"},
             "sheet_name": {"type": "string", "description": "工作表名称"},
         },
-        "required": ["action", "path"],
+        "required": ["action"],
     },
     handler=_excel_handler,
     category="document",
@@ -128,10 +142,8 @@ async def _word_handler(args: dict) -> str:
     except ImportError:
         return json.dumps({"error": "需要安装 python-docx: pip install python-docx"}, ensure_ascii=False)
 
-    action = args.get("action", "")
-    raw_path = args.get("path", "")
-    if not raw_path:
-        return json.dumps({"error": "缺少 path 参数"}, ensure_ascii=False)
+    action = args.get("action", "create")
+    raw_path = _auto_path(args.get("path", ""), args.get("content", "")[:20] or "文档", "docx")
 
     try:
         path = _safe_path(raw_path)
@@ -156,7 +168,7 @@ async def _word_handler(args: dict) -> str:
                     doc.add_paragraph(line)
             path.parent.mkdir(parents=True, exist_ok=True)
             doc.save(str(path))
-            return json.dumps({"status": "created", "path": raw_path}, ensure_ascii=False)
+            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "preview": content[:500]}, ensure_ascii=False)
 
         elif action == "read":
             if not path.is_file():
@@ -206,18 +218,18 @@ async def _word_handler(args: dict) -> str:
 
 word_processor = ToolDefinition(
     name="word_processor",
-    description="创建和读取 Word 文档。当用户需要生成报告、文档、方案、会议纪要时使用。支持 create/read/replace/add_table。内容支持 Markdown。",
+    description="创建和读取 Word 文档。当用户需要生成报告、文档、方案、邮件、会议纪要时使用。支持 create/read/replace/add_table。内容支持 Markdown。",
     input_schema={
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["create", "read", "replace", "add_table"], "description": "操作类型"},
-            "path": {"type": "string", "description": "文档路径(.docx)"},
+            "action": {"type": "string", "enum": ["create", "read", "replace", "add_table"], "description": "操作类型，默认 create"},
+            "path": {"type": "string", "description": "文档路径（可选，不填则自动生成到 data/outputs/）"},
             "content": {"type": "string", "description": "文档内容（create时，\\n分段，#开头为标题）"},
             "find": {"type": "string", "description": "查找文本（replace时）"},
             "replace_with": {"type": "string", "description": "替换文本（replace时）"},
             "table_data": {"type": "string", "description": "表格数据，JSON二维数组"},
         },
-        "required": ["action", "path"],
+        "required": ["content"],
     },
     handler=_word_handler,
     category="document",

@@ -122,10 +122,15 @@ class ContextBuilder:
             "2. 创建/修改/删除时，必须调用工具执行\n"
             "3. 公司/业务问题先搜索知识库\n"
             "4. 实时信息用 web_search\n"
-            "5. 文件转换（PDF转Word/Excel/PPT等）必须调用 document_converter 工具，绝对不要用文字描述转换结果\n"
-            "6. 生成文档（报告/方案等）必须调用 document_converter 工具，不要只输出文本\n"
-            "7. 任何涉及创建文件、转换文件的操作，都必须调用对应工具，不允许只用文字模拟\n"
-            "8. 工具执行完成后简要确认即可\n"
+            "5. 文件格式转换（如 PDF 转 Word）使用 document_converter\n"
+            "6. 生成文件时，根据目标格式选择对应工具：\n"
+            "   - Word/报告/方案/邮件/纪要 → word_processor(content=内容)\n"
+            "   - Excel/表格/数据 → excel_processor(action=create)\n"
+            "   - PPT/演示文稿 → document_converter(target_format=pptx)\n"
+            "   - 如果用户没指定格式，默认生成 Word\n"
+            "7. 任何用户要求'生成/创建/写入文件'的操作，都必须调用工具创建真实文件\n"
+            "8. 严禁用文字描述代替工具执行，不允许假装已创建文件\n"
+            "9. 工具执行后简要确认即可\n"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:
