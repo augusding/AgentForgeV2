@@ -46,6 +46,8 @@ async def handle_chat_session_messages(request):
         "id": m.get("id", ""), "role": m["role"], "content": m["content"],
         "agent_id": "", "agent_name": "", "created_at": m.get("created_at", 0),
         "tokens_used": m.get("tokens_used", 0), "model": m.get("model", ""),
+        "tool_calls": m.get("tool_calls", []),
+        "attachments": m.get("attachments", []),
     } for m in messages])
 
 

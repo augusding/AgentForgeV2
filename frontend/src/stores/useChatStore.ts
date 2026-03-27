@@ -54,6 +54,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ messages: (Array.isArray(data) ? data : []).map((m: any) => ({
         id: m.id, role: m.role, content: m.content, model: m.model,
         tokens_used: m.tokens_used, created_at: m.created_at,
+        tool_calls: m.tool_calls || [], attachments: m.attachments || [],
+        duration_ms: m.duration_ms || 0,
       })) })
     } catch {}
   },

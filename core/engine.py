@@ -302,12 +302,16 @@ class ForgeEngine:
                     user_id=msg.user_id, session_id=session_id)
         full_content = ""
         collected_tools: list[dict] = []
+        collected_tool_calls: list[dict] = []
         async for chunk in runtime.execute_stream(mission, context):
             ct = chunk.get("type", "")
             if ct == "text":
                 full_content += chunk.get("text", "")
-            elif ct == "tool_result":
+            elif ct == "tool_start":
                 collected_tools.append({"name": chunk.get("name", "")})
+                collected_tool_calls.append({"type": "tool_start", "name": chunk.get("name", ""), "input": chunk.get("arguments", {})})
+            elif ct == "tool_result":
+                collected_tool_calls.append({"type": "tool_result", "name": chunk.get("name", ""), "result": chunk.get("result", "")[:3000]})
             if ct == "done":
                 chunk["session_id"] = session_id
             yield chunk
@@ -317,8 +321,11 @@ class ForgeEngine:
                     data={"tools": [t["name"] for t in collected_tools]},
                     user_id=msg.user_id, session_id=session_id,
                     duration=time.time() - _t0)
-        if full_content:
-            await self._session_store.add_message(session_id, "assistant", full_content)
+        if full_content or collected_tool_calls:
+            await self._session_store.add_message(
+                session_id, "assistant", full_content,
+                tool_calls=collected_tool_calls if collected_tool_calls else None,
+            )
         asyncio.ensure_future(self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id))
         asyncio.ensure_future(self._post_process(msg.content, full_content, collected_tools, msg.user_id, msg.org_id, msg.position_id))
 
