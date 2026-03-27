@@ -28,8 +28,8 @@ _MAX_ROWS = 1000
 class SQLAdapter(BaseAdapter):
     connector_type = "sql"
 
-    def __init__(self, cid: str, config: dict):
-        super().__init__(cid, config)
+    def __init__(self, connector_id: str, config: dict):
+        super().__init__(connector_id, config)
         self._conn_str = config.get("connection_string", "")
         self._mode = config.get("mode", "row_to_doc")
         self._table = config.get("table", "")

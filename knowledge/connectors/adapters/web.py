@@ -28,8 +28,8 @@ _STATIC_TIMEOUT = aiohttp.ClientTimeout(total=15)
 class WebAdapter(BaseAdapter):
     connector_type = "web"
 
-    def __init__(self, cid: str, config: dict):
-        super().__init__(cid, config)
+    def __init__(self, connector_id: str, config: dict):
+        super().__init__(connector_id, config)
         self._urls: list[str] = config.get("urls", [])
         self._extra_headers: dict = config.get("extra_headers", {})
         self._fetch_mode: str = config.get("fetch_mode", "static")

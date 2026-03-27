@@ -25,8 +25,8 @@ _PAGE_LIMIT = 50
 class ConfluenceAdapter(BaseAdapter):
     connector_type = "confluence"
 
-    def __init__(self, cid: str, config: dict):
-        super().__init__(cid, config)
+    def __init__(self, connector_id: str, config: dict):
+        super().__init__(connector_id, config)
         self._base_url = config.get("base_url", "").rstrip("/")
         self._email = config.get("email", "")
         self._api_token = config.get("api_token", "")

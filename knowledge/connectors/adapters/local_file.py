@@ -16,8 +16,8 @@ SUPPORTED = {".txt", ".md", ".pdf", ".docx", ".csv", ".json"}
 class LocalFileAdapter(BaseAdapter):
     connector_type = "local_file"
 
-    def __init__(self, cid: str, config: dict):
-        super().__init__(cid, config)
+    def __init__(self, connector_id: str, config: dict):
+        super().__init__(connector_id, config)
         self._dir = config.get("directory", "")
         self._recursive = config.get("recursive", True)
         self._exts = set(config.get("extensions", list(SUPPORTED)))
