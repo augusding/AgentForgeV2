@@ -318,6 +318,26 @@ class ForgeEngine:
                 chunk["session_id"] = session_id
             yield chunk
 
+        # ── 后处理：自动文件生成（LLM 没调文件工具时系统兜底）──
+        _file_tools = {"word_processor", "excel_processor", "ppt_processor", "document_converter"}
+        already_created = any(t["name"] in _file_tools for t in collected_tools)
+        if not already_created and full_content:
+            from core.pipeline.post_file_handler import detect_file_intent, auto_create_file
+            file_fmt = detect_file_intent(msg.content)
+            if file_fmt:
+                logger.info("后处理：检测到文件意图 [%s]，自动创建", file_fmt)
+                try:
+                    tr = await auto_create_file(full_content, file_fmt, msg.content, self._tool_registry)
+                    if tr:
+                        yield {"type": "thinking", "content": "📄 正在生成文件..."}
+                        yield {"type": "tool_start", "name": tr["name"], "arguments": {}}
+                        yield {"type": "tool_result", "name": tr["name"], "result": tr["result"]}
+                        collected_tools.append({"name": tr["name"]})
+                        collected_tool_calls.append({"type": "tool_start", "name": tr["name"], "input": {}})
+                        collected_tool_calls.append({"type": "tool_result", "name": tr["name"], "result": str(tr["result"])[:3000]})
+                except Exception as e:
+                    logger.warning("自动文件创建失败: %s", e)
+
         if lc:
             lc.info("pipeline", "stream_done", f"流式完成, 长度={len(full_content)}",
                     data={"tools": [t["name"] for t in collected_tools]},
