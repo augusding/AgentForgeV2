@@ -26,6 +26,7 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if (toolName === 'search_knowledge' && data.results) return { type: 'search', data, toolName }
     if (['calculator', 'datetime'].includes(toolName)) return { type: 'data', data, toolName }
     if (toolName === 'chart_generator' && data.type === 'echarts' && data.option) return { type: 'chart', data, toolName }
+    if (toolName === 'list_knowledge_files' && data.files) return { type: 'knowledge_files', data, toolName }
     if (toolName === 'list_workflows' && data.workflows) return { type: 'workflow_list', data, toolName }
     if (toolName === 'run_workflow' && (data.action === 'confirm_run' || data.workflow_id)) return { type: 'workflow_confirm', data, toolName }
     return null
@@ -42,6 +43,7 @@ export default function ActionCard({ card, onFileClick }: { card: CardData; onFi
     case 'data': return <DataCard data={card.data} tool={card.toolName} />
     case 'file': return <FileCard2 data={card.data} onFileClick={onFileClick} />
     case 'chart': return <ChartCard data={card.data} />
+    case 'knowledge_files': return <KnowledgeFilesCard data={card.data} />
     case 'workflow_list': return <WorkflowListCard data={card.data} />
     case 'workflow_confirm': return <WorkflowConfirmCard data={card.data} />
     default: return null
@@ -286,6 +288,25 @@ function ChartCard({ data }: { data: any }) {
 }
 
 /* ── 工作流列表卡片 ── */
+/* ── 知识库文件列表卡片 ── */
+function KnowledgeFilesCard({ data }: { data: any }) {
+  const files = data.files || []
+  return (
+    <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+        <span>📚</span><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>知识库文档 ({files.length})</span>
+      </div>
+      {files.length ? (
+        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+          {files.map((f: any) => (
+            <div key={f.doc_id} className="px-4 py-2 text-sm" style={{ color: 'var(--text)' }}>📄 {f.filename}</div>
+          ))}
+        </div>
+      ) : <div className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>暂无文档</div>}
+    </div>
+  )
+}
+
 function WorkflowListCard({ data }: { data: any }) {
   const wfs = data.workflows || []
   if (!wfs.length) return <div className="py-2 text-xs" style={{ color: 'var(--text-muted)' }}>暂无工作流</div>

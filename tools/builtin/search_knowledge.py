@@ -38,3 +38,32 @@ def create_search_knowledge_tool(knowledge_base):
         handler=_handler,
         category="search",
     )
+
+
+def create_knowledge_list_tool(knowledge_base):
+    """创建知识库文件列表工具。"""
+
+    async def _handler(args: dict) -> str:
+        if not knowledge_base or not knowledge_base._collection:
+            return json.dumps({"files": [], "message": "知识库未初始化"}, ensure_ascii=False)
+        try:
+            result = knowledge_base._collection.get(include=["metadatas"])
+            seen: dict[str, dict] = {}
+            for meta in (result.get("metadatas") or []):
+                doc_id = meta.get("doc_id", "")
+                if doc_id and doc_id not in seen:
+                    seen[doc_id] = {"doc_id": doc_id, "filename": meta.get("filename", doc_id)}
+            files = list(seen.values())
+            if not files:
+                return json.dumps({"files": [], "total": 0, "message": "知识库中暂无文档"}, ensure_ascii=False)
+            return json.dumps({"files": files, "total": len(files)}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": f"获取文件列表失败: {e}"}, ensure_ascii=False)
+
+    return ToolDefinition(
+        name="list_knowledge_files",
+        description="列出知识库中已上传的文档。当用户询问'知识库有什么文档''有哪些文件''知识库内容列表'时使用。",
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_handler,
+        category="knowledge",
+    )

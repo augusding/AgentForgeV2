@@ -103,8 +103,9 @@ class ForgeEngine:
 
         # 动态工具注册
         if self._knowledge_base:
-            from tools.builtin.search_knowledge import create_search_knowledge_tool
+            from tools.builtin.search_knowledge import create_search_knowledge_tool, create_knowledge_list_tool
             self._tool_registry.register(create_search_knowledge_tool(self._knowledge_base))
+            self._tool_registry.register(create_knowledge_list_tool(self._knowledge_base))
         if self._work_item_store:
             from tools.builtin.workstation_tools import create_workstation_tools
             for t in create_workstation_tools(self._work_item_store):

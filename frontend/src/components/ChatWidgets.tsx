@@ -38,6 +38,7 @@ const TD: Record<string, { label: string; icon: string; verb: string }> = {
   email_sender: { label: '邮件', icon: '✉️', verb: '发送邮件' }, http_request: { label: 'HTTP', icon: '🔗', verb: '请求数据' },
   text_processor: { label: '文本', icon: '📝', verb: '处理文本' }, ppt_processor: { label: 'PPT', icon: '📙', verb: '处理 PPT' },
   list_workflows: { label: '工作流', icon: '⚡', verb: '查询工作流' }, run_workflow: { label: '工作流', icon: '⚡', verb: '触发工作流' },
+  list_knowledge_files: { label: '知识库', icon: '📚', verb: '查看文档列表' },
 }
 
 function _desc(name: string, input: any): string {
@@ -47,6 +48,7 @@ function _desc(name: string, input: any): string {
   if (name.startsWith('manage_')) return ({ list: '查看', add: `创建: ${a.title || ''}`, delete: '删除', update: '更新' })[a.action as string] || ''
   if (name === 'calculator') return a.expression || ''
   if (name === 'http_request') return a.url ? `${a.method || 'GET'} ${a.url.slice(0, 30)}` : ''
+  if (name === 'list_knowledge_files') return ''
   if (name === 'list_workflows') return ''
   if (name === 'run_workflow') return a.name ? `"${a.name}"` : ''
   return ''
