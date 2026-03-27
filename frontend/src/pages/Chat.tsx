@@ -206,15 +206,14 @@ export default function Chat() {
             {!activeTool && (
               <Toolbox onSelectTool={tool => setActiveTool(tool)} expanded={toolboxOpen} onToggle={() => setToolboxOpen(!toolboxOpen)} />
             )}
+            <div className="relative">
+              <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
+                onSelect={(cmd: SlashCommand) => { setShowSlash(false); setSlashQ('')
+                  if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
+                  if (cmd.mode === 'direct') { setInput(''); send(cmd.prompt) }
+                  else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const len = cmd.prompt.length; taRef.current?.setSelectionRange(len, len) }, 50) }
+                }} onClose={() => setShowSlash(false)} />
             <div className="rounded-2xl overflow-hidden transition-shadow" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: input.trim() ? '0 2px 12px rgba(0,0,0,0.08)' : 'none' }}>
-              <div className="relative">
-                <SlashCommandMenu ref={slashRef} query={slashQ} visible={showSlash}
-                  onSelect={(cmd: SlashCommand) => { setShowSlash(false); setSlashQ('')
-                    if (cmd.toolHint) pendingToolHint.current = cmd.toolHint
-                    if (cmd.mode === 'direct') { setInput(''); send(cmd.prompt) }
-                    else { setInput(cmd.prompt); setTimeout(() => { taRef.current?.focus(); const len = cmd.prompt.length; taRef.current?.setSelectionRange(len, len) }, 50) }
-                  }} onClose={() => setShowSlash(false)} />
-              </div>
               <textarea ref={taRef} value={input}
                 onChange={e => { const v = e.target.value; setInput(v); adjustH()
                   if (v === '/' || (v.startsWith('/') && v.length <= 20 && !v.includes(' '))) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
@@ -231,6 +230,7 @@ export default function Chat() {
                   : <button onClick={() => send()} disabled={!input.trim() && !attachments.length} className="p-2 rounded-xl"
                       style={{ background: input.trim() || attachments.length ? 'var(--accent)' : 'var(--border)' }}><Send size={16} className="text-white" /></button>}
               </div>
+            </div>
             </div>
             <div className="text-center mt-1.5"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>AI 回复仅供参考</span></div>
           </div>
