@@ -26,6 +26,8 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if (toolName === 'search_knowledge' && data.results) return { type: 'search', data, toolName }
     if (['calculator', 'datetime'].includes(toolName)) return { type: 'data', data, toolName }
     if (toolName === 'chart_generator' && data.type === 'echarts' && data.option) return { type: 'chart', data, toolName }
+    if (toolName === 'list_workflows' && data.workflows) return { type: 'workflow_list', data, toolName }
+    if (toolName === 'run_workflow' && data.action === 'confirm_run') return { type: 'workflow_confirm', data, toolName }
     return null
   } catch { return null }
 }
@@ -40,6 +42,8 @@ export default function ActionCard({ card, onFileClick }: { card: CardData; onFi
     case 'data': return <DataCard data={card.data} tool={card.toolName} />
     case 'file': return <FileCard2 data={card.data} onFileClick={onFileClick} />
     case 'chart': return <ChartCard data={card.data} />
+    case 'workflow_list': return <WorkflowListCard data={card.data} />
+    case 'workflow_confirm': return <WorkflowConfirmCard data={card.data} />
     default: return null
   }
 }
@@ -277,6 +281,66 @@ function ChartCard({ data }: { data: any }) {
       {error
         ? <div className="px-4 py-6 text-center text-xs" style={{ color: '#ef4444' }}>{error}</div>
         : <div ref={chartRef} style={{ width: '100%', height: 300 }} />}
+    </div>
+  )
+}
+
+/* ── 工作流列表卡片 ── */
+function WorkflowListCard({ data }: { data: any }) {
+  const wfs = data.workflows || []
+  if (!wfs.length) return <div className="py-2 text-xs" style={{ color: 'var(--text-muted)' }}>暂无工作流</div>
+  return (
+    <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--border)', background: 'var(--bg-surface)' }}>
+        <span>⚡</span><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>可用工作流 ({wfs.length})</span>
+      </div>
+      <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+        {wfs.map((wf: any) => (
+          <div key={wf.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[var(--bg-hover)]">
+            <div><div className="text-sm font-medium" style={{ color: 'var(--text)' }}>{wf.name}</div>
+              {wf.description && <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{wf.description}</div>}</div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: wf.enabled ? '#22c55e15' : '#ef444415', color: wf.enabled ? '#22c55e' : '#ef4444' }}>{wf.enabled ? '已启用' : '已禁用'}</span>
+              {wf.node_count > 0 && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{wf.node_count} 节点</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── 工作流确认执行卡片 ── */
+function WorkflowConfirmCard({ data }: { data: any }) {
+  const [executing, setExecuting] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const run = async () => {
+    setExecuting(true)
+    try {
+      const resp = await fetch(`/api/v1/workflows/${data.workflow_id}/execute`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('agentforge_token') || ''}` }, body: '{}',
+      })
+      const r = await resp.json()
+      setResult(r.status === 'completed' ? '✅ 执行完成' : r.error ? `❌ ${r.error}` : '⏳ 已提交')
+    } catch (e: any) { setResult(`❌ ${e.message}`) }
+    setExecuting(false)
+  }
+  return (
+    <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+        <span>⚡</span><span className="text-xs font-medium" style={{ color: 'var(--text)' }}>工作流确认</span></div>
+      <div className="px-4 py-3">
+        <div className="text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>{data.workflow_name}</div>
+        {data.description && <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{data.description}</div>}
+        {data.node_count > 0 && <div className="text-[11px] mb-3" style={{ color: 'var(--text-muted)' }}>{data.node_count} 个节点</div>}
+        {result ? <div className="text-sm py-1" style={{ color: 'var(--text)' }}>{result}</div> : (
+          <div className="flex gap-2">
+            <button onClick={run} disabled={executing} className="px-4 py-1.5 rounded-lg text-xs font-medium text-white"
+              style={{ background: executing ? 'var(--border)' : 'var(--accent)' }}>{executing ? '执行中...' : '确认执行'}</button>
+            <button className="px-4 py-1.5 rounded-lg text-xs" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>取消</button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

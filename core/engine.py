@@ -130,6 +130,11 @@ class ForgeEngine:
         self._trigger_manager = TriggerManager(self._wf_store, self._wf_engine, self._scheduler, self._llm)
         await self._trigger_manager.load_triggers()
 
+        # 工作流工具注册
+        from tools.builtin.workflow_tools import create_workflow_tools
+        for t in create_workflow_tools(self._wf_store, self._trigger_manager):
+            self._tool_registry.register(t)
+
         # 安全护栏
         from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger, SystemGuard
         self._pre_tool_guard = PreToolGuard()
@@ -285,6 +290,10 @@ class ForgeEngine:
             daily_summary += "\n[联网搜索已开启] 优先使用 web_search 工具搜索最新信息来回答。"
         if msg.metadata.get("tool_hint"):
             daily_summary += f"\n[系统提示] 用户通过快捷命令指定使用 {msg.metadata['tool_hint']} 工具，请直接调用。"
+        if self._trigger_manager:
+            wf_match = self._trigger_manager.match_chat_trigger(msg.content)
+            if wf_match:
+                daily_summary += f"\n[系统提示] 用户消息可能与工作流「{wf_match['name']}」相关（关键词: {wf_match['matched_keyword']}）。如果用户想执行它，请调用 run_workflow。"
         context = self._context_builder.build(
             position=position, mission=mission, history=history,
             rag_results=rag_results, daily_context=daily_summary,
