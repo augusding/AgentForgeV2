@@ -104,6 +104,9 @@ def create_app(engine: ForgeEngine) -> web.Application:
     from api.routes.connectors import register as reg_connectors
     reg_connectors(app)
 
+    from api.routes.evolution import register as reg_evolution
+    reg_evolution(app)
+
     from api.routes.toolbox import register as reg_toolbox
     reg_toolbox(app)
 
