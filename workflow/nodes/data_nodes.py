@@ -41,11 +41,21 @@ async def _transform_executor(node: WorkflowNode, variables: dict, ctx: dict) ->
 
 async def _approval_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeResult:
     approver = node.config.get("approver", "")
-    message = node.config.get("message", "请审批")
-    if node.config.get("autoApprove", True):
+    message = node.config.get("message", "请审批此工作流步骤")
+    title = node.config.get("title", "工作流审批请求")
+    if node.config.get("autoApprove", False):
         return NodeResult(node_id=node.id, status="completed", output={
             "approved": True, "approver": approver or "auto", "message": message, "_output_index": 0})
-    return NodeResult(node_id=node.id, status="waiting_approval", output={"approved": None, "approver": approver})
+    exec_id = variables.get("_execution_id", "")
+    gateway, uid = ctx.get("gateway"), ctx.get("user_id", "")
+    if gateway and uid:
+        try:
+            import asyncio as _a
+            _a.create_task(gateway.push_to_user(uid, {"type": "approval_required",
+                "execution_id": exec_id, "node_id": node.id, "title": title, "message": message}))
+        except Exception: pass
+    return NodeResult(node_id=node.id, status="waiting_approval",
+        output={"approved": None, "approver": approver, "execution_id": exec_id, "node_id": node.id})
 
 
 _KV_DB = _os.path.join(_os.environ.get("AGENTFORGE_ROOT", "."), "data", "workflow_kv.db")
@@ -59,7 +69,10 @@ async def _kv_ensure(db):
 async def _kv_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeResult:
     action = node.config.get("action", "get")
     key = node.config.get("key", "")
-    org_id = ctx.get("org_id") or variables.get("org_id", "")
+    scope = node.config.get("scope", "org")
+    if scope == "global": org_id = "__global__"
+    elif scope == "private": org_id = f"__private__{variables.get('_workflow_id', '')}"
+    else: org_id = ctx.get("org_id") or variables.get("org_id", "")
     if not key:
         return NodeResult(node_id=node.id, status="failed", error="key 不能为空")
     _os.makedirs(_os.path.dirname(_KV_DB), exist_ok=True)
@@ -104,16 +117,20 @@ def register_data_nodes(registry: NodeRegistry) -> None:
             {"name": "filter", "type": "string", "displayName": "过滤条件", "default": ""},
         ], executor=_transform_executor))
     registry.register(NodeTypeInfo(name="approval", display_name="审批", group="action", icon="user-check",
-        description="等待人工审批", outputs=2, output_names=["approved", "rejected"], parameters=[
+        description="等待人工审批，通过后继续执行", outputs=2, output_names=["approved", "rejected"], parameters=[
+            {"name": "title", "type": "string", "displayName": "审批标题", "default": "工作流审批请求"},
             {"name": "approver", "type": "string", "displayName": "审批人", "default": ""},
-            {"name": "message", "type": "string", "displayName": "说明", "default": "请审批"},
-            {"name": "autoApprove", "type": "boolean", "displayName": "自动通过", "default": True},
+            {"name": "message", "type": "string", "displayName": "审批说明", "default": "请审批此工作流步骤"},
+            {"name": "autoApprove", "type": "boolean", "displayName": "自动通过（调试）", "default": False},
         ], executor=_approval_executor))
     registry.register(NodeTypeInfo(name="kvStore", display_name="数据存储", group="data", icon="hard-drive",
-        description="工作流间共享键值存储", parameters=[
+        description="工作流间共享键值存储（按组织/全局/私有隔离）", parameters=[
             {"name": "action", "type": "options", "displayName": "操作", "default": "get",
              "options": [{"name": "读取", "value": "get"}, {"name": "写入", "value": "set"},
                         {"name": "删除", "value": "delete"}, {"name": "列出", "value": "list"}]},
             {"name": "key", "type": "string", "displayName": "键名", "default": ""},
             {"name": "value", "type": "json", "displayName": "值", "default": ""},
+            {"name": "scope", "type": "options", "displayName": "共享范围", "default": "org",
+             "options": [{"name": "组织内共享", "value": "org"}, {"name": "全局共享", "value": "global"},
+                        {"name": "工作流私有", "value": "private"}]},
         ], executor=_kv_executor))

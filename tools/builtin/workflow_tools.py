@@ -46,6 +46,7 @@ def create_workflow_tools(wf_store, trigger_manager=None) -> list[ToolDefinition
                                "workflow_name": matched.get("name", ""),
                                "description": matched.get("description", ""),
                                "node_count": matched.get("node_count", 0),
+                               "org_id": args.get("org_id", ""),
                                "instruction": "【重要】工作流尚未执行！请告诉用户：已找到该工作流，需要点击下方卡片中的「确认执行」按钮才会真正执行。不要说已经触发或已经执行。"}, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": f"查找工作流失败: {e}"}, ensure_ascii=False)

@@ -152,6 +152,42 @@ class WorkflowStore(BaseStore):
                 results.append(d)
             return results
 
+    async def get_execution(self, exec_id: str) -> dict | None:
+        await self.ensure_tables()
+        async with self._db() as db:
+            cursor = await db.execute("SELECT * FROM workflow_executions WHERE id = ?", (exec_id,))
+            row = await cursor.fetchone()
+        if not row: return None
+        d = dict(row)
+        d["node_results"] = json.loads(d.get("node_results", "{}"))
+        d["variables"] = json.loads(d.get("variables", "{}"))
+        d["trigger_data"] = json.loads(d.get("trigger_data", "{}"))
+        return d
+
+    async def update_execution_status(self, exec_id: str, status: str,
+                                       node_results: dict | None = None, variables: dict | None = None,
+                                       error: str = "", completed_at: float = 0) -> None:
+        await self.ensure_tables()
+        async with self._db() as db:
+            fields, params = ["status = ?"], [status]
+            if node_results is not None: fields.append("node_results = ?"); params.append(json.dumps(node_results, ensure_ascii=False, default=str))
+            if variables is not None: fields.append("variables = ?"); params.append(json.dumps(variables, ensure_ascii=False, default=str))
+            if error: fields.append("error = ?"); params.append(error)
+            if completed_at: fields.append("completed_at = ?"); params.append(completed_at)
+            params.append(exec_id)
+            await db.execute(f"UPDATE workflow_executions SET {', '.join(fields)} WHERE id = ?", params)
+            await db.commit()
+
+    async def list_pending_approvals(self, org_id: str = "") -> list[dict]:
+        await self.ensure_tables()
+        async with self._db() as db:
+            cursor = await db.execute("SELECT * FROM workflow_executions WHERE status = 'paused' ORDER BY started_at DESC")
+            rows = [dict(r) for r in await cursor.fetchall()]
+        for d in rows:
+            d["node_results"] = json.loads(d.get("node_results", "{}"))
+            d["variables"] = json.loads(d.get("variables", "{}"))
+        return rows
+
     # ── 工具方法 ──────────────────────────────────────────
 
     @staticmethod

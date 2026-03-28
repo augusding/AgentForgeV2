@@ -41,10 +41,12 @@ class WorkflowEngine:
         stop_at_node: str = "",
     ) -> WorkflowExecution:
         """执行工作流。"""
+        exec_id = uuid4().hex[:12]
         execution = WorkflowExecution(
-            id=uuid4().hex[:12], workflow_id=workflow.id,
+            id=exec_id, workflow_id=workflow.id,
             trigger_data=trigger_data or {},
-            variables={**workflow.variables, **(trigger_data or {})},
+            variables={**workflow.variables, **(trigger_data or {}),
+                       "_workflow_id": workflow.id, "_execution_id": exec_id},
             started_at=time.time(),
         )
         ctx = context or {}
@@ -92,9 +94,14 @@ class WorkflowEngine:
                                 label_outputs[n.label] = r.output
                     ctx["_node_outputs"] = label_outputs
 
-                    # WebSocket 推送节点状态
                     _push_node_status(ctx, execution, nid, nr)
-
+                    # 审批节点挂起
+                    if nr and nr.status == "waiting_approval":
+                        execution.status = "paused"; execution.paused_at_node = nid
+                        execution.completed_at = time.time()
+                        _push_execution_done(ctx, execution)
+                        logger.info("工作流暂停等待审批: wf=%s node=%s", workflow.id, nid)
+                        return execution
                     if nr and nr.status in ("completed", "skipped"):
                         out_idx = nr.output.get("_output_index") if isinstance(nr.output, dict) else None
                         for next_id in adjacency.get(nid, []):

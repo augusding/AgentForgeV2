@@ -224,6 +224,44 @@ async def handle_workflow_executions(request: web.Request) -> web.Response:
     return _json({"executions": executions})
 
 
+async def handle_approval_list(request: web.Request) -> web.Response:
+    """GET /api/v1/workflows/approvals"""
+    store = await _get_wf_store(request)
+    items = await store.list_pending_approvals()
+    return _json({"approvals": items, "total": len(items)})
+
+
+async def handle_approval_action(request: web.Request) -> web.Response:
+    """POST /api/v1/workflows/executions/{exec_id}/approve"""
+    store = await _get_wf_store(request)
+    wf_engine = await _get_wf_engine(request)
+    engine = request.app["engine"]
+    exec_id = request.match_info["exec_id"]
+    body = await request.json()
+    approved = bool(body.get("approved", True))
+    comment = body.get("comment", "")
+    exec_data = await store.get_execution(exec_id)
+    if not exec_data: return _json({"error": "执行不存在"}, 404)
+    if exec_data.get("status") != "paused": return _json({"error": f"状态非 paused: {exec_data.get('status')}"}, 400)
+    wf = await store.get_workflow(exec_data["workflow_id"])
+    if not wf: return _json({"error": "工作流不存在"}, 404)
+    node_results = exec_data.get("node_results", {})
+    paused_nid = ""
+    for nid, nr in node_results.items():
+        if nr.get("status") == "waiting_approval": paused_nid = nid; break
+    if not paused_nid: return _json({"error": "无等待审批节点"}, 400)
+    node_results[paused_nid] = {"status": "completed", "output": {"approved": approved, "comment": comment, "_output_index": 0 if approved else 1}, "error": "", "duration": 0}
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    ctx = {"llm": engine._llm, "gateway": request.app.get("gateway"), "user_id": uid, "wf_engine": wf_engine, "wf_store": store}
+    execution = await wf_engine.run(wf, trigger_data=exec_data.get("trigger_data", {}), context=ctx)
+    merged = {**node_results}
+    merged.update({nid: {"status": nr.status, "output": nr.output, "error": nr.error, "duration": nr.duration} for nid, nr in execution.node_results.items()})
+    import time as _t
+    await store.update_execution_status(exec_id, execution.status, node_results=merged, variables=execution.variables, error=execution.error, completed_at=execution.completed_at or _t.time())
+    return _json({"execution_id": exec_id, "approved": approved, "status": execution.status})
+
+
 async def _get_trigger_manager(request):
     """获取或创建 TriggerManager。"""
     if "trigger_manager" not in request.app:
@@ -290,6 +328,8 @@ def register(app: web.Application) -> None:
     app.router.add_delete("/api/v1/workflows/{workflow_id}", handle_workflow_delete)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute", handle_workflow_execute)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute/stream", handle_workflow_execute_stream)
+    app.router.add_get("/api/v1/workflows/approvals", handle_approval_list)
+    app.router.add_post("/api/v1/workflows/executions/{exec_id}/approve", handle_approval_action)
     app.router.add_get("/api/v1/workflows/{workflow_id}/executions", handle_workflow_executions)
     app.router.add_post("/api/v1/webhook/{trigger_id}", handle_webhook)
     app.router.add_get("/api/v1/triggers", handle_trigger_list)
