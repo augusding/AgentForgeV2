@@ -9,10 +9,11 @@ interface Props {
   node: Node; catalog: NodeTypeDef[]; execData?: any; upstreamOutput?: any
   upstreamNodes?: Array<{ nodeId: string; nodeLabel: string; nodeType: string; data: any; schema: any[] }>
   onUpdateConfig: (c: any) => void; onUpdateLabel: (l: string) => void; onDelete: () => void; onClose: () => void
+  onFieldInsert?: (expr: string) => void
 }
 type Tab = 'params' | 'input' | 'output'
 
-export default function PropertyPanel({ node, catalog, execData, upstreamOutput, upstreamNodes, onUpdateConfig, onUpdateLabel, onDelete, onClose }: Props) {
+export default function PropertyPanel({ node, catalog, execData, upstreamOutput, upstreamNodes, onUpdateConfig, onUpdateLabel, onDelete, onClose, onFieldInsert }: Props) {
   const { label, nodeType, config } = node.data as any
   const def = catalog.find(c => c.name === nodeType)
   const params = def?.parameters || []
@@ -77,20 +78,37 @@ export default function PropertyPanel({ node, catalog, execData, upstreamOutput,
         </>}
 
         {tab === 'input' && <>
-          {(upstreamNodes || []).map(u => <div key={u.nodeId} className="mb-2">
-            <div className="text-[10px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{u.nodeLabel} {u.data ? '✅' : '📋'}</div>
-            <div className="flex flex-wrap gap-1">{(u.data ? Object.keys(typeof u.data === 'object' ? u.data : {}).slice(0, 10) : u.schema.map((f: any) => f.name)).map((f: string) =>
-              <button key={f} onClick={() => { navigator.clipboard.writeText(`{{ $input.${f} }}`); toast.success('已复制') }}
-                className="px-1.5 py-0.5 rounded text-[9px] font-mono hover:bg-[var(--accent)] hover:text-white"
-                style={{ background: 'var(--bg)', color: 'var(--accent)' }}>{f}</button>)}</div>
-          </div>)}
+          {(upstreamNodes || []).map(u => (
+            <div key={u.nodeId} className="mb-3">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text)' }}>{u.nodeLabel}</span>
+                <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{u.data ? '实际数据' : '预测结构'}</span>
+              </div>
+              <div className="space-y-0.5">{(u.data
+                ? Object.entries(typeof u.data === 'object' ? u.data : { value: u.data }).slice(0, 12)
+                : u.schema.map((f: any) => [f.name, f.description])
+              ).map(([key, val]: any) => {
+                const expr = `{{ $input.${key} }}`
+                const dv = u.data ? (typeof val === 'object' ? JSON.stringify(val).slice(0, 25) : String(val ?? '').slice(0, 25)) : String(val ?? '')
+                return (
+                  <button key={key} onClick={() => onFieldInsert ? onFieldInsert(expr) : (navigator.clipboard.writeText(expr), toast.success('已复制'))}
+                    className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-left hover:bg-[var(--bg-hover)]" title={`点击插入：${expr}`}>
+                    <span className="text-[10px] font-mono min-w-[60px]" style={{ color: 'var(--accent)' }}>{key}</span>
+                    <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{dv}</span>
+                    <span className="text-[8px] shrink-0" style={{ color: 'var(--text-muted)' }}>{onFieldInsert ? '插入' : '复制'}</span>
+                  </button>)})}</div>
+            </div>
+          ))}
           {(!upstreamNodes || !upstreamNodes.length) && <div className="text-xs text-center py-3" style={{ color: 'var(--text-muted)' }}>无上游连接</div>}
-          <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={6}
-            className="w-full px-2 py-1.5 rounded text-xs outline-none resize-y font-mono"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 60 }} placeholder='{"key":"value"}' />
+          <div className="mt-2 space-y-1.5">
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>测试数据</span>
+            <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={5}
+              className="w-full px-2 py-1.5 rounded text-xs outline-none resize-y font-mono"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 60 }} placeholder={'{\n  "text": "test"\n}'} />
+          </div>
           <button onClick={handleTest} disabled={testing} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-white"
             style={{ background: testing ? 'var(--border)' : 'var(--accent)' }}>
-            {testing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} 测试</button>
+            {testing ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} 测试节点</button>
         </>}
 
         {tab === 'output' && (result ? <>

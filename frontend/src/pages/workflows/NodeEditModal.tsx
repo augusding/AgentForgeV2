@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { X, Play, Loader2, ChevronRight, ChevronDown, Plus, Trash2, HelpCircle } from 'lucide-react'
 import NodeCustomUI, { hasCustomUI } from './NodeCustomUI'
 import ExprAutocomplete, { extractFields } from './ExprAutocomplete'
@@ -106,6 +106,17 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
 
   const outItems = useMemo(() => { const o = result?.output; if (!o) return []; if (Array.isArray(o)) return o; if (o.items && Array.isArray(o.items)) return o.items; return [o] }, [result])
   const up = (n: string, v: any) => n === '_full' ? onUpdateConfig(v) : onUpdateConfig({ ...config, [n]: v })
+  const focusedFieldRef = useRef<{ name: string; el: HTMLInputElement | HTMLTextAreaElement } | null>(null)
+  const handleFieldInsert = useCallback((expr: string) => {
+    const f = focusedFieldRef.current
+    if (!f) { navigator.clipboard.writeText(expr); toast.success('已复制：' + expr); return }
+    const el = f.el, start = el.selectionStart ?? el.value.length, end = el.selectionEnd ?? el.value.length
+    const nv = el.value.slice(0, start) + expr + el.value.slice(end)
+    const setter = Object.getOwnPropertyDescriptor(el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value')?.set
+    setter?.call(el, nv); el.dispatchEvent(new Event('input', { bubbles: true }))
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(start + expr.length, start + expr.length) })
+    up(f.name, nv)
+  }, [up])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
@@ -137,7 +148,8 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
                     <span className="absolute left-5 top-0 hidden group-hover:block z-10 px-2 py-1 rounded text-[10px] max-w-[250px]"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>{p.description}</span></span>}
                 </div>
-                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} nodeLabels={nodeLabels} />
+                <RPI param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => up(p.name, v)} inputData={upstreamOutput} nodeLabels={nodeLabels}
+                  onFocus={(name, el) => { focusedFieldRef.current = { name, el } }} />
               </div>)})}
             {!params.length && <div className="text-center py-8 text-xs" style={{ color: 'var(--text-muted)' }}>无需配置</div>}
             </>}
@@ -161,45 +173,47 @@ export default function NodeEditModal({ node, catalog, execData, upstreamOutput,
               </button>)}
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {rTab === 'input' && <div className="space-y-4">
+              {rTab === 'input' && <div className="space-y-3">
                 {(upstreamNodes || []).length > 0 ? (upstreamNodes || []).map(u => (
-                  <div key={u.nodeId} className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+                  <div key={u.nodeId} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
                     <div className="flex items-center gap-2 px-3 py-2" style={{ background: 'var(--bg-surface)' }}>
-                      <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{u.nodeLabel}</span>
+                      <span className="text-[10px] font-semibold" style={{ color: 'var(--text)' }}>{u.nodeLabel}</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{u.nodeType}</span>
-                      {u.data && <span className="text-[9px] px-1.5 py-0.5 rounded text-white ml-auto" style={{ background: 'var(--success)' }}>有数据</span>}
-                      {!u.data && <span className="text-[9px] ml-auto" style={{ color: 'var(--text-muted)' }}>📋 预测</span>}
+                      {u.data ? <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded text-white" style={{ background: 'var(--success)' }}>实际数据</span>
+                              : <span className="ml-auto text-[9px]" style={{ color: 'var(--text-muted)' }}>预测结构</span>}
                     </div>
                     <div className="px-3 py-2 space-y-0.5">{(u.data
-                      ? Object.entries(typeof u.data === 'object' ? u.data : { value: u.data }).slice(0, 15)
+                      ? Object.entries(typeof u.data === 'object' ? u.data : { value: u.data }).slice(0, 20)
                       : u.schema.map((f: any) => [f.name, f.description])
-                    ).map(([key, val]: any) => (
-                      <div key={key} className="flex items-center gap-1.5 py-0.5 group">
-                        <span className="text-[10px] font-mono" style={{ color: u.data ? 'var(--accent)' : 'var(--text-muted)' }}>{key}</span>
-                        <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>
-                          {u.data ? (typeof val === 'object' ? JSON.stringify(val).slice(0, 30) : String(val).slice(0, 30)) : val}
-                        </span>
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
-                          <button onClick={() => { navigator.clipboard.writeText(`{{ $input.${key} }}`); toast.success('已复制') }}
-                            className="px-1 py-0.5 rounded text-[8px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}>$input</button>
-                          <button onClick={() => { navigator.clipboard.writeText(`{{ $node["${u.nodeLabel}"].${key} }}`); toast.success('已复制') }}
-                            className="px-1 py-0.5 rounded text-[8px] hover:bg-[var(--bg-hover)]" style={{ color: 'var(--accent)' }}>$node</button>
-                        </div>
-                      </div>))}</div>
+                    ).map(([key, val]: any) => {
+                      const ie = `{{ $input.${key} }}`; const ne = `{{ $node["${u.nodeLabel}"].${key} }}`
+                      const dv = u.data ? (typeof val === 'object' ? JSON.stringify(val).slice(0, 40) : String(val ?? '').slice(0, 40)) : String(val ?? '')
+                      return (
+                        <div key={key} className="flex items-center gap-1.5 py-1 px-1 rounded group cursor-pointer hover:bg-[var(--bg-hover)]"
+                          onClick={() => handleFieldInsert(ie)}>
+                          <span className="text-[10px] font-mono min-w-[80px]" style={{ color: u.data ? 'var(--accent)' : 'var(--text-muted)' }}>{key}</span>
+                          <span className="text-[9px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>{dv}</span>
+                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
+                            <button onClick={e => { e.stopPropagation(); handleFieldInsert(ie) }} className="px-1.5 py-0.5 rounded text-[8px] font-mono"
+                              style={{ background: 'var(--accent)15', color: 'var(--accent)', border: '1px solid var(--accent)40' }}>$input</button>
+                            <button onClick={e => { e.stopPropagation(); handleFieldInsert(ne) }} className="px-1.5 py-0.5 rounded text-[8px] font-mono"
+                              style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>$node</button>
+                          </div>
+                        </div>)})}</div>
                   </div>
-                )) : <div className="rounded-lg p-4 text-center" style={{ background: 'var(--bg-surface)', border: '1px dashed var(--border)' }}>
-                  <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>无上游连接</div></div>}
-                <div className="rounded-lg p-3 text-[10px]" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                  <div className="font-medium mb-1" style={{ color: 'var(--text)' }}>📖 引用语法</div>
-                  <div className="font-mono space-y-0.5">
-                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $input.字段 }}'}</code> — 直接上游</div>
-                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $node["节点名"].字段 }}'}</code> — 指定节点</div>
-                    <div><code style={{ color: 'var(--accent)' }}>{'{{ $vars.变量名 }}'}</code> — 工作流变量</div>
-                  </div></div>
-                <details className="group"><summary className="text-xs font-medium cursor-pointer flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                  <ChevronRight size={12} className="group-open:rotate-90 transition-transform" /> 手动测试数据</summary>
-                  <div className="mt-2"><textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={6} placeholder='{"key": "value"}'
-                    className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 60 }} /></div></details>
+                )) : <div className="rounded-xl p-4 text-center" style={{ background: 'var(--bg-surface)', border: '1px dashed var(--border)' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>无上游连接</p></div>}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between"><span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>手动测试数据</span>
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>JSON</span></div>
+                  <textarea value={testInput} onChange={e => setTestInput(e.target.value)} rows={5} placeholder={'{\n  "text": "Hello"\n}'}
+                    className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)', minHeight: 80 }} />
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-2 py-1.5 rounded-lg text-[9px] font-mono" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+                  <span><code style={{ color: 'var(--accent)' }}>{'{{ $input.字段 }}'}</code> 上游</span>
+                  <span><code style={{ color: 'var(--accent)' }}>{'{{ $node["名"].字段 }}'}</code> 指定节点</span>
+                  <span><code style={{ color: 'var(--accent)' }}>{'{{ $vars.变量 }}'}</code> 变量</span>
+                </div>
               </div>}
               {rTab === 'output' && (result ? <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -250,7 +264,7 @@ function JT({ data, depth = 0 }: { data: any; depth?: number }) {
       {ent.slice(0, 100).map(([k, v]) => <div key={k} className="flex items-start gap-1.5"><span className="text-[11px] font-mono shrink-0" style={{ color: 'var(--accent)' }}>{k}:</span><JT data={v} depth={depth + 1} /></div>)}</div>}</div>)
 }
 
-function RPI({ param, value, onChange, inputData, nodeLabels }: { param: any; value: any; onChange: (v: any) => void; inputData?: any; nodeLabels?: string[] }) {
+function RPI({ param, value, onChange, inputData, nodeLabels, onFocus }: { param: any; value: any; onChange: (v: any) => void; inputData?: any; nodeLabels?: string[]; onFocus?: (n: string, el: HTMLInputElement | HTMLTextAreaElement) => void }) {
   const [fx, setFx] = useState(false)
   const st = { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }
   const pv = typeof value === 'string' && value.includes('{{') ? exprPreview(value, inputData) : ''
@@ -266,14 +280,14 @@ function RPI({ param, value, onChange, inputData, nodeLabels }: { param: any; va
     <div className={`w-8 h-4 rounded-full relative ${value ? 'bg-[var(--accent)]' : 'bg-gray-400'}`}><div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow ${value ? 'translate-x-4' : 'translate-x-0.5'}`} /></div>{value ? '是' : '否'}</button>
   if (param.type === 'number') return <div className="flex gap-1"><input type="number" value={value} onChange={e => onChange(Number(e.target.value))} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name]} />
     <button onClick={() => setFx(true)} className="px-2 rounded-lg text-[10px] opacity-40 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>fx</button></div>
-  if (param.type === 'code') return <textarea value={value} onChange={e => onChange(e.target.value)} rows={10} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y leading-relaxed" style={{ ...st, minHeight: 120 }} placeholder={PH[param.name] || ''} />
+  if (param.type === 'code') return <textarea value={value} onChange={e => onChange(e.target.value)} onFocus={e => onFocus?.(param.name, e.currentTarget)} rows={10} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y leading-relaxed" style={{ ...st, minHeight: 120 }} placeholder={PH[param.name] || ''} />
   if (param.type === 'json') return <KVE value={value} onChange={onChange} ph={PH[param.name] || '{}'} />
   if (param.type === 'filter') return <CB value={value} onChange={onChange} />
   const ml = ['prompt', 'content', 'body', 'message', 'instruction', 'query', 'text'].includes(param.name)
   if (ml) return <div><div className="relative"><ExprAutocomplete value={value} onChange={onChange} upstreamFields={uf} nodeLabels={nodeLabels} multiline rows={4}
     placeholder={PH[param.name] || ''} className="w-full px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ ...st, minHeight: 60 }} />
     <button onClick={() => setFx(true)} className="absolute right-2 top-2 px-1.5 py-0.5 rounded text-[9px] opacity-30 hover:opacity-100" style={{ color: 'var(--text-muted)', background: 'var(--bg)' }}>fx</button></div>{pvEl}</div>
-  return <div><div className="flex gap-1"><input type="text" value={value} onChange={e => onChange(e.target.value)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name] || ''} />
+  return <div><div className="flex gap-1"><input type="text" value={value} onChange={e => onChange(e.target.value)} onFocus={e => onFocus?.(param.name, e.currentTarget)} className="flex-1 px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder={PH[param.name] || ''} />
     <button onClick={() => setFx(true)} className="px-2 rounded-lg text-[10px] opacity-40 hover:opacity-100" style={{ color: 'var(--text-muted)' }}>fx</button></div>{pvEl}</div>
 }
 
