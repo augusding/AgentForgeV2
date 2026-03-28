@@ -33,28 +33,16 @@ async def _set_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeR
 
 
 async def _code_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeResult:
-    """Python 代码执行：exec，捕获 result 变量。"""
+    """Python 代码执行：直接 exec，不限制 import，适用于企业内部可信场景。"""
     code = node.config.get("code", "")
     if not code.strip():
         return NodeResult(node_id=node.id, status="completed", output={})
 
     sandbox = {
-        "__builtins__": {
-            "print": print, "len": len, "str": str, "int": int, "float": float,
-            "bool": bool, "list": list, "dict": dict, "tuple": tuple, "set": set,
-            "range": range, "enumerate": enumerate, "zip": zip, "map": map,
-            "filter": filter, "sorted": sorted, "max": max, "min": min, "sum": sum,
-            "abs": abs, "round": round, "isinstance": isinstance, "type": type,
-            "hasattr": hasattr, "getattr": getattr,
-            "ValueError": ValueError, "TypeError": TypeError, "KeyError": KeyError,
-            "Exception": Exception, "RuntimeError": RuntimeError,
-            "json": __import__("json"), "datetime": __import__("datetime"),
-            "re": __import__("re"), "math": __import__("math"),
-        },
         "input_data": ctx.get("_last_output", {}),
         "variables": dict(variables),
         "items": ctx.get("_last_output", {}),
-        **variables,  # expose variables as top-level names
+        **variables,
     }
 
     try:
