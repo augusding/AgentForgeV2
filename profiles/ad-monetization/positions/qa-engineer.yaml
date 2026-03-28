@@ -30,12 +30,6 @@ context: |
 
 default_model: "sonnet"
 
-tools:
-  - code_executor
-  - data_analysis
-  - text_processor
-  - http_request
-  - calculator
 
 
   - id: bug-analysis

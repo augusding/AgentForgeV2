@@ -29,12 +29,6 @@ context: |
 
 default_model: "sonnet"
 
-tools:
-  - code_executor
-  - http_request
-  - data_analysis
-  - text_processor
-  - calculator
 
 
   - id: capacity-review

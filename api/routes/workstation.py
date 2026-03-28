@@ -63,9 +63,7 @@ async def handle_home(request: web.Request) -> web.Response:
     if engine.signal_store:
         insights = await engine.signal_store.get_insights(user_id, org_id, position_id, limit=5)
 
-    quick_workflows = [{"id": s["id"], "name": s.get("name", s["id"]),
-                        "description": s.get("description", ""), "icon": s.get("icon", "play")}
-                       for s in pos_cfg.skills if isinstance(s, dict) and s.get("id")]
+    quick_workflows = []
 
     recent_chats = []
     if engine.session_store:
@@ -82,7 +80,6 @@ async def handle_home(request: web.Request) -> web.Response:
         },
         "metrics": [],
         "quick_workflows": quick_workflows,
-        "tools": pos_cfg.tools,
         "onboarding": pos_cfg.onboarding,
         "recent_chats": recent_chats,
         "pending_items": [],
@@ -111,9 +108,8 @@ async def handle_position_detail(request: web.Request) -> web.Response:
                 "position_id": pos.position_id, "display_name": pos.display_name,
                 "icon": pos.icon, "color": pos.color,
                 "department": pos.department, "domain": pos.domain,
-                "description": pos.description, "tools": pos.tools,
+                "description": pos.description,
                 "onboarding": pos.onboarding,
-                "skills": [{"id": s.get("id", ""), "name": s.get("name", "")} for s in pos.skills],
             })
     return _json({"error": "岗位不存在"}, status=404)
 

@@ -32,11 +32,6 @@ default_model: "sonnet"
 complex_model: "opus"
 
 # ── 资源声明 ──
-tools:
-  - code_executor
-  - text_processor
-  - web_search
-  - data_analysis
 
 
   - id: performance-profiling

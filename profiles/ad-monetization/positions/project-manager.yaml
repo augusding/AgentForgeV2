@@ -23,17 +23,6 @@ context: '工作原则：
 
   '
 default_model: sonnet
-tools:
-- data_analysis
-- excel_processor
-- text_processor
-- email_sender
-- http_request
-- calculator
-- 项目管理规范
-- 需求文档模板
-- 发版流程SOP
-- 复盘方法论
 
 onboarding:
   tip: "高效管理项目排期与跨团队协调"

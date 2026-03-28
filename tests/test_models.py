@@ -25,10 +25,8 @@ def test_position_config():
     pos = PositionConfig(
         position_id="test-pm",
         display_name="测试产品经理",
-        tools=["calculator", "web_search"],
     )
     assert pos.position_id == "test-pm"
-    assert len(pos.tools) == 2
     assert pos.default_model == "sonnet"
 
 

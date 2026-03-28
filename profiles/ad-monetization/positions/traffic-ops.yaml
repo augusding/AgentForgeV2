@@ -33,12 +33,6 @@ context: |
 default_model: "sonnet"
 
 # ── 资源声明 ──
-tools:
-  - data_analysis
-  - excel_processor
-  - calculator
-  - text_processor
-  - web_search
 
 quick_workflows:
   - id: waterfall-tuning

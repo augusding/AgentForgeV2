@@ -29,12 +29,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-tools:
-  - text_processor
-  - web_search
-  - data_analysis
-  - excel_processor
-  - http_request
 
 
   - id: competitor-analysis

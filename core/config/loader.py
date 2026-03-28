@@ -142,25 +142,9 @@ class ConfigLoader:
             context=raw.get("context", ""),
             default_model=raw.get("default_model", defaults.get("default_model", "sonnet")),
             complex_model=raw.get("complex_model", defaults.get("complex_model", "opus")),
-            tools=self._parse_tools(raw.get("tools", [])),
-            skills=self._parse_skills(raw.get("tools", []), raw.get("skills", [])),
             dashboard=raw.get("dashboard", {}),
             onboarding=raw.get("onboarding", {}),
         )
-
-    @staticmethod
-    def _parse_tools(tools_raw: list) -> list[str]:
-        """从工具列表中只提取字符串工具名（忽略 dict 格式的 skill 条目）。"""
-        return [item for item in tools_raw if isinstance(item, str)]
-
-    @staticmethod
-    def _parse_skills(tools_raw: list, skills_raw: list) -> list[dict]:
-        """提取 skill 条目（tools 列表中的 dict + 独立的 skills 字段）。"""
-        skills = list(skills_raw)
-        for item in tools_raw:
-            if isinstance(item, dict) and "id" in item:
-                skills.append(item)
-        return skills
 
     def list_profiles(self) -> list[str]:
         """列出所有可用的 Profile 名（profiles/ + data/profiles/）。"""

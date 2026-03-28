@@ -41,13 +41,11 @@ def test_load_profile(loader):
         break
 
 
-def test_position_tools_parsed(loader):
+def test_position_fields(loader):
     bundle = loader.load_profile("ad-monetization")
     for pos in bundle.positions.values():
-        assert isinstance(pos.tools, list)
-        # 工具应该是字符串列表
-        for t in pos.tools:
-            assert isinstance(t, str)
+        assert pos.position_id
+        assert pos.display_name
         break
 
 

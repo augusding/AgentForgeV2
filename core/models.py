@@ -52,8 +52,6 @@ class PositionConfig:
     # 资源声明
     default_model: str = "sonnet"
     complex_model: str = "opus"
-    tools: list[str] = field(default_factory=list)
-    skills: list[dict] = field(default_factory=list)
 
     # UI 配置
     dashboard: dict = field(default_factory=dict)

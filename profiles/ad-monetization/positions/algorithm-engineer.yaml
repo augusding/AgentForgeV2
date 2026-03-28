@@ -32,12 +32,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-tools:
-  - code_executor
-  - data_analysis
-  - calculator
-  - text_processor
-  - web_search
 
 
   - id: feature-analysis

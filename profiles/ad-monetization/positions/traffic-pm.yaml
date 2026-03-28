@@ -28,12 +28,6 @@ context: |
 
 default_model: "sonnet"
 
-tools:
-  - data_analysis
-  - calculator
-  - excel_processor
-  - web_search
-  - text_processor
 
 
   - id: frequency-cap-review

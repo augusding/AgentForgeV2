@@ -29,11 +29,6 @@ context: |
 
 default_model: "sonnet"
 
-tools:
-  - code_executor
-  - text_processor
-  - web_search
-  - data_analysis
 
 
   - id: code-review-assist

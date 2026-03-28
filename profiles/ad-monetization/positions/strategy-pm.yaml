@@ -33,13 +33,6 @@ default_model: "sonnet"
 complex_model: "opus"
 
 # ── 资源声明 ──
-tools:
-  - data_analysis
-  - calculator
-  - code_executor
-  - text_processor
-  - web_search
-  - excel_processor
 
 
   - id: ab-experiment-design

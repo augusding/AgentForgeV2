@@ -52,17 +52,6 @@ default_model: "sonnet"
 complex_model: "opus"
 
 # ── 资源声明 ──
-tools:
-  - text_processor
-  - data_analysis
-  - excel_processor
-  - word_processor
-  - ppt_processor
-  - pdf_processor
-  - chart_generator
-  - web_search
-  - calculator
-  - http_request
 
 quick_workflows:
   - id: report-prepare

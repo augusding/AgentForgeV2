@@ -31,12 +31,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-tools:
-  - code_executor
-  - data_analysis
-  - text_processor
-  - web_search
-  - http_request
 
 
   - id: api-design

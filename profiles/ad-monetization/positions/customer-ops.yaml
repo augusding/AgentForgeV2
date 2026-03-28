@@ -32,13 +32,6 @@ context: |
 default_model: "sonnet"
 
 # ── 资源声明 ──
-tools:
-  - text_processor
-  - data_analysis
-  - excel_processor
-  - web_search
-  - calculator
-  - email_sender
 
 
   - id: campaign-diagnosis

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Briefcase, ChevronDown, ChevronRight, Loader2, Zap, Target } from 'lucide-react'
+import { Briefcase, ChevronDown, ChevronRight, Loader2, Target } from 'lucide-react'
 import client from '../../api/client'
 
 export default function PositionsTab() {
@@ -53,16 +53,12 @@ export default function PositionsTab() {
                       <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>复杂模型</div>
                       <div className="text-xs font-mono font-medium" style={{ color: 'var(--accent)' }}>{d.complex_model}</div></div>}
                   </div>
-                  {d.tools?.length > 0 && <div>
-                    <div className="text-[10px] font-medium mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><Zap size={10} /> 工具 ({d.tools.length})</div>
-                    <div className="flex flex-wrap gap-1.5">{d.tools.map((t: string) => <span key={t} className="text-[9px] px-2 py-0.5 rounded-full font-mono"
-                      style={{ background: 'var(--accent)10', color: 'var(--accent)', border: '1px solid var(--accent)30' }}>{t}</span>)}</div></div>}
                 </>)})() : <Loader2 className="animate-spin" size={14} style={{ color: 'var(--accent)' }} />}
               </div>)}
           </div>))}</div>
       )}
       <div className="rounded-xl p-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>岗位在 <code className="px-1 py-0.5 rounded text-[10px] font-mono" style={{ background: 'var(--bg)' }}>profiles/</code> 目录管理，定义了 AI 角色、目标、工具和知识范围。</div>
+        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>岗位在 <code className="px-1 py-0.5 rounded text-[10px] font-mono" style={{ background: 'var(--bg)' }}>profiles/</code> 目录管理，定义了 AI 的角色、目标和领域知识。</div>
       </div>
     </div>
   )

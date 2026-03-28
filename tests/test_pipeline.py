@@ -25,7 +25,6 @@ class TestContextBuilder:
             role="你是一个产品经理的AI助手。",
             goal="帮助产品经理管理产品。",
             context="产品管理方法论：用户故事、Sprint 规划、需求优先级排序。",
-            tools=["calculator"],
         )
 
     def test_basic_build(self):

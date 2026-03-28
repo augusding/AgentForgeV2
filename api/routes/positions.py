@@ -42,7 +42,6 @@ async def handle_position_detail(request: web.Request) -> web.Response:
                 "department": pos.department,
                 "domain": pos.domain,
                 "description": pos.description,
-                "tools": pos.tools,
                 "onboarding": pos.onboarding,
             })
 

@@ -32,12 +32,6 @@ context: |
 default_model: "sonnet"
 
 # ── 资源声明 ──
-tools:
-  - code_executor
-  - data_analysis
-  - calculator
-  - text_processor
-  - excel_processor
 
 
   - id: data-model-design
