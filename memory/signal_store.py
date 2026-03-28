@@ -22,6 +22,10 @@ class SignalStore(BaseStore):
         await db.execute("CREATE TABLE IF NOT EXISTS signals (id TEXT PRIMARY KEY, user_id TEXT DEFAULT '', org_id TEXT DEFAULT '', position_id TEXT DEFAULT '', signal_type TEXT NOT NULL, content TEXT NOT NULL, source TEXT DEFAULT '', created_at REAL NOT NULL)")
         await db.execute("CREATE TABLE IF NOT EXISTS patterns (id TEXT PRIMARY KEY, user_id TEXT DEFAULT '', org_id TEXT DEFAULT '', position_id TEXT DEFAULT '', pattern_type TEXT NOT NULL, description TEXT NOT NULL, confidence REAL DEFAULT 0.0, occurrence_count INTEGER DEFAULT 1, created_at REAL NOT NULL, updated_at REAL NOT NULL)")
         await db.execute("CREATE TABLE IF NOT EXISTS insights (id TEXT PRIMARY KEY, user_id TEXT DEFAULT '', org_id TEXT DEFAULT '', position_id TEXT DEFAULT '', insight_type TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL, priority TEXT DEFAULT 'normal', is_read INTEGER DEFAULT 0, created_at REAL NOT NULL)")
+        await db.execute("CREATE TABLE IF NOT EXISTS feedbacks (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT DEFAULT '', user_id TEXT DEFAULT '', org_id TEXT DEFAULT '', position_id TEXT DEFAULT '', rating TEXT NOT NULL, created_at REAL NOT NULL)")
+        await db.execute("CREATE TABLE IF NOT EXISTS pending_analysis (id TEXT PRIMARY KEY, org_id TEXT DEFAULT '', position_id TEXT NOT NULL, user_id TEXT NOT NULL, pending_count INTEGER DEFAULT 0, oldest_pending REAL, last_analyzed REAL, updated_at REAL NOT NULL)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_pending_count ON pending_analysis(pending_count)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_feedback_session ON feedbacks(session_id)")
 
     async def add_signal(self, user_id: str, org_id: str, position_id: str, signal_type: str, content: str, source: str = "") -> str:
         await self.ensure_tables()
@@ -90,3 +94,60 @@ class SignalStore(BaseStore):
         async with self._db() as db:
             await db.execute("UPDATE insights SET is_read=1 WHERE id=?", (insight_id,))
             await db.commit()
+
+    # ── Feedback + Pending Analysis ─────────────────────────
+
+    async def add_feedback(self, message_id: str, session_id: str,
+                            user_id: str, org_id: str, position_id: str, rating: str) -> str:
+        await self.ensure_tables()
+        fid = uuid4().hex[:12]
+        async with self._db() as db:
+            await db.execute("INSERT OR REPLACE INTO feedbacks VALUES (?,?,?,?,?,?,?,?)",
+                             (fid, message_id, session_id, user_id, org_id, position_id, rating, time.time()))
+            await db.commit()
+        if rating == "down":
+            await self.increment_pending(org_id, position_id, user_id)
+        return fid
+
+    async def increment_pending(self, org_id: str, position_id: str, user_id: str) -> int:
+        await self.ensure_tables()
+        now = time.time()
+        key = f"{org_id}:{position_id}:{user_id}"
+        async with self._db() as db:
+            cursor = await db.execute("SELECT pending_count FROM pending_analysis WHERE id=?", (key,))
+            row = await cursor.fetchone()
+            if row:
+                new_count = row["pending_count"] + 1
+                await db.execute("UPDATE pending_analysis SET pending_count=?, updated_at=? WHERE id=?", (new_count, now, key))
+            else:
+                new_count = 1
+                await db.execute("INSERT INTO pending_analysis VALUES (?,?,?,?,1,?,NULL,?)", (key, org_id, position_id, user_id, now, now))
+            await db.commit()
+        return new_count
+
+    async def reset_pending(self, org_id: str, position_id: str, user_id: str) -> None:
+        await self.ensure_tables()
+        now = time.time()
+        key = f"{org_id}:{position_id}:{user_id}"
+        async with self._db() as db:
+            await db.execute("UPDATE pending_analysis SET pending_count=0, last_analyzed=?, updated_at=? WHERE id=?", (now, now, key))
+            await db.commit()
+
+    async def get_pending_list(self, min_count: int = 10, stale_days: float = 3.0, limit: int = 50) -> list[dict]:
+        await self.ensure_tables()
+        stale_ts = time.time() - stale_days * 86400
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM pending_analysis WHERE pending_count >= ? OR (pending_count > 0 AND oldest_pending IS NOT NULL AND oldest_pending < ?) ORDER BY pending_count DESC LIMIT ?",
+                (min_count, stale_ts, limit))
+            return [dict(r) for r in await cursor.fetchall()]
+
+    async def get_feedbacks_by_session(self, session_id: str, rating: str = "") -> list[dict]:
+        await self.ensure_tables()
+        if rating:
+            q, p = "SELECT * FROM feedbacks WHERE session_id=? AND rating=? ORDER BY created_at DESC", (session_id, rating)
+        else:
+            q, p = "SELECT * FROM feedbacks WHERE session_id=? ORDER BY created_at DESC", (session_id,)
+        async with self._db() as db:
+            cursor = await db.execute(q, p)
+            return [dict(r) for r in await cursor.fetchall()]

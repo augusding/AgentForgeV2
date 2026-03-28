@@ -371,7 +371,8 @@ class ForgeEngine:
             )
         asyncio.ensure_future(self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id))
         asyncio.ensure_future(self._post_process(msg.content, full_content, collected_tools, msg.user_id, msg.org_id, msg.position_id))
-
+        if self._signal_store and msg.position_id and msg.user_id:
+            asyncio.ensure_future(self._signal_store.increment_pending(msg.org_id, msg.position_id, msg.user_id))
     # ── 内部辅助 ─────────────────────────────────────────
 
     def _search_rag(self, query: str, position: PositionConfig, org_id: str = "") -> list[dict]:

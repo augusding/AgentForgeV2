@@ -300,7 +300,7 @@ def register(app: web.Application) -> None:
     r.add_patch("/api/v1/chat/sessions/{session_id}/title", handle_chat_session_title_update)
     r.add_post("/api/v1/chat/upload", handle_chat_upload)
     r.add_get("/api/v1/chat/quick-commands", handle_chat_quick_commands)
-    r.add_post("/api/v1/chat/messages/{message_id}/feedback", _stub_ok)
+    # feedback 已迁移到 chat.py
     r.add_delete("/api/v1/chat/messages/{message_id}/feedback", _stub_ok)
     r.add_get("/api/v1/chat/sessions/{session_id}/feedbacks", _stub_list)
 

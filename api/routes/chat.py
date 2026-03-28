@@ -208,6 +208,29 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
     return resp
 
 
+async def handle_feedback(request: web.Request) -> web.Response:
+    """POST /api/v1/chat/messages/{message_id}/feedback"""
+    engine = request.app["engine"]
+    message_id = request.match_info["message_id"]
+    body = await request.json()
+    rating = body.get("rating", "")
+    if rating not in ("up", "down"):
+        return _json({"error": "rating 必须是 up 或 down"}, status=400)
+    session_id = body.get("session_id", "")
+    user = request.get("user") or {}
+    user_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+    org_id = user.get("org_id", "") if isinstance(user, dict) else ""
+    position_id = ""
+    if session_id and engine.session_store:
+        session = await engine.session_store.get_session(session_id)
+        if session:
+            position_id = session.get("position_id", "")
+    if engine.signal_store:
+        await engine.signal_store.add_feedback(message_id, session_id, user_id, org_id, position_id, rating)
+    return _json({"status": "ok"})
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/chat", handle_chat)
     app.router.add_post("/api/v1/chat/stream", handle_chat_stream)
+    app.router.add_post("/api/v1/chat/messages/{message_id}/feedback", handle_feedback)
