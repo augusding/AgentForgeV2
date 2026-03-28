@@ -44,10 +44,15 @@ class PositionConfig:
     domain: str = ""
     description: str = ""
 
-    # 核心三要素
-    role: str = ""          # 角色描述 (system prompt 核心)
+    # 核心三要素（兼容旧配置）
+    role: str = ""          # 角色描述（新配置用 identity）
     goal: str = ""          # 目标描述
-    context: str = ""       # 领域知识上下文
+    context: str = ""       # 专业知识（L3/L4 才注入）
+
+    # 六层专家模型（新增）
+    identity: str = ""      # 身份层：我是谁，经历，视角
+    values: str = ""        # 价值观层：我在乎什么，底线
+    behavior: str = ""      # 行为层：表达风格，边界
 
     # 资源声明
     default_model: str = "sonnet"
