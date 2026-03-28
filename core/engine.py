@@ -17,7 +17,6 @@ from core.models import (
 
 logger = logging.getLogger(__name__)
 
-
 class ForgeEngine:
     """核心编排引擎。"""
 
@@ -31,6 +30,7 @@ class ForgeEngine:
         self._llm = None
         self._session_store = None
         self._signal_store = None
+        self._user_profile_store = None
         self._tool_registry = None
         self._context_builder = None
         self._knowledge_base = None
@@ -73,10 +73,12 @@ class ForgeEngine:
         db_path = str(self.root_dir / "data" / "memories.db")
         self._session_store = SessionStore(db_path)
         self._signal_store = SignalStore(db_path)
+        from memory.user_profile_store import UserProfileStore
+        self._user_profile_store = UserProfileStore(db_path)
         self._token_tracker = TokenTracker(db_path)
         self._mission_tracer = MissionTracer(db_path)
         self._work_item_store = WorkItemStore(db_path)
-        for store in (self._session_store, self._signal_store,
+        for store in (self._session_store, self._signal_store, self._user_profile_store,
                       self._token_tracker, self._mission_tracer, self._work_item_store):
             await store.ensure_tables()
 
@@ -216,10 +218,12 @@ class ForgeEngine:
 
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
-        context = self._context_builder.build(
-            position=position, mission=mission, history=history,
-            rag_results=rag_results, daily_context=daily_summary,
-        )
+        _up = ""
+        if self._user_profile_store:
+            try: _up = await self._user_profile_store.build_injection_text(msg.user_id, msg.org_id, msg.position_id)
+            except Exception: pass
+        context = self._context_builder.build(position=position, mission=mission, history=history,
+            rag_results=rag_results, daily_context=daily_summary, user_profile=_up)
 
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
@@ -306,10 +310,12 @@ class ForgeEngine:
             wf_match = self._trigger_manager.match_chat_trigger(msg.content)
             if wf_match:
                 daily_summary += f"\n[系统提示] 用户消息可能与工作流「{wf_match['name']}」相关（关键词: {wf_match['matched_keyword']}）。如果用户想执行它，请调用 run_workflow。"
-        context = self._context_builder.build(
-            position=position, mission=mission, history=history,
-            rag_results=rag_results, daily_context=daily_summary,
-        )
+        _up = ""
+        if self._user_profile_store:
+            try: _up = await self._user_profile_store.build_injection_text(msg.user_id, msg.org_id, msg.position_id)
+            except Exception: pass
+        context = self._context_builder.build(position=position, mission=mission, history=history,
+            rag_results=rag_results, daily_context=daily_summary, user_profile=_up)
         if lc:
             lc.info("pipeline", "context_built", "上下文构建完成",
                     data={"messages": len(context.messages)},
@@ -404,19 +410,13 @@ class ForgeEngine:
     # ── 查询接口 ──────────────────────────────────────────
 
     def _resolve_position(self, msg: UnifiedMessage) -> PositionConfig | None:
-        if not msg.position_id:
-            return None
-        for bundle in self._bundles.values():
-            if msg.position_id in bundle.positions:
-                return bundle.positions[msg.position_id]
+        if not msg.position_id: return None
+        for b in self._bundles.values():
+            if msg.position_id in b.positions: return b.positions[msg.position_id]
         return None
-
     async def reload_profiles(self) -> list[str]:
-        """重新加载所有 Profiles。"""
         self._bundles.clear()
-        for name in self._loader.list_profiles():
-            self._bundles[name] = self._loader.load_profile(name)
-        logger.info("Profiles 重新加载: %s", list(self._bundles.keys()))
+        for name in self._loader.list_profiles(): self._bundles[name] = self._loader.load_profile(name)
         return list(self._bundles.keys())
 
     def get_position(self, profile_name: str, position_id: str) -> PositionConfig | None:
@@ -425,11 +425,9 @@ class ForgeEngine:
 
     def get_positions_list(self, profile_name: str = "") -> list[dict]:
         targets = [self._bundles[profile_name]] if profile_name in self._bundles else self._bundles.values()
-        return [{"position_id": pos.position_id, "display_name": pos.display_name,
-                 "icon": pos.icon, "color": pos.color, "department": pos.department,
-                 "description": pos.description}
-                for b in targets for pos in b.positions.values()]
-
+        return [{"position_id": p.position_id, "display_name": p.display_name, "icon": p.icon,
+                 "color": p.color, "department": p.department, "description": p.description}
+                for b in targets for p in b.positions.values()]
     @property
     def log_collector(self): return self._log_collector
     @property
@@ -454,6 +452,8 @@ class ForgeEngine:
     def connector_store(self): return self._connector_store
     @property
     def sync_manager(self): return self._sync_manager
+    @property
+    def user_profile_store(self): return self._user_profile_store
 
     # ── 生命周期 ──────────────────────────────────────────
 
@@ -476,15 +476,14 @@ class ForgeEngine:
             from core.proactive_engine import ProactiveEngine
             self._proactive = ProactiveEngine(self._work_item_store, self._wf_store, self._session_store, self._gateway)
             self._scheduler.add_job("proactive_check", "AI 主动推送检查", "*/5 * * * *", self._proactive.check_all_users)
-            logger.info("主动推送引擎已启动（每 5 分钟检查）")
-
         if self._knowledge_base:
-            async def _purge_deleted_docs():
-                result = self._knowledge_base.purge_deleted_documents(retain_days=30)
-                logger.info("定时清理软删除文档: %s", result)
-            self._scheduler.add_job("purge_deleted_docs", "软删除物理清理", "0 3 * * *", _purge_deleted_docs)
-            logger.info("软删除清理任务已注册（每日 03:00，保留 30 天）")
-
+            async def _purge(): logger.info("purge: %s", self._knowledge_base.purge_deleted_documents(retain_days=30))
+            self._scheduler.add_job("purge_deleted_docs", "软删除清理", "0 3 * * *", _purge)
+        if self._signal_store:
+            async def _scan():
+                from core.session_analyzer import run_daily_scan
+                await run_daily_scan(self)
+            self._scheduler.add_job("daily_signal_scan", "信号兜底扫描", "5 3 * * *", _scan)
         logger.info("API 服务已启动: http://%s:%d", host, api_port)
         try:
             await asyncio.Event().wait()

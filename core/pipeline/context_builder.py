@@ -26,7 +26,7 @@ class ContextBuilder:
         self, position: PositionConfig, mission: Mission,
         history: list[dict] | None = None, rag_results: list[dict] | None = None,
         memories: list[str] | None = None, tool_descriptions: str = "",
-        daily_context: str = "",
+        daily_context: str = "", user_profile: str = "",
     ) -> ContextResult:
         complexity = self._assess_complexity(mission.instruction)
         system_parts: list[str] = []
@@ -43,6 +43,8 @@ class ContextBuilder:
                 f"{position.context}"
             )
 
+        if user_profile:
+            system_parts.append(f"\n## 个人规范与偏好\n{user_profile}")
         if rag_results:
             rag_text = self._format_rag(rag_results)
             if rag_text:
