@@ -32,3 +32,6 @@ def register_all_nodes(registry: NodeRegistry, llm_client=None) -> None:
     register_scraper(registry)
     register_flow(registry)
     register_data_nodes(registry)
+
+    from workflow.nodes.feishu_api_node import register_feishu_api
+    register_feishu_api(registry)
