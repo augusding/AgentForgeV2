@@ -25,21 +25,30 @@ def _json(data, status: int = 200) -> web.Response:
 
 
 async def _get_wf_store(request):
-    """获取或创建 WorkflowStore。"""
+    """获取 WorkflowStore：优先使用 ForgeEngine 已初始化的实例。"""
+    forge = request.app.get("engine")
+    if forge and forge.wf_store:
+        return forge.wf_store
     if "wf_store" not in request.app:
         from workflow.store import WorkflowStore
-        engine = request.app["engine"]
-        store = WorkflowStore(str(engine.root_dir / "data" / "workflows.db"))
+        store = WorkflowStore(str(forge.root_dir / "data" / "workflows.db") if forge else "data/workflows.db")
         await store.ensure_tables()
         request.app["wf_store"] = store
     return request.app["wf_store"]
 
 
 async def _get_wf_engine(request):
-    """获取或创建 WorkflowEngine。"""
+    """获取 WorkflowEngine：优先使用 ForgeEngine 已初始化的实例（含完整节点注册）。"""
+    forge = request.app.get("engine")
+    if forge and forge.wf_engine:
+        return forge.wf_engine
     if "wf_engine" not in request.app:
         from workflow.engine import WorkflowEngine
-        request.app["wf_engine"] = WorkflowEngine()
+        from workflow.registry import NodeRegistry
+        from workflow.nodes import register_all_nodes
+        registry = NodeRegistry()
+        register_all_nodes(registry)
+        request.app["wf_engine"] = WorkflowEngine(registry=registry)
     return request.app["wf_engine"]
 
 
@@ -115,10 +124,10 @@ async def handle_workflow_execute(request: web.Request) -> web.Response:
     ctx = {"llm": engine._llm, "gateway": request.app.get("gateway"), "user_id": uid,
            "wf_engine": wf_engine, "wf_store": store}
     # 注入岗位 context
-    if wf.get("position_id"):
+    if wf.position_id:
         try:
             for b in engine._bundles.values():
-                pos = b.positions.get(wf["position_id"])
+                pos = b.positions.get(wf.position_id)
                 if pos:
                     if pos.context: ctx["position_context"] = pos.context
                     ctx["position"] = pos
