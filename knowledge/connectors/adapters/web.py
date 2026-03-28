@@ -30,7 +30,13 @@ class WebAdapter(BaseAdapter):
 
     def __init__(self, connector_id: str, config: dict):
         super().__init__(connector_id, config)
-        self._urls: list[str] = config.get("urls", [])
+        raw_urls = config.get("urls", [])
+        if isinstance(raw_urls, str):
+            self._urls = [u.strip() for u in raw_urls.splitlines() if u.strip()]
+        elif isinstance(raw_urls, list):
+            self._urls = [u for u in raw_urls if u]
+        else:
+            self._urls = []
         self._extra_headers: dict = config.get("extra_headers", {})
         self._fetch_mode: str = config.get("fetch_mode", "static")
         self._wait_selector: str = config.get("wait_selector", "body")

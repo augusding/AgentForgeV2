@@ -135,9 +135,17 @@ export default function Connectors() {
               {selType && Object.entries(selType.schema.properties || {}).map(([k, f]) => (
                 <div key={k}>
                   <label className="text-xs mb-1 block" style={{ color: 'var(--text-muted)' }}>{f.title}{selType.schema.required?.includes(k) ? ' *' : ''}</label>
-                  <input value={form.config[k] || (f.default as string) || ''} onChange={e => setForm(p => ({ ...p, config: { ...p.config, [k]: e.target.value } }))}
-                    placeholder={f.description || ''} className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  {(f as any).type === 'array' ? (
+                    <textarea value={Array.isArray(form.config[k]) ? (form.config[k] as unknown as string[]).join('\n') : (form.config[k] as string) || ''}
+                      onChange={e => setForm(p => ({ ...p, config: { ...p.config, [k]: e.target.value } }))}
+                      placeholder={(f.description || '') + '\n每行一个'} rows={3}
+                      className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  ) : (
+                    <input value={(form.config[k] as string) || (f.default as string) || ''} onChange={e => setForm(p => ({ ...p, config: { ...p.config, [k]: e.target.value } }))}
+                      placeholder={f.description || ''} className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+                  )}
                 </div>
               ))}
               <div>
