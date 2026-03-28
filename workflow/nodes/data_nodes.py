@@ -2,8 +2,10 @@
 
 import json
 import logging
-import time
-from pathlib import Path
+import os as _os
+import time as _time_mod
+
+import aiosqlite as _aiosqlite
 
 from workflow.registry import NodeRegistry, NodeTypeInfo
 from workflow.expression import ExprContext
@@ -46,42 +48,53 @@ async def _approval_executor(node: WorkflowNode, variables: dict, ctx: dict) -> 
     return NodeResult(node_id=node.id, status="waiting_approval", output={"approved": None, "approver": approver})
 
 
-_kv: dict = {}
-_KV_FILE = Path("data/workflow_kv.json")
+_KV_DB = _os.path.join(_os.environ.get("AGENTFORGE_ROOT", "."), "data", "workflow_kv.db")
 
-def _load_kv():
-    global _kv
-    if _KV_FILE.exists():
-        try: _kv = json.loads(_KV_FILE.read_text(encoding="utf-8"))
-        except Exception: _kv = {}
 
-def _save_kv():
-    _KV_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _KV_FILE.write_text(json.dumps(_kv, ensure_ascii=False, indent=2), encoding="utf-8")
+async def _kv_ensure(db):
+    await db.execute("CREATE TABLE IF NOT EXISTS kv_store (org_id TEXT NOT NULL DEFAULT '', key TEXT NOT NULL, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL, PRIMARY KEY (org_id, key))")
+    await db.commit()
 
 
 async def _kv_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeResult:
-    _load_kv()
     action = node.config.get("action", "get")
     key = node.config.get("key", "")
-    if not key: return NodeResult(node_id=node.id, status="failed", error="key 不能为空")
-
-    if action == "get":
-        return NodeResult(node_id=node.id, status="completed", output={"key": key, "value": _kv.get(key), "exists": key in _kv})
-    if action == "set":
-        val = node.config.get("value", "") or ctx.get("_last_output", {})
-        if isinstance(val, str):
-            try: val = json.loads(val)
-            except json.JSONDecodeError: pass
-        _kv[key] = val; _save_kv()
-        return NodeResult(node_id=node.id, status="completed", output={"key": key, "value": val})
-    if action == "delete":
-        existed = key in _kv; _kv.pop(key, None); _save_kv()
-        return NodeResult(node_id=node.id, status="completed", output={"key": key, "deleted": existed})
-    if action == "list":
-        matching = {k: v for k, v in _kv.items() if k.startswith(key)}
-        return NodeResult(node_id=node.id, status="completed", output={"keys": list(matching.keys()), "count": len(matching)})
-    return NodeResult(node_id=node.id, status="failed", error=f"未知操作: {action}")
+    org_id = ctx.get("org_id") or variables.get("org_id", "")
+    if not key:
+        return NodeResult(node_id=node.id, status="failed", error="key 不能为空")
+    _os.makedirs(_os.path.dirname(_KV_DB), exist_ok=True)
+    try:
+        async with _aiosqlite.connect(_KV_DB) as db:
+            db.row_factory = _aiosqlite.Row
+            await _kv_ensure(db)
+            if action == "get":
+                cur = await db.execute("SELECT value FROM kv_store WHERE org_id=? AND key=?", (org_id, key))
+                row = await cur.fetchone()
+                if row:
+                    try: val = json.loads(row["value"])
+                    except Exception: val = row["value"]
+                    return NodeResult(node_id=node.id, status="completed", output={"key": key, "value": val, "exists": True})
+                return NodeResult(node_id=node.id, status="completed", output={"key": key, "value": None, "exists": False})
+            if action == "set":
+                val = node.config.get("value")
+                if val is None: val = ctx.get("_last_output", {})
+                vs = json.dumps(val, ensure_ascii=False) if not isinstance(val, str) else val
+                await db.execute("INSERT OR REPLACE INTO kv_store VALUES (?,?,?,?)", (org_id, key, vs, _time_mod.time()))
+                await db.commit()
+                try: ov = json.loads(vs)
+                except Exception: ov = vs
+                return NodeResult(node_id=node.id, status="completed", output={"key": key, "value": ov})
+            if action == "delete":
+                cur = await db.execute("DELETE FROM kv_store WHERE org_id=? AND key=?", (org_id, key))
+                await db.commit()
+                return NodeResult(node_id=node.id, status="completed", output={"key": key, "deleted": cur.rowcount > 0})
+            if action == "list":
+                cur = await db.execute("SELECT key FROM kv_store WHERE org_id=? AND key LIKE ?", (org_id, key + "%"))
+                keys = [r["key"] for r in await cur.fetchall()]
+                return NodeResult(node_id=node.id, status="completed", output={"keys": keys, "count": len(keys)})
+        return NodeResult(node_id=node.id, status="failed", error=f"未知操作: {action}")
+    except Exception as e:
+        return NodeResult(node_id=node.id, status="failed", error=f"KV 操作失败: {e}")
 
 
 def register_data_nodes(registry: NodeRegistry) -> None:

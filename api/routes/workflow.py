@@ -112,7 +112,18 @@ async def handle_workflow_execute(request: web.Request) -> web.Response:
 
     user = request.get("user") or {}
     uid = user.get("sub", "") if isinstance(user, dict) else ""
-    ctx = {"llm": engine._llm, "gateway": request.app.get("gateway"), "user_id": uid}
+    ctx = {"llm": engine._llm, "gateway": request.app.get("gateway"), "user_id": uid,
+           "wf_engine": wf_engine, "wf_store": store}
+    # 注入岗位 context
+    if wf.get("position_id"):
+        try:
+            for b in engine._bundles.values():
+                pos = b.positions.get(wf["position_id"])
+                if pos:
+                    if pos.context: ctx["position_context"] = pos.context
+                    ctx["position"] = pos
+                    break
+        except Exception: pass
     execution = await wf_engine.run(wf, trigger_data=trigger_data, context=ctx, stop_at_node=stop_at)
 
     # 持久化执行记录
@@ -162,7 +173,8 @@ async def handle_webhook(request: web.Request) -> web.Response:
     trigger_id = request.match_info["trigger_id"]
     body = await request.json() if request.can_read_body else {}
     tm = await _get_trigger_manager(request)
-    ctx = {"llm": request.app["engine"]._llm}
+    engine = request.app["engine"]
+    ctx = {"llm": engine._llm, "wf_engine": engine.wf_engine, "wf_store": engine.wf_store}
     result = await tm.handle_webhook(trigger_id, body, context=ctx)
     return _json(result, status=200 if "error" not in result else 404)
 
