@@ -30,7 +30,6 @@ tools:
 - email_sender
 - http_request
 - calculator
-knowledge_scope:
 - 项目管理规范
 - 需求文档模板
 - 发版流程SOP

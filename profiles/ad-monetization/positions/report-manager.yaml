@@ -131,7 +131,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "历史汇报"
   - "汇报模板"
   - "汇报制度"

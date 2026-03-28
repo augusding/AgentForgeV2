@@ -108,7 +108,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "运维手册"
   - "应急预案库"
   - "监控告警规则"

@@ -108,7 +108,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "广告源对接文档"
   - "Waterfall配置手册"
   - "eCPM基准数据"

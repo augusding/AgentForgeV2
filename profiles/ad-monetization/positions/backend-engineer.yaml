@@ -103,7 +103,6 @@ dashboard:
       source:
         type: "computed"
 
-knowledge_scope:
   - "系统架构文档"
   - "API接口文档"
   - "OpenRTB协议规范"

@@ -24,7 +24,7 @@ export default function Chat() {
   const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string }>>([])
   const [quickCmds, setQuickCmds] = useState<string[]>([])
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
-  const [knowledgeScope, setKnowledgeScope] = useState<string[]>([]); const [hasKB, setHasKB] = useState(false)
+  const [hasKB, setHasKB] = useState(false)
   const [personality, setPersonality] = useState('')
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const [previewFile, setPreviewFile] = useState<{ path: string; filename: string; format?: string; size?: number } | null>(null)
@@ -53,7 +53,7 @@ export default function Chat() {
   }, [user?.active_position])
   useEffect(() => {
     if (!positionId) return
-    client.get(`/positions/${positionId}`).then((d: any) => { setPosInfo(d); setKnowledgeScope(d.knowledge_scope || []); setPersonality(d.role || d.description || '') }).catch(() => {})
+    client.get(`/positions/${positionId}`).then((d: any) => { setPosInfo(d); setPersonality(d.role || d.description || '') }).catch(() => {})
     client.get('/knowledge/stats').then((d: any) => setHasKB((d.count || d.total_chunks || 0) > 0)).catch(() => {})
   }, [positionId])
 
@@ -165,10 +165,6 @@ export default function Chat() {
                     <span className="text-xs font-medium">{c.t}</span>
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{c.d}</span></button>))}
               </div>
-              {knowledgeScope.length > 0 && <div className="flex flex-wrap justify-center gap-1.5 mb-5">
-                <span className="text-[10px] flex items-center gap-1 mr-1" style={{ color: 'var(--text-muted)' }}><BookOpen size={10} /> 知识范围:</span>
-                {knowledgeScope.slice(0, 6).map(k => <span key={k} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: `${clr}10`, color: clr, border: `1px solid ${clr}25` }}>{k}</span>)}
-              </div>}
               {quickCmds.length > 0 && <div className="w-full">
                 <p className="text-xs text-center mb-2 flex items-center justify-center gap-1" style={{ color: 'var(--text-muted)' }}>
                   <Sparkles size={12} style={{ color: clr }} /> 推荐试试</p>

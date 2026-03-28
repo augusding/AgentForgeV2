@@ -96,7 +96,6 @@ dashboard:
         query: "test_coverage"
         refresh: "1h"
 
-knowledge_scope:
   - "前端架构文档"
   - "组件库文档"
   - "设计规范"

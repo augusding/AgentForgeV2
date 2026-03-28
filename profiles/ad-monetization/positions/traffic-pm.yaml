@@ -107,7 +107,6 @@ dashboard:
         query: "ad_load_time"
         refresh: "1h"
 
-knowledge_scope:
   - "广告位设计规范"
   - "流量分配策略文档"
   - "A/B实验方法论"

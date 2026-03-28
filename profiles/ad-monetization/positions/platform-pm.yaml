@@ -88,7 +88,6 @@ dashboard:
       source:
         type: "computed"
 
-knowledge_scope:
   - "广告平台PRD模板"
   - "产品设计规范"
   - "竞品分析报告"

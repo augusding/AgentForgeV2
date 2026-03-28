@@ -106,7 +106,6 @@ dashboard:
         query: "render_success_rate"
         refresh: "1h"
 
-knowledge_scope:
   - "SDK接口文档"
   - "系统集成方案"
   - "性能基准数据"

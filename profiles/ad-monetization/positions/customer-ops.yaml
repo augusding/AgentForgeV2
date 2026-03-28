@@ -107,7 +107,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "客服话术库"
   - "常见问题FAQ"
   - "行业解决方案"

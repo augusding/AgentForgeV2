@@ -143,7 +143,6 @@ class ConfigLoader:
             default_model=raw.get("default_model", defaults.get("default_model", "sonnet")),
             complex_model=raw.get("complex_model", defaults.get("complex_model", "opus")),
             tools=self._parse_tools(raw.get("tools", [])),
-            knowledge_scope=raw.get("knowledge_scope", []),
             skills=self._parse_skills(raw.get("tools", []), raw.get("skills", [])),
             dashboard=raw.get("dashboard", {}),
             onboarding=raw.get("onboarding", {}),

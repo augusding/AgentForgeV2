@@ -117,7 +117,6 @@ dashboard:
         query: "calibration_error"
         refresh: "1h"
 
-knowledge_scope:
   - "模型架构文档"
   - "特征字典"
   - "实验记录库"

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Briefcase, ChevronDown, ChevronRight, Loader2, Zap, BookOpen, Target } from 'lucide-react'
+import { Briefcase, ChevronDown, ChevronRight, Loader2, Zap, Target } from 'lucide-react'
 import client from '../../api/client'
 
 export default function PositionsTab() {
@@ -57,10 +57,6 @@ export default function PositionsTab() {
                     <div className="text-[10px] font-medium mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><Zap size={10} /> 工具 ({d.tools.length})</div>
                     <div className="flex flex-wrap gap-1.5">{d.tools.map((t: string) => <span key={t} className="text-[9px] px-2 py-0.5 rounded-full font-mono"
                       style={{ background: 'var(--accent)10', color: 'var(--accent)', border: '1px solid var(--accent)30' }}>{t}</span>)}</div></div>}
-                  {d.knowledge_scope?.length > 0 && <div>
-                    <div className="text-[10px] font-medium mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}><BookOpen size={10} /> 知识范围</div>
-                    <div className="flex flex-wrap gap-1.5">{d.knowledge_scope.map((k: string) => <span key={k} className="text-[9px] px-2 py-0.5 rounded-full"
-                      style={{ background: '#22c55e15', color: '#22c55e', border: '1px solid #22c55e30' }}>{k}</span>)}</div></div>}
                 </>)})() : <Loader2 className="animate-spin" size={14} style={{ color: 'var(--accent)' }} />}
               </div>)}
           </div>))}</div>

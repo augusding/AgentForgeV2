@@ -103,7 +103,6 @@ dashboard:
       source:
         type: "computed"
 
-knowledge_scope:
   - "数据仓库模型文档"
   - "ETL开发规范"
   - "数据字典"

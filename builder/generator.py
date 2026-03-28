@@ -53,9 +53,6 @@ tools:
   - 工具1
   - 工具2
 
-knowledge_scope:
-  - 知识领域1
-
 onboarding:
   tip: "一句话提示"
   prompts:

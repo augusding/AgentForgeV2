@@ -94,7 +94,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "运营活动SOP"
   - "广告主成长体系"
   - "投放最佳实践"

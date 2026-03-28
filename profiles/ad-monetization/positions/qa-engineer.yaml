@@ -100,7 +100,6 @@ dashboard:
         query: "avg_bug_fix_time"
         refresh: "1h"
 
-knowledge_scope:
   - "测试规范文档"
   - "测试用例库"
   - "广告链路文档"

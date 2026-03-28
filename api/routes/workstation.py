@@ -45,7 +45,7 @@ async def handle_home(request: web.Request) -> web.Response:
         return _json({
             "assigned": False, "position": None, "assistant": {},
             "metrics": [], "quick_workflows": [], "tools": [],
-            "knowledge_scope": [], "onboarding": {}, "recent_chats": [], "pending_items": [],
+            "onboarding": {}, "recent_chats": [], "pending_items": [],
         })
 
     position_info = {
@@ -83,7 +83,6 @@ async def handle_home(request: web.Request) -> web.Response:
         "metrics": [],
         "quick_workflows": quick_workflows,
         "tools": pos_cfg.tools,
-        "knowledge_scope": pos_cfg.knowledge_scope,
         "onboarding": pos_cfg.onboarding,
         "recent_chats": recent_chats,
         "pending_items": [],
@@ -113,7 +112,7 @@ async def handle_position_detail(request: web.Request) -> web.Response:
                 "icon": pos.icon, "color": pos.color,
                 "department": pos.department, "domain": pos.domain,
                 "description": pos.description, "tools": pos.tools,
-                "knowledge_scope": pos.knowledge_scope, "onboarding": pos.onboarding,
+                "onboarding": pos.onboarding,
                 "skills": [{"id": s.get("id", ""), "name": s.get("name", "")} for s in pos.skills],
             })
     return _json({"error": "岗位不存在"}, status=404)

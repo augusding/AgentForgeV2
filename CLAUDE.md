@@ -1,5 +1,13 @@
 # AgentForge V2 — Smart Workstation Platform
 
+## 会话续接
+每次新会话开始前，先执行：`cat claude-progress.txt`
+了解上次进度后再开始工作。
+任务完成后执行 `/save-progress` 保存进度。
+
+---
+
+
 ## 项目定位
 流程驱动、AI辅助的智能工位平台。每个岗位拥有专属AI助手，在确定性工作流中嵌入概率性AI能力。
 
@@ -54,6 +62,7 @@
 - 异步方法统一用 `async def`
 - 配置统一从 `core/config/loader.py` 加载
 - 错误处理: 业务错误用自定义 Exception，不要 bare except
+- 新建功能模块前先查阅 `skills/` 目录下对应的 Skill 文件
 
 ## 数据隔离规则（强制）
 

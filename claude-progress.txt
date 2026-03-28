@@ -1,0 +1,112 @@
+# AgentForge V2 — 开发进度
+更新时间：2026-03-28 16:00
+
+## 本次完成
+
+### 核心功能修复（约 20 个 commit）
+- 知识库：统计/删除/文件隔离（chat vs knowledge 目录分离）
+- 文档转换：converter_tools 相对路径、PPT/Word/Excel 预览
+- 文件生成：word_processor/excel_processor/ppt_processor path 自动生成
+- 工具调用：tool_choice 强制 + 后处理兜底（post_file_handler 意图检测）
+- 流式输出：thinking 事件消除空白期、1.5s 空闲检测自动提示
+- 下载：MIME 类型映射、URL 编码中文文件名
+- 会话历史：tool_calls/attachments 持久化到 DB 并在刷新后恢复
+- 搜索：搜狗搜索 snippet 提取重写、datetime 卡片名修复
+
+### 工具箱可插拔架构
+- 12 个 YAML 工具定义（写作/报告/文档 3 类）
+- 后端 /api/v1/toolbox/tools API + 前端 Toolbox/ToolPanel 动态表单
+- 斜杠命令精简为 8 个（工位/工作流/知识库 3 组）
+
+### AI 会话 + 工作流联动
+- list_workflows / run_workflow 工具 + 确认卡片
+- list_knowledge_files 工具 + 知识库文件列表卡片
+- ECharts 图表卡片（chart_generator 渲染）
+
+### 工位页面重设计
+- 4 统计 + 任务看板（3 列）+ 时间线日程 + 跟进提醒 + AI 建议
+- 周/月维度筛选、导航回来自动刷新
+
+### 企业知识库连接器（Phase 1 + Phase 2，T1-T16）
+- T1: BaseAdapter / RawDoc / ConnectorRegistry（单例路由表）
+- T2: ConnectorStore（SQLite + Fernet 加密 + 审计日志 + DLQ）
+- T3: QualityFilter（hash 去重 + 乱码检测 + 质量评分）
+- T4: SyncManager（断路器三态 + Connector Lock + Org Semaphore + Cursor Checkpoint）
+- T5: LocalFileAdapter（mtime 游标增量）
+- T6: WebAdapter（SSL 强制 + URL 游标增量）
+- T7: Connector API 路由（CRUD + test + sync + status + types + history + DLQ + reconcile）
+- T8: ForgeEngine 集成（ConnectorStore + SyncManager 属性）
+- T9: 前端 Connectors 页面（动态 Schema 表单 + 同步状态轮询）
+- T10: 全量验证
+- T11: ConfluenceAdapter（REST API v2 + ISO 8601 cursor）
+- T12: SQLAdapter（row_to_doc / query_to_doc / table_summary，写操作拦截）
+- T13: WebAdapter 双引擎（static + playwright browser）+ langdetect 语言检测
+- T14: 同步监控面板（操作历史 + DLQ UI + 手动重试）
+- T15: 删除对账（soft_delete + orphan reconciliation）
+- T16: 软删除物理清理（每日 03:00 定时任务，保留 30 天）
+- Fix: adapter __init__ cid->connector_id
+- Fix: WebAdapter urls 字符串/数组兼容 + textarea
+- Feat: 知识库页面展示连接器来源标签、URL 链接、语言、质量
+
+## 当前系统状态
+- 服务状态：运行中（Backend PID 531 @ :8080, Frontend PID 532 @ :3001）
+- 工具数量：23 个
+- 连接器类型：4 种（local_file, web, confluence, sql）
+- 最近 commit：
+  504ff9a feat(knowledge): show source_type badge, source_url link, lang, quality for connector docs
+  a35789e fix(connectors): WebAdapter urls string/array normalize, textarea for array fields
+  72a3fb0 fix(connectors): adapter __init__ cid->connector_id matches registry.build() kwargs
+
+## 遗留问题 / 下次继续
+1. 工位页面优化：AI 建议逻辑可进一步设计（当前是规则生成，可改为 LLM 分析）
+2. 连接器端到端验证：创建 LocalFile 连接器 → 同步 → 知识库页面看到文档 → AI 对话检索到内容
+3. Confluence/SQL 连接器需要真实环境验证（目前只有代码和单元级验证）
+4. playwright browser 模式需要安装 chromium（pip install playwright && playwright install chromium）
+5. CONNECTOR_ENCRYPT_KEY 环境变量未设置（生产环境需要配置）
+6. 前端 Workstation.tsx 已被用户手动修改（增加了周/月筛选、useLocation 刷新）
+
+## 关键文件变更
+
+### 后端
+- core/engine.py — ConnectorStore/SyncManager 集成 + tool_hint + post_file_handler
+- core/agent.py — tool_choice + thinking 事件
+- core/llm.py — tool_choice 参数
+- core/pipeline/context_builder.py — system prompt 工具使用原则
+- core/pipeline/post_file_handler.py — 文件意图检测 + 自动创建
+- api/routes/connectors.py — 13 个端点
+- api/routes/knowledge.py — 清空/文件列表/统计 + 来源字段
+- api/routes/chat.py — thinking SSE 事件
+- api/routes/files.py — MIME + PPT zipfile 预览
+- api/routes/workstation.py — daily-brief 返回原始数据
+- api/routes/toolbox.py — 工具箱 API
+- api/routes/compat.py — tool_calls/attachments 返回
+- knowledge/connectors/ — BaseAdapter, Registry, Store, 4 个 Adapter
+- knowledge/sync_manager.py — 断路器 + DLQ + 对账
+- knowledge/pipeline/quality_filter.py — langdetect + 质量评分
+- knowledge/rag.py — soft_delete + purge + list_doc_ids_by_source
+- tools/builtin/workflow_tools.py — list_workflows + run_workflow
+- tools/builtin/search_knowledge.py — list_knowledge_files
+- tools/builtin/document_tools.py — auto_path + rel_path
+- tools/builtin/converter_tools.py — 相对路径
+- tools/builtin/extra_tools.py — ppt auto_path + rel_path
+- tools/builtin/core_tools.py — 搜狗搜索 snippet
+- tools/toolbox/*.yaml — 12 个工具定义
+
+### 前端
+- frontend/src/pages/Chat.tsx — 工具箱 + 斜杠命令 + idle 检测
+- frontend/src/pages/Knowledge.tsx — 来源标签 + 过滤 + 连接器文档
+- frontend/src/pages/Workstation.tsx — 任务看板 + 时间线
+- frontend/src/pages/Connectors.tsx — 连接器管理 + 监控面板
+- frontend/src/components/ActionCards.tsx — ChartCard + WorkflowCards + KnowledgeFilesCard
+- frontend/src/components/Toolbox.tsx — 可折叠工具箱
+- frontend/src/components/ToolPanel.tsx — 动态表单
+- frontend/src/components/ConnectorMonitor.tsx — 操作历史 + DLQ
+- frontend/src/components/FilePreviewPanel.tsx — PPT/table/slides/richtext
+- frontend/src/components/SlashCommandMenu.tsx — 8 命令 3 组
+- frontend/src/components/ChatWidgets.tsx — 工具映射
+- frontend/src/stores/useChatStore.ts — tool_calls 持久化
+- frontend/src/api/connectors.ts + connector_monitor.ts
+- frontend/src/App.tsx + MainLayout.tsx — /connectors 路由 + 侧栏
+
+## 下次会话快速启动语
+"继续企业连接器端到端验证：创建一个 LocalFile 连接器指向 data/uploads 目录，触发同步，验证知识库页面显示来源标签为'本地文件'，然后在 AI 对话中搜索同步的内容确认检索链路通畅。同时需要重启服务（上次改了 knowledge.py 和 Knowledge.tsx）。"

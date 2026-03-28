@@ -113,7 +113,6 @@ dashboard:
       source:
         type: "manual"
 
-knowledge_scope:
   - "策略设计方法论"
   - "A/B实验规范"
   - "算法指标定义"
