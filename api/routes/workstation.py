@@ -108,7 +108,9 @@ async def handle_position_detail(request: web.Request) -> web.Response:
                 "position_id": pos.position_id, "display_name": pos.display_name,
                 "icon": pos.icon, "color": pos.color,
                 "department": pos.department, "domain": pos.domain,
-                "description": pos.description,
+                "description": pos.description, "role": pos.role, "goal": pos.goal,
+                "identity": pos.identity, "values": pos.values, "behavior": pos.behavior,
+                "default_model": pos.default_model, "complex_model": pos.complex_model,
                 "onboarding": pos.onboarding,
             })
     return _json({"error": "岗位不存在"}, status=404)
