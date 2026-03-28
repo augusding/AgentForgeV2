@@ -5,7 +5,7 @@ import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, addEdge, u
 import '@xyflow/react/dist/style.css'
 import dagre from 'dagre'
 import { ArrowLeft, Save, Play, Loader2, Layout, Download, Clock, X } from 'lucide-react'
-import { getWorkflow, updateWorkflow, createWorkflow, executeWorkflow, getNodeCatalog, getExecutions, type NodeTypeDef } from '../../api/workflow'
+import { getWorkflow, updateWorkflow, createWorkflow, getNodeCatalog, getExecutions, type NodeTypeDef } from '../../api/workflow'
 import WfNode from './WfNode'
 import NodePalette from './NodePalette'
 import PropertyPanel from './PropertyPanel'
@@ -110,10 +110,28 @@ function WorkflowEditorInner() {
 
   const runWf = async (stopAt = '') => {
     if (!wfId) { await handleSave(); return }; setExecStatus({}); setExecuting(true)
-    try { const body: any = { trigger_data: {} }; if (stopAt) body.stop_at_node = stopAt
-      const r = await executeWorkflow(wfId, body)
-      if (r.node_results) { const sm: ES = {}; for (const [nid, nr] of Object.entries(r.node_results as Record<string, any>)) sm[nid] = { status: nr.status, output: nr.output, error: nr.error, duration: nr.duration }; setExecStatus(sm) }
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { toast.success(`完成: ${r.status}`); setExecuting(false) }
+    try {
+      const token = localStorage.getItem('agentforge_token') || ''
+      const body: any = { trigger_data: {} }; if (stopAt) body.stop_at_node = stopAt
+      const resp = await fetch(`/api/v1/workflows/${wfId}/execute/stream`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body) })
+      if (!resp.ok || !resp.body) { toast.error('执行失败'); setExecuting(false); return }
+      const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = ''
+      while (true) { const { done, value } = await reader.read(); if (done) break
+        buf += dec.decode(value, { stream: true }); const parts = buf.split('\n\n'); buf = parts.pop() || ''
+        for (const part of parts) { if (!part.trim()) continue; let evt = '', data = ''
+          for (const ln of part.split('\n')) { if (ln.startsWith('event: ')) evt = ln.slice(7); if (ln.startsWith('data: ')) data = ln.slice(6) }
+          if (!evt || !data) continue
+          try { const d = JSON.parse(data)
+            if (evt === 'node_start') setExecStatus(p => ({ ...p, [d.node_id]: { status: 'running' } }))
+            else if (evt === 'node_done') setExecStatus(p => ({ ...p, [d.node_id]: { status: d.status, duration: d.duration } }))
+            else if (evt === 'node_error') setExecStatus(p => ({ ...p, [d.node_id]: { status: 'failed', error: d.error } }))
+            else if (evt === 'done') {
+              if (d.node_results) { const sm: ES = {}; for (const [nid, nr] of Object.entries(d.node_results as Record<string, any>)) sm[nid] = { status: nr.status, output: nr.output, error: nr.error, duration: nr.duration }; setExecStatus(sm) }
+              toast.success(`完成: ${d.status} (${d.duration?.toFixed(1)}s)`); setExecuting(false) }
+            else if (evt === 'error') { toast.error(d.message || '执行出错'); setExecuting(false) }
+          } catch {} } }
     } catch { toast.error('执行失败'); setExecuting(false) }
   }
 

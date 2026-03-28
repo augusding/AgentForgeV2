@@ -160,6 +160,7 @@ class WorkflowStore(BaseStore):
             "id": node.id, "type": node.type, "label": node.label,
             "config": node.config, "inputs": node.inputs, "outputs": node.outputs,
             "next_nodes": node.next_nodes, "position": node.position,
+            "disabled": node.disabled, "retry_count": node.retry_count, "retry_delay": node.retry_delay,
         }
 
     @staticmethod

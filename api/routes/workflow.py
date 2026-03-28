@@ -146,6 +146,75 @@ async def handle_workflow_execute(request: web.Request) -> web.Response:
     })
 
 
+async def handle_workflow_execute_stream(request: web.Request) -> web.StreamResponse:
+    """POST /api/v1/workflows/{workflow_id}/execute/stream — SSE 流式执行"""
+    store = await _get_wf_store(request)
+    wf_engine = await _get_wf_engine(request)
+    engine = request.app["engine"]
+    wf_id = request.match_info["workflow_id"]
+    wf = await store.get_workflow(wf_id)
+    if not wf:
+        return web.Response(status=404, text="工作流不存在")
+    body = await request.json() if request.can_read_body else {}
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"})
+    await resp.prepare(request)
+
+    async def sse(event: str, data: dict):
+        try: await resp.write(f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n".encode())
+        except Exception: pass
+
+    event_queue: asyncio.Queue = asyncio.Queue()
+    class _SSEGw:
+        async def push_to_user(self, uid, data): await event_queue.put(data)
+
+    ctx = {"llm": engine._llm, "gateway": _SSEGw(), "user_id": uid,
+           "wf_engine": wf_engine, "wf_store": store}
+    if wf.position_id:
+        try:
+            for b in engine._bundles.values():
+                pos = b.positions.get(wf.position_id)
+                if pos:
+                    if pos.context: ctx["position_context"] = pos.context
+                    ctx["position"] = pos; break
+        except Exception: pass
+
+    async def _run():
+        try:
+            ex = await wf_engine.run(wf, trigger_data=body.get("trigger_data", {}), context=ctx)
+            await event_queue.put({"type": "__done__", "ex": ex})
+        except Exception as e:
+            await event_queue.put({"type": "__error__", "error": str(e)})
+
+    task = asyncio.create_task(_run())
+    try:
+        while True:
+            try: ev = await asyncio.wait_for(event_queue.get(), timeout=120)
+            except asyncio.TimeoutError: await sse("error", {"message": "超时"}); break
+            et = ev.get("type", "")
+            if et == "__done__":
+                ex = ev["ex"]
+                nrd = {nid: {"status": nr.status, "output": nr.output, "error": nr.error, "duration": nr.duration}
+                       for nid, nr in ex.node_results.items()}
+                await store.save_execution(exec_id=ex.id, workflow_id=wf_id, status=ex.status,
+                    node_results=nrd, variables=ex.variables, started_at=ex.started_at,
+                    completed_at=ex.completed_at, error=ex.error)
+                await sse("done", {"execution_id": ex.id, "status": ex.status,
+                    "duration": ex.completed_at - ex.started_at, "node_results": nrd})
+                break
+            elif et == "__error__":
+                await sse("error", {"message": ev.get("error", "")}); break
+            elif et == "workflow_node_status":
+                ns = ev.get("status", "")
+                if ns == "running": await sse("node_start", {"node_id": ev.get("node_id")})
+                elif ns in ("completed", "skipped"): await sse("node_done", {"node_id": ev.get("node_id"), "status": ns, "duration": ev.get("duration", 0)})
+                elif ns == "failed": await sse("node_error", {"node_id": ev.get("node_id"), "error": ev.get("error", "")})
+    except ConnectionResetError: pass
+    finally: task.cancel()
+    return resp
+
+
 async def handle_workflow_executions(request: web.Request) -> web.Response:
     """GET /api/v1/workflows/{workflow_id}/executions"""
     store = await _get_wf_store(request)
@@ -220,6 +289,7 @@ def register(app: web.Application) -> None:
     app.router.add_put("/api/v1/workflows/{workflow_id}", handle_workflow_create)  # upsert
     app.router.add_delete("/api/v1/workflows/{workflow_id}", handle_workflow_delete)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute", handle_workflow_execute)
+    app.router.add_post("/api/v1/workflows/{workflow_id}/execute/stream", handle_workflow_execute_stream)
     app.router.add_get("/api/v1/workflows/{workflow_id}/executions", handle_workflow_executions)
     app.router.add_post("/api/v1/webhook/{trigger_id}", handle_webhook)
     app.router.add_get("/api/v1/triggers", handle_trigger_list)

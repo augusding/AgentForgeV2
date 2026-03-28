@@ -22,6 +22,8 @@ class WorkflowNode:
     next_nodes: list[str] = field(default_factory=list)  # 后续节点 ID
     position: dict = field(default_factory=dict)         # UI 位置 {x, y}
     disabled: bool = False
+    retry_count: int = 0        # 失败重试次数（0=不重试）
+    retry_delay: float = 2.0   # 重试间隔秒数
 
 
 @dataclass
@@ -63,3 +65,4 @@ class WorkflowExecution:
     started_at: float = 0.0
     completed_at: float = 0.0
     error: str = ""
+    paused_at_node: str = ""

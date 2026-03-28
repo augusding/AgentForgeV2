@@ -128,34 +128,39 @@ class WorkflowEngine:
 
     async def _execute_node(self, node: WorkflowNode, execution: WorkflowExecution,
                             edges: list[dict], ctx: dict) -> NodeResult:
-        """执行单个节点：表达式解析 → 执行器调用。"""
+        """执行单个节点：表达式解析 → 执行器调用 → 失败重试。"""
         if node.disabled:
             return NodeResult(node_id=node.id, status="skipped", output={"skipped_reason": "disabled"})
         executor = self._registry.get_executor(node.type)
         if not executor:
             return NodeResult(node_id=node.id, status="failed", error=f"未知节点类型: {node.type}")
-
         upstream = _get_upstream_output(node.id, edges, execution)
         node_outputs = {nid: nr.output for nid, nr in execution.node_results.items() if nr.output}
-
         enriched_ctx = {**ctx, "_last_output": upstream, "_node_outputs": node_outputs}
-
         start = time.time()
         try:
-            expr_ctx = ExprContext(
-                input_data=upstream, node_outputs=node_outputs,
-                variables=execution.variables, parameters=node.config)
-            resolved_node = WorkflowNode(
-                id=node.id, type=node.type, label=node.label,
-                config=expr_ctx.resolve_dict(node.config),
-                inputs=node.inputs, outputs=node.outputs,
-                next_nodes=node.next_nodes, position=node.position)
-
-            result = await executor(resolved_node, execution.variables, enriched_ctx)
-            result.duration = time.time() - start
-            return result
+            expr_ctx = ExprContext(input_data=upstream, node_outputs=node_outputs,
+                                   variables=execution.variables, parameters=node.config)
+            resolved = WorkflowNode(id=node.id, type=node.type, label=node.label,
+                config=expr_ctx.resolve_dict(node.config), inputs=node.inputs, outputs=node.outputs,
+                next_nodes=node.next_nodes, position=node.position,
+                retry_count=node.retry_count, retry_delay=node.retry_delay)
         except Exception as e:
-            return NodeResult(node_id=node.id, status="failed", error=str(e), duration=time.time() - start)
+            return NodeResult(node_id=node.id, status="failed", error=f"表达式解析失败: {e}", duration=time.time() - start)
+        max_attempts = max(1, resolved.retry_count + 1)
+        last_result: NodeResult | None = None
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                await asyncio.sleep(resolved.retry_delay)
+                logger.info("节点重试 %s attempt=%d/%d", node.id, attempt + 1, max_attempts)
+            try:
+                result = await executor(resolved, execution.variables, enriched_ctx)
+                result.duration = time.time() - start
+                if result.status != "failed": return result
+                last_result = result
+            except Exception as e:
+                last_result = NodeResult(node_id=node.id, status="failed", error=str(e), duration=time.time() - start)
+        return last_result or NodeResult(node_id=node.id, status="failed", error="执行失败", duration=time.time() - start)
 
 
 def _find_edge(edges: list[dict], source: str, target: str) -> dict | None:
