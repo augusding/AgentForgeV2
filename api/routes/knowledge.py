@@ -172,8 +172,14 @@ async def handle_knowledge_files(request: web.Request) -> web.Response:
                     seen[doc_id] = {
                         "doc_id": doc_id,
                         "file_id": doc_id,
-                        "filename": meta.get("filename", doc_id),
+                        "filename": meta.get("filename") or meta.get("title") or doc_id,
+                        "title": meta.get("title", ""),
                         "source": meta.get("source", ""),
+                        "source_type": meta.get("source_type", "upload"),
+                        "source_url": meta.get("source_url") or meta.get("source", ""),
+                        "lang": meta.get("lang", ""),
+                        "quality_score": meta.get("quality_score", 1.0),
+                        "deleted": meta.get("deleted", False),
                         "size": 0,
                         "modified": 0,
                     }
