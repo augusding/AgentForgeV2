@@ -32,37 +32,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-
-
-  - id: feature-analysis
-    name: "特征分析"
-    description: "分析特征重要性、覆盖率和分布"
-    icon: "bar-chart-2"
-    trigger: "manual"
-    keywords: ["特征分析", "特征重要性", "特征覆盖率", "特征分布"]
-    default_params:
-      analysis_type: "importance"
-      top_n: 50
-
-  - id: model-performance-review
-    name: "模型效果复盘"
-    description: "分析模型上线后的指标变化和归因"
-    icon: "trending-up"
-    trigger: "manual"
-    keywords: ["模型复盘", "效果分析", "指标归因", "模型评估"]
-    default_params:
-      time_range: "last_7_days"
-
-  - id: training-pipeline-check
-    name: "训练Pipeline检查"
-    description: "检查训练数据、样本质量和模型产出"
-    icon: "settings"
-    trigger: "scheduled"
-    schedule: "0 10 * * *"
-    keywords: ["训练检查", "Pipeline状态", "样本质量", "模型产出"]
-    default_params:
-      check_scope: "all_models"
-
 dashboard:
   metrics:
     - key: "ctr_auc"
@@ -110,12 +79,6 @@ dashboard:
         endpoint: "bi-system"
         query: "calibration_error"
         refresh: "1h"
-
-  - "模型架构文档"
-  - "特征字典"
-  - "实验记录库"
-  - "论文阅读笔记"
-  - "训练配置规范"
 
 onboarding:
   tip: "加速模型迭代与特征工程分析"

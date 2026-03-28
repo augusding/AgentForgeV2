@@ -33,30 +33,6 @@ default_model: "sonnet"
 
 # ── 资源声明 ──
 
-
-  - id: campaign-diagnosis
-    name: "投放效果诊断"
-    description: "诊断广告主投放效果不佳的原因"
-    icon: "stethoscope"
-    trigger: "manual"
-    keywords: ["投放诊断", "效果不佳", "投放优化", "ROI"]
-
-  - id: ka-review
-    name: "KA客户回顾"
-    description: "准备KA客户季度回顾的数据和建议"
-    icon: "crown"
-    trigger: "manual"
-    keywords: ["KA回顾", "季度回顾", "大客户", "客户分析"]
-    default_params:
-      period: "last_quarter"
-
-  - id: satisfaction-survey
-    name: "满意度分析"
-    description: "分析NPS调研结果和改进方向"
-    icon: "smile"
-    trigger: "manual"
-    keywords: ["满意度", "NPS", "客户反馈", "服务质量"]
-
 dashboard:
   metrics:
     - key: "open_tickets"
@@ -99,12 +75,6 @@ dashboard:
       direction: "higher_is_better"
       source:
         type: "manual"
-
-  - "客服话术库"
-  - "常见问题FAQ"
-  - "行业解决方案"
-  - "审核规则文档"
-  - "平台操作手册"
 
 onboarding:
   tip: "快速响应客户问题并提升续投率"

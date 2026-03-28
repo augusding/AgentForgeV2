@@ -29,34 +29,6 @@ context: |
 
 default_model: "sonnet"
 
-
-
-  - id: capacity-review
-    name: "容量评估"
-    description: "评估服务资源使用率和扩容需求"
-    icon: "hard-drive"
-    trigger: "scheduled"
-    schedule: "0 10 * * 1"
-    keywords: ["容量", "扩容", "资源评估", "弹性伸缩"]
-    default_params:
-      scope: "all_services"
-      time_range: "last_7d"
-
-  - id: deploy-review
-    name: "发布审查"
-    description: "检查发布配置、灰度策略和回滚方案"
-    icon: "rocket"
-    trigger: "manual"
-    workflow_ref: "release-checklist"
-    keywords: ["发布", "部署", "灰度", "回滚", "上线"]
-
-  - id: alert-tuning
-    name: "告警优化"
-    description: "分析告警噪音，优化告警规则和阈值"
-    icon: "bell"
-    trigger: "manual"
-    keywords: ["告警优化", "告警噪音", "阈值调整", "告警规则"]
-
 dashboard:
   metrics:
     - key: "service_availability"
@@ -101,12 +73,6 @@ dashboard:
       direction: "lower_is_better"
       source:
         type: "manual"
-
-  - "运维手册"
-  - "应急预案库"
-  - "监控告警规则"
-  - "发布流程SOP"
-  - "架构拓扑图"
 
 onboarding:
   tip: "保障广告系统稳定运行与快速发布"

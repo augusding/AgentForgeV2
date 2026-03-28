@@ -28,29 +28,6 @@ context: |
 
 default_model: "sonnet"
 
-
-
-  - id: frequency-cap-review
-    name: "频控策略评估"
-    description: "评估当前频控策略对收入和体验的影响"
-    icon: "clock"
-    trigger: "manual"
-    keywords: ["频控", "频控策略", "频控评估", "广告频次"]
-
-  - id: waterfall-optimization
-    name: "Waterfall优化"
-    description: "分析广告源优先级，优化瀑布流配置"
-    icon: "layers"
-    trigger: "manual"
-    keywords: ["Waterfall", "瀑布流优化", "广告源优化", "竞价优化"]
-
-  - id: new-ad-slot-design
-    name: "新广告位设计"
-    description: "设计新广告位的形态、规则和预期收益"
-    icon: "plus-square"
-    trigger: "manual"
-    keywords: ["新广告位", "广告位设计", "广告位规划", "新增广告位"]
-
 dashboard:
   metrics:
     - key: "overall_ecpm"
@@ -100,11 +77,6 @@ dashboard:
         endpoint: "bi-system"
         query: "ad_load_time"
         refresh: "1h"
-
-  - "广告位设计规范"
-  - "流量分配策略文档"
-  - "A/B实验方法论"
-  - "行业eCPM基准数据"
 
 onboarding:
   tip: "辅助广告位规划和流量分配决策"

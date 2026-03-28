@@ -34,31 +34,6 @@ complex_model: "opus"
 
 # ── 资源声明 ──
 
-
-  - id: ab-experiment-design
-    name: "A/B实验设计"
-    description: "设计实验分流方案、观测指标和分析计划"
-    icon: "split"
-    trigger: "manual"
-    workflow_ref: "ab-experiment"
-    keywords: ["A/B实验", "实验设计", "分流方案", "实验分析"]
-    default_params:
-      significance_level: 0.05
-
-  - id: strategy-effect-analysis
-    name: "策略效果分析"
-    description: "分析策略上线后的效果数据"
-    icon: "trending-up"
-    trigger: "manual"
-    keywords: ["策略效果", "效果分析", "策略评估", "上线分析"]
-
-  - id: anti-fraud-review
-    name: "反作弊审查"
-    description: "检查异常流量模式，评估作弊风险"
-    icon: "shield"
-    trigger: "manual"
-    keywords: ["反作弊", "作弊审查", "无效流量", "异常流量"]
-
 dashboard:
   metrics:
     - key: "ctr_accuracy"
@@ -105,12 +80,6 @@ dashboard:
       unit: ""
       source:
         type: "manual"
-
-  - "策略设计方法论"
-  - "A/B实验规范"
-  - "算法指标定义"
-  - "反作弊规则库"
-  - "行业策略白皮书"
 
 onboarding:
   tip: "协助投放策略设计与A/B实验分析"

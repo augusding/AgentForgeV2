@@ -33,34 +33,6 @@ complex_model: "opus"
 
 # ── 资源声明 ──
 
-
-  - id: performance-profiling
-    name: "性能Profile分析"
-    description: "分析广告加载、渲染的性能瓶颈"
-    icon: "activity"
-    trigger: "manual"
-    keywords: ["性能分析", "Profile", "加载耗时", "渲染性能"]
-    default_params:
-      profile_type: "cpu_memory"
-
-  - id: crash-analysis
-    name: "Crash分析"
-    description: "分析SDK崩溃堆栈，定位根因"
-    icon: "bug"
-    trigger: "manual"
-    keywords: ["Crash分析", "崩溃", "堆栈分析", "ANR"]
-    default_params:
-      time_range: "last_24h"
-
-  - id: compliance-check
-    name: "隐私合规检查"
-    description: "检查SDK数据采集是否符合隐私法规"
-    icon: "shield"
-    trigger: "manual"
-    keywords: ["隐私合规", "合规检查", "数据采集", "个保法"]
-    default_params:
-      regulations: ["gdpr", "pipl"]
-
 dashboard:
   metrics:
     - key: "sdk_crash_rate"
@@ -100,12 +72,6 @@ dashboard:
         endpoint: "bi-system"
         query: "render_success_rate"
         refresh: "1h"
-
-  - "SDK接口文档"
-  - "系统集成方案"
-  - "性能基准数据"
-  - "隐私合规规范"
-  - "Android Framework文档"
 
 onboarding:
   tip: "优化广告SDK性能与渲染成功率"

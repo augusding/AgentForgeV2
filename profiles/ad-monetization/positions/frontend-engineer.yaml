@@ -29,33 +29,6 @@ context: |
 
 default_model: "sonnet"
 
-
-
-  - id: code-review-assist
-    name: "Code Review辅助"
-    description: "审查前端代码质量、性能和可访问性"
-    icon: "git-pull-request"
-    trigger: "manual"
-    keywords: ["代码审查", "Code Review", "前端代码", "代码质量"]
-    default_params:
-      review_focus: "quality,performance,a11y"
-
-  - id: chart-config
-    name: "图表配置生成"
-    description: "根据数据需求生成ECharts/AntV配置"
-    icon: "pie-chart"
-    trigger: "manual"
-    keywords: ["图表配置", "ECharts", "AntV", "数据可视化"]
-    default_params:
-      chart_lib: "echarts"
-
-  - id: form-schema-design
-    name: "表单Schema设计"
-    description: "设计复杂投放配置表单的Schema和校验规则"
-    icon: "form-input"
-    trigger: "manual"
-    keywords: ["表单设计", "Schema", "表单校验", "投放配置"]
-
 dashboard:
   metrics:
     - key: "page_load_time"
@@ -90,11 +63,6 @@ dashboard:
         endpoint: "bi-system"
         query: "test_coverage"
         refresh: "1h"
-
-  - "前端架构文档"
-  - "组件库文档"
-  - "设计规范"
-  - "API接口文档"
 
 onboarding:
   tip: "高效构建广告平台前端与数据可视化"

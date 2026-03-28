@@ -29,29 +29,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-
-
-  - id: competitor-analysis
-    name: "竞品分析"
-    description: "分析竞品广告平台的功能和策略"
-    icon: "eye"
-    trigger: "manual"
-    keywords: ["竞品分析", "竞品调研", "竞品对比", "广告平台竞品"]
-
-  - id: data-requirement
-    name: "数据需求文档"
-    description: "生成埋点方案和指标定义文档"
-    icon: "database"
-    trigger: "manual"
-    keywords: ["数据需求", "埋点方案", "指标定义", "数据文档"]
-
-  - id: feature-spec-review
-    name: "功能规格检查"
-    description: "检查PRD的完整性和一致性"
-    icon: "check-square"
-    trigger: "manual"
-    keywords: ["规格检查", "PRD检查", "完整性检查", "功能规格"]
-
 dashboard:
   metrics:
     - key: "platform_dau"
@@ -81,11 +58,6 @@ dashboard:
       unit: ""
       source:
         type: "computed"
-
-  - "广告平台PRD模板"
-  - "产品设计规范"
-  - "竞品分析报告"
-  - "广告行业标准"
 
 onboarding:
   tip: "辅助投放平台产品设计与PRD撰写"

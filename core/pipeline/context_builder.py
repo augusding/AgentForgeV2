@@ -16,9 +16,6 @@ from core.models import ContextResult, Mission, PositionConfig
 
 logger = logging.getLogger(__name__)
 
-_COMPLEX_KEYWORDS = {"战略", "架构", "重构", "规划", "分析", "制定方案", "对比", "评估",
-                     "设计", "梳理", "研究", "方案", "建议", "如何", "怎么"}
-_SIMPLE_MAX_CHARS = 100
 _PERSONA_MAX_CHARS = 900
 
 
@@ -39,10 +36,10 @@ class ContextBuilder:
         system_parts.append(persona)
 
         # 专业知识（L3/L4 才注入）
-        if complexity in ("standard", "complex") and position.context:
+        if complexity == "standard" and position.context:
             system_parts.append(
                 "\n## 专业知识\n"
-                "（仅在用户咨询专业问题时参考，日常执行指令无需使用）\n"
+                "（L3/L4 问题参考，L1/L2 指令忽略）\n"
                 f"{position.context}"
             )
 
@@ -136,11 +133,9 @@ class ContextBuilder:
 
     @staticmethod
     def _assess_complexity(instruction: str) -> str:
-        s = instruction.strip()
-        if len(s) <= _SIMPLE_MAX_CHARS and not any(k in s for k in _COMPLEX_KEYWORDS):
+        """极短消息不预注入 context，其余一律注入让 LLM 自判断 L1-L4。"""
+        if len(instruction.strip()) <= 15:
             return "simple"
-        if any(k in s for k in _COMPLEX_KEYWORDS):
-            return "complex"
         return "standard"
 
     @staticmethod

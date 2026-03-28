@@ -65,23 +65,6 @@ quick_workflows:
       report_type: "okr"
       period: "quarterly"
 
-  - id: todo-extract
-    name: "TODO提取与建档"
-    description: "从汇报记录中提取待办事项，结构化建档并通知责任人"
-    icon: "list-checks"
-    trigger: "manual"
-    workflow_ref: "report-todo-extract"
-    keywords: ["TODO提取", "待办事项", "会议纪要", "任务分配"]
-
-  - id: todo-track
-    name: "TODO跟踪与催办"
-    description: "定期检查待办进度，超期催办，到期验收"
-    icon: "clock-alert"
-    trigger: "scheduled"
-    schedule: "0 9 * * 1"
-    workflow_ref: "report-todo-track"
-    keywords: ["TODO跟踪", "催办", "进度检查", "验收"]
-
 dashboard:
   metrics:
     - key: "redundancy_rate"
@@ -119,13 +102,6 @@ dashboard:
       direction: "higher_is_better"
       source:
         type: "manual"
-
-  - "历史汇报"
-  - "汇报模板"
-  - "汇报制度"
-  - "待办事项"
-  - "汇报评分标准"
-  - "行业最佳实践"
 
 onboarding:
   tip: "智能分析汇报增量并跟踪待办闭环"

@@ -56,10 +56,10 @@ class TestContextBuilder:
         ctx = self.builder.build(self.position, mission)
         assert ctx.complexity == "simple"
 
-    def test_complexity_complex(self):
+    def test_complexity_standard(self):
         mission = Mission(id="t5", instruction="帮我制定一个完整的产品战略规划方案")
         ctx = self.builder.build(self.position, mission)
-        assert ctx.complexity == "complex"
+        assert ctx.complexity == "standard"
 
 
 # ── DocumentChunker 测试 ──────────────────────────────────

@@ -33,35 +33,6 @@ default_model: "sonnet"
 
 # ── 资源声明 ──
 
-
-  - id: data-model-design
-    name: "数据模型设计"
-    description: "设计数据仓库表结构和ETL流程"
-    icon: "table"
-    trigger: "manual"
-    keywords: ["数据建模", "表结构设计", "ETL", "数仓设计"]
-    default_params:
-      layer: "dwd"
-      modeling_type: "dimensional"
-
-  - id: data-quality-check
-    name: "数据质量检查"
-    description: "检查核心数据表的完整性和准确性"
-    icon: "shield-check"
-    trigger: "scheduled"
-    schedule: "0 8 * * *"
-    keywords: ["数据质量", "数据检查", "完整性检查", "数据监控"]
-    default_params:
-      check_scope: "core_tables"
-      alert_on_failure: true
-
-  - id: pipeline-troubleshoot
-    name: "Pipeline排障"
-    description: "分析数据任务失败原因并修复"
-    icon: "wrench"
-    trigger: "manual"
-    keywords: ["Pipeline排障", "任务失败", "数据任务", "调度排查"]
-
 dashboard:
   metrics:
     - key: "pipeline_success_rate"
@@ -96,12 +67,6 @@ dashboard:
       direction: "lower_is_better"
       source:
         type: "computed"
-
-  - "数据仓库模型文档"
-  - "ETL开发规范"
-  - "数据字典"
-  - "数据质量规则"
-  - "Flink/Spark最佳实践"
 
 onboarding:
   tip: "保障数据Pipeline稳定与数据质量"

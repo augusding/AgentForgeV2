@@ -33,32 +33,6 @@ default_model: "sonnet"
 
 # ── 资源声明 ──
 
-
-  - id: advertiser-analysis
-    name: "广告主分析"
-    description: "分析广告主投放行为和成长路径"
-    icon: "users"
-    trigger: "manual"
-    keywords: ["广告主分析", "投放行为", "成长路径", "分层"]
-
-  - id: content-creation
-    name: "运营内容创作"
-    description: "撰写投放指南、案例分析和产品公告"
-    icon: "pen-tool"
-    trigger: "manual"
-    keywords: ["内容创作", "投放指南", "案例分析", "产品公告"]
-
-  - id: weekly-ops-report
-    name: "周度运营报告"
-    description: "汇总本周运营数据和活动效果"
-    icon: "file-bar-chart"
-    trigger: "scheduled"
-    schedule: "0 10 * * 5"
-    keywords: ["运营报告", "周报", "活动效果", "运营数据"]
-    default_params:
-      scope: "all_campaigns"
-      time_range: "this_week"
-
 dashboard:
   metrics:
     - key: "new_advertisers"
@@ -87,12 +61,6 @@ dashboard:
       direction: "higher_is_better"
       source:
         type: "manual"
-
-  - "运营活动SOP"
-  - "广告主成长体系"
-  - "投放最佳实践"
-  - "行业案例库"
-  - "竞品运营策略"
 
 onboarding:
   tip: "助力广告主赋能和运营活动策划"

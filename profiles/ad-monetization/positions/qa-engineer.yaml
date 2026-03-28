@@ -30,32 +30,6 @@ context: |
 
 default_model: "sonnet"
 
-
-
-  - id: bug-analysis
-    name: "Bug根因分析"
-    description: "分析Bug的根因并给出修复建议"
-    icon: "bug"
-    trigger: "manual"
-    keywords: ["Bug分析", "根因分析", "缺陷分析", "修复建议"]
-
-  - id: release-test-report
-    name: "发版测试报告"
-    description: "生成版本测试报告和质量评估"
-    icon: "file-check"
-    trigger: "manual"
-    workflow_ref: "release-checklist"
-    keywords: ["测试报告", "发版报告", "质量评估", "上线报告"]
-
-  - id: performance-test-plan
-    name: "性能测试方案"
-    description: "设计性能压测方案和验收标准"
-    icon: "gauge"
-    trigger: "manual"
-    keywords: ["性能测试", "压测方案", "QPS", "延迟"]
-    default_params:
-      target_qps: 10000
-
 dashboard:
   metrics:
     - key: "bug_open_count"
@@ -93,12 +67,6 @@ dashboard:
         endpoint: "bi-system"
         query: "avg_bug_fix_time"
         refresh: "1h"
-
-  - "测试规范文档"
-  - "测试用例库"
-  - "广告链路文档"
-  - "兼容性矩阵"
-  - "性能基准数据"
 
 onboarding:
   tip: "提升广告系统测试覆盖与质量度量"

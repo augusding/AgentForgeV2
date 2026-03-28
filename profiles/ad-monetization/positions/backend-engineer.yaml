@@ -31,34 +31,6 @@ context: |
 default_model: "sonnet"
 complex_model: "opus"
 
-
-
-  - id: api-design
-    name: "API设计"
-    description: "设计RESTful/gRPC接口，生成接口文档"
-    icon: "file-code"
-    trigger: "manual"
-    keywords: ["API设计", "接口设计", "接口文档", "gRPC"]
-    default_params:
-      protocol: "restful"
-      doc_format: "openapi"
-
-  - id: performance-analysis
-    name: "性能分析"
-    description: "分析服务性能瓶颈，给出优化建议"
-    icon: "gauge"
-    trigger: "manual"
-    keywords: ["性能分析", "性能优化", "延迟优化", "QPS"]
-    default_params:
-      time_range: "last_24h"
-
-  - id: incident-rca
-    name: "故障根因分析"
-    description: "分析线上故障的根因和修复方案"
-    icon: "search"
-    trigger: "manual"
-    keywords: ["故障分析", "根因分析", "RCA", "线上故障"]
-
 dashboard:
   metrics:
     - key: "ad_request_qps"
@@ -96,12 +68,6 @@ dashboard:
       direction: "lower_is_better"
       source:
         type: "computed"
-
-  - "系统架构文档"
-  - "API接口文档"
-  - "OpenRTB协议规范"
-  - "运维手册"
-  - "代码规范"
 
 onboarding:
   tip: "解决广告服务性能瓶颈与架构问题"

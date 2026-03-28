@@ -42,20 +42,6 @@ quick_workflows:
     trigger: "manual"
     keywords: ["Waterfall", "底价调整", "广告源优化", "优先级"]
 
-  - id: fill-rate-diagnosis
-    name: "填充率诊断"
-    description: "分析低填充率的原因和改善方案"
-    icon: "search"
-    trigger: "manual"
-    keywords: ["填充率", "未填充", "兜底", "填充诊断"]
-
-  - id: revenue-anomaly-analysis
-    name: "收入异常分析"
-    description: "排查收入波动的原因和影响"
-    icon: "alert-circle"
-    trigger: "manual"
-    keywords: ["收入异常", "波动分析", "异常排查", "eCPM下降"]
-
 dashboard:
   metrics:
     - key: "daily_revenue"
@@ -101,12 +87,6 @@ dashboard:
       unit: ""
       source:
         type: "manual"
-
-  - "广告源对接文档"
-  - "Waterfall配置手册"
-  - "eCPM基准数据"
-  - "历史优化记录"
-  - "结算规则"
 
 onboarding:
   tip: "快速定位收入波动原因并给出调优建议"
