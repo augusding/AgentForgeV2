@@ -499,6 +499,65 @@ def t2_set_expression():
         f"doubled={doubled!r}")
 
 
+def t2_error_output():
+    """T2-8: 错误输出分支"""
+    r, err = create_and_run("T2-8 错误分支", [
+        {"id": "t", "type": "manualTrigger", "label": "触发"},
+        {"id": "bad", "type": "code", "label": "出错", "config": {"code": "raise ValueError('boom')"}, "on_error": "error_output"},
+        {"id": "handler", "type": "notification", "label": "处理", "config": {"title": "错误", "message": "caught"}},
+    ], [{"source": "t", "target": "bad"}, {"source": "bad", "target": "handler", "sourceOutput": -1}], keep=KEEP)
+    if err: return log("FAIL", "T2-8", "错误分支", err)
+    nr = r.get("node_results", {})
+    ok = nr.get("bad", {}).get("status") == "failed" and nr.get("handler", {}).get("status") == "completed"
+    log("PASS" if ok else "FAIL", "T2-8", "错误分支", f"bad={nr.get('bad',{}).get('status')} handler={nr.get('handler',{}).get('status')}")
+
+def t2_error_continue():
+    """T2-9: 错误继续"""
+    r, err = create_and_run("T2-9 错误继续", [
+        {"id": "t", "type": "manualTrigger", "label": "触发"},
+        {"id": "bad", "type": "code", "label": "出错", "config": {"code": "raise ValueError('boom')"}, "on_error": "continue"},
+        {"id": "next", "type": "code", "label": "后续", "config": {"code": "result={'continued':True}"}},
+    ], [{"source": "t", "target": "bad"}, {"source": "bad", "target": "next"}], keep=KEEP)
+    if err: return log("FAIL", "T2-9", "错误继续", err)
+    nr = r.get("node_results", {})
+    ok = nr.get("bad", {}).get("status") == "failed" and nr.get("next", {}).get("status") == "completed"
+    log("PASS" if ok else "FAIL", "T2-9", "错误继续", f"bad={nr.get('bad',{}).get('status')} next={nr.get('next',{}).get('status')}")
+
+def t2_error_stop():
+    """T2-10: 错误停止"""
+    r, err = create_and_run("T2-10 错误停止", [
+        {"id": "t", "type": "manualTrigger", "label": "触发"},
+        {"id": "bad", "type": "code", "label": "出错", "config": {"code": "raise ValueError('boom')"}},
+        {"id": "next", "type": "notification", "label": "不执行", "config": {"title": "x", "message": "x"}},
+    ], [{"source": "t", "target": "bad"}, {"source": "bad", "target": "next"}], keep=KEEP)
+    if err: return log("FAIL", "T2-10", "错误停止", err)
+    nr = r.get("node_results", {})
+    ok = nr.get("bad", {}).get("status") == "failed" and nr.get("next", {}).get("status") != "completed"
+    log("PASS" if ok else "FAIL", "T2-10", "错误停止", f"bad={nr.get('bad',{}).get('status')} next={nr.get('next',{}).get('status','missing')}")
+
+def t2_stats_api():
+    """T2-11: 统计 API"""
+    try:
+        r = _req("get", f"{BASE}/workflows/stats?days=7")
+        if r.status_code != 200: return log("FAIL", "T2-11", "统计 API", f"status={r.status_code}")
+        data = r.json()
+        ok = all(k in data for k in ["total_executions", "success_rate", "avg_duration"])
+        log("PASS" if ok else "FAIL", "T2-11", "统计 API", f"total={data.get('total_executions')} rate={data.get('success_rate')}%")
+    except Exception as e:
+        log("FAIL", "T2-11", "统计 API", str(e))
+
+def t2_code_security():
+    """T2-12: 代码安全"""
+    r, err = create_and_run("T2-12 代码安全", [
+        {"id": "t", "type": "manualTrigger", "label": "触发"},
+        {"id": "c", "type": "code", "label": "import os", "config": {"code": "import os\nresult={}"}},
+    ], [{"source": "t", "target": "c"}], keep=KEEP)
+    if err: return log("FAIL", "T2-12", "代码安全", err)
+    nr = r.get("node_results", {}).get("c", {})
+    ok = nr.get("status") == "failed" and "白名单" in nr.get("error", "")
+    log("PASS" if ok else "FAIL", "T2-12", "代码安全 (import os)", f"status={nr.get('status')} err={nr.get('error','')[:50]}")
+
+
 # ══════════════════════════════════════════════════════════════
 # 报告生成
 # ══════════════════════════════════════════════════════════════
@@ -672,6 +731,11 @@ def main():
     t2_set_expression()
     t2_http_process()
     t2_kv_readwrite()
+    t2_error_output()
+    t2_error_continue()
+    t2_error_stop()
+    t2_stats_api()
+    t2_code_security()
 
     # ── 安全清理 ──
     if not KEEP:
