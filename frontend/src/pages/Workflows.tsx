@@ -144,7 +144,7 @@ export default function Workflows() {
           <button onClick={handleCreate} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm text-white" style={{ background: 'var(--accent)' }}><Plus size={14} /> 新建</button>
         </div>
       </div>
-      {stats && stats.total_executions > 0 && (
+      {stats && stats.total_executions > 0 && wfs.length > 0 && (
         <div className="flex gap-3 mb-6">
           {[{ label: '总执行', value: stats.total_executions, icon: BarChart3, color: 'var(--text)' },
             { label: '成功率', value: `${stats.success_rate}%`, icon: CheckCircle, color: '#22c55e' },

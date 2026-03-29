@@ -68,6 +68,11 @@ async def handle_workflow_stats(request: web.Request) -> web.Response:
         import aiosqlite
         async with store._db() as db:
             db.row_factory = aiosqlite.Row
+            # 清理孤儿执行记录（workflow 已删除但 execution 残留）
+            await db.execute(
+                "DELETE FROM workflow_executions WHERE workflow_id NOT IN (SELECT id FROM workflows)"
+            )
+            await db.commit()
             total = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE started_at>?", (cutoff,))).fetchone())["c"]
             success = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE status='completed' AND started_at>?", (cutoff,))).fetchone())["c"]
             failed = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE status IN ('failed','timeout') AND started_at>?", (cutoff,))).fetchone())["c"]
