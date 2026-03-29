@@ -40,10 +40,15 @@ export default function Chat() {
 
   useEffect(() => { store.loadSessions() }, [])
 
-  // URL ?prompt=xxx 自动发送
+  // URL ?prompt=xxx 自动发送（ref 防 StrictMode 双触发）
+  const promptSentRef = useRef(false)
   useEffect(() => {
     const p = searchParams.get('prompt')
-    if (p) { setSearchParams({}, { replace: true }); setTimeout(() => send(p), 600) }
+    if (p && !promptSentRef.current) {
+      promptSentRef.current = true
+      setSearchParams({}, { replace: true })
+      setTimeout(() => send(p), 600)
+    }
   }, [])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
   useEffect(() => {

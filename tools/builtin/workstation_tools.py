@@ -38,6 +38,12 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
                 uid, oid, pid, title=args.get("title", ""), scheduled_time=args.get("time", ""),
                 duration_minutes=args.get("duration", 60), description=args.get("description", ""))
             return json.dumps({"status": "created", "id": rid}, ensure_ascii=False)
+        elif action == "update":
+            kw = {k: v for k, v in args.items() if k in ("title", "description", "scheduled_time", "duration_minutes", "status") and v}
+            if "time" in args and args["time"]:
+                kw["scheduled_time"] = args["time"]
+            await work_item_store.update_schedule(args.get("id", ""), **kw)
+            return json.dumps({"status": "updated"}, ensure_ascii=False)
         elif action == "delete":
             await work_item_store.delete_schedule(args.get("id", ""))
             return json.dumps({"status": "deleted"}, ensure_ascii=False)
@@ -108,15 +114,15 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_schedule",
-            description="管理用户的日程安排和会议。当用户提到日程、会议、安排、几点、上午/下午、开会、约了、schedule 时使用。支持 list(查看，可按日期过滤)/add(添加)/delete(删除)。创建需要 title 和 time(YYYY-MM-DD HH:MM)。",
+            description="管理用户的日程安排和会议。当用户提到日程、会议、安排、几点、上午/下午、开会、约了、schedule 时使用。支持 list(查看，可按日期过滤)/add(添加)/update(更新)/delete(删除)。创建需要 title 和 time(YYYY-MM-DD HH:MM)。",
             input_schema={"type": "object", "properties": {
-                "action": {"type": "string", "enum": ["list", "add", "delete"]},
+                "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "日程标题"},
                 "time": {"type": "string", "description": "日程时间 YYYY-MM-DD HH:MM"},
                 "duration": {"type": "integer", "description": "时长（分钟）", "default": 60},
                 "description": {"type": "string"},
                 "date": {"type": "string", "description": "查询日期 YYYY-MM-DD（list时）"},
-                "id": {"type": "string", "description": "日程ID（delete时）"},
+                "id": {"type": "string", "description": "日程ID（update/delete时）"},
                 **_ctx,
             }, "required": ["action"]},
             handler=_manage_schedule, category="workstation",

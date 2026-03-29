@@ -159,6 +159,17 @@ class WorkItemStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
+    async def update_schedule(self, schedule_id: str, **kwargs) -> None:
+        allowed = {"title", "description", "scheduled_time", "duration_minutes", "recurrence", "status"}
+        updates = {k: v for k, v in kwargs.items() if k in allowed}
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        async with self._db() as db:
+            await db.execute(f"UPDATE schedules SET {set_clause} WHERE id = ?",
+                             list(updates.values()) + [schedule_id])
+            await db.commit()
+
     async def delete_schedule(self, schedule_id: str) -> None:
         async with self._db() as db:
             await db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
