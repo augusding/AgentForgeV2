@@ -116,7 +116,10 @@ function WorkflowEditorInner() {
       const resp = await fetch(`/api/v1/workflows/${wfId}/execute/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body) })
-      if (!resp.ok || !resp.body) { toast.error('执行失败'); setExecuting(false); return }
+      if (!resp.ok || !resp.body) {
+        let em = '执行失败'; try { const e = await resp.json(); em = e.error || e.message || em } catch {}
+        toast.error(em); setExecuting(false); return
+      }
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = ''
       while (true) { const { done, value } = await reader.read(); if (done) break
         buf += dec.decode(value, { stream: true }); const parts = buf.split('\n\n'); buf = parts.pop() || ''
@@ -132,7 +135,7 @@ function WorkflowEditorInner() {
               toast.success(`完成: ${d.status} (${d.duration?.toFixed(1)}s)`); setExecuting(false) }
             else if (evt === 'error') { toast.error(d.message || '执行出错'); setExecuting(false) }
           } catch {} } }
-    } catch { toast.error('执行失败'); setExecuting(false) }
+    } catch (e: any) { if (e?.name !== 'AbortError') toast.error(e?.message || '执行失败'); setExecuting(false) }
   }
 
   // Keyboard shortcuts
