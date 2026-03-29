@@ -6,7 +6,7 @@ import { useChatStore } from '../stores/useChatStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { uploadChatFile, getQuickCommands } from '../api/chat'
 import { SessionItem, ToolCalls, Collapsible, CopyBtn, FeedbackBtn, timeAgo } from '../components/ChatWidgets'
-import ActionCard, { parseCard } from '../components/ActionCards'
+import ActionCard, { parseCard, SuggestionCard } from '../components/ActionCards'
 import FilePreviewPanel from '../components/FilePreviewPanel'
 import client from '../api/client'
 import Markdown from '../components/Markdown'
@@ -106,6 +106,7 @@ export default function Chat() {
               store.setThinking(tl[d.tool] || `🔧 ${d.tool}...`)
             }
             else if (evt === 'tool_result') { store.addToolCall({ type: 'tool_result', name: d.tool || '', result: d.result }); store.setThinking('继续生成中...') }
+            else if (evt === 'suggestion') { store.addSuggestion({ item_type: d.item_type, title: d.title, confidence: d.confidence, fields: d.fields || {} }) }
             else if (evt === 'done') { store.setThinking(''); store.finishAssistant({ model: d.model, tokens_used: d.tokens_used, duration_ms: d.duration_ms }); if (d.session_id) { store.setSessionId(d.session_id); if (isFirstMsg.current) setTimeout(() => store.generateTitle(), 500) } }
             else if (evt === 'error') { store.setThinking(''); store.appendDelta(`\n\n⚠️ ${d.content || '未知错误'}`) }
           } catch {}; evt = '' } }
@@ -283,6 +284,9 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { ms
             {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
               const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} onFileClick={onFileClick} /> : null
             })}
+            {msg.suggestions?.map((sg: any, i: number) => (
+              <SuggestionCard key={`sg-${i}`} suggestion={sg} />
+            ))}
           </div>
           {msg.content && <div className="flex items-center gap-1 px-3 py-1.5 border-t opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderColor: 'var(--border)' }}>
             <CopyBtn text={msg.content} /><FeedbackBtn msgId={msgId} />

@@ -6,6 +6,7 @@ import { CheckCircle, Circle, Clock, Users, Download,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
 import { createTask, createSchedule, createFollowup } from '../api/workitems'
+import type { SuggestionData } from '../stores/useChatStore'
 import toast from 'react-hot-toast'
 
 interface CardData { type: string; data: any; toolName: string }
@@ -538,6 +539,91 @@ function WorkItemConfirmCard({ data }: { data: any }) {
           className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
           style={{ background: status === 'creating' ? 'var(--border)' : typeColor }}>
           {status === 'creating' ? '创建中...' : '确认创建'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── AI 主动建议卡片（一行式轻量设计） ── */
+export function SuggestionCard({ suggestion }: { suggestion: SuggestionData }) {
+  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>('pending')
+  const [fields, setFields] = useState<Record<string, any>>({
+    title: suggestion.title,
+    ...suggestion.fields,
+  })
+  const typeLabel = suggestion.item_type === 'task' ? '任务' : suggestion.item_type === 'schedule' ? '日程' : '跟进'
+  const typeIcon = suggestion.item_type === 'task' ? '✅' : suggestion.item_type === 'schedule' ? '📅' : '👤'
+  const typeColor = suggestion.item_type === 'task' ? '#3b82f6' : suggestion.item_type === 'schedule' ? '#22c55e' : '#a855f7'
+
+  const confirm = async () => {
+    setStatus('creating')
+    try {
+      if (suggestion.item_type === 'task') {
+        await createTask({ title: fields.title, priority: fields.priority || 'P1', due_date: fields.due_date || undefined })
+      } else if (suggestion.item_type === 'schedule') {
+        const st = fields.scheduled_time || ''
+        if (!st) { toast.error('请填写日程时间'); setStatus('pending'); return }
+        await createSchedule({ title: fields.title, scheduled_time: st, duration_minutes: parseInt(fields.duration_minutes || '60', 10) })
+      } else {
+        await createFollowup({ title: fields.title, target: fields.target || undefined, due_date: fields.due_date || undefined })
+      }
+      setStatus('created')
+      toast.success(`${typeLabel}已创建`)
+    } catch {
+      toast.error('创建失败')
+      setStatus('pending')
+    }
+  }
+
+  const ignore = async () => {
+    setStatus('ignored')
+    try { await client.post('/work-items/suggestion-ignore', { item_type: suggestion.item_type }) } catch {}
+  }
+
+  if (status === 'created') {
+    return (
+      <div className="rounded-xl p-2.5 my-1.5 flex items-center gap-2" style={{ background: '#22c55e08', border: '1px solid #22c55e30' }}>
+        <CheckCircle size={14} style={{ color: '#22c55e' }} />
+        <span className="text-[11px]" style={{ color: 'var(--text)' }}>{typeLabel}「{fields.title}」已创建</span>
+      </div>
+    )
+  }
+  if (status === 'ignored') return null
+
+  return (
+    <div className="rounded-xl overflow-hidden my-1.5" style={{ border: '1px dashed var(--border)', background: 'var(--bg)' }}>
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="text-sm">{typeIcon}</span>
+        <span className="text-[11px] shrink-0" style={{ color: 'var(--text-muted)' }}>检测到{typeLabel}：</span>
+        <input value={fields.title || ''} onChange={e => setFields(f => ({ ...f, title: e.target.value }))}
+          className="flex-1 text-[11px] font-medium bg-transparent outline-none border-none min-w-0"
+          style={{ color: 'var(--text)' }} />
+
+        {suggestion.item_type === 'task' && fields.due_date && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: '#3b82f610', color: '#3b82f6' }}>
+            截止 {fields.due_date}
+          </span>
+        )}
+        {suggestion.item_type === 'schedule' && fields.scheduled_time && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: '#22c55e10', color: '#22c55e' }}>
+            {fields.scheduled_time}
+          </span>
+        )}
+        {suggestion.item_type === 'followup' && fields.target && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: '#a855f710', color: '#a855f7' }}>
+            @{fields.target}
+          </span>
+        )}
+
+        <button onClick={confirm} disabled={status === 'creating'}
+          className="px-2.5 py-1 rounded-lg text-[10px] font-medium shrink-0"
+          style={{ background: typeColor, color: '#fff' }}>
+          {status === 'creating' ? '...' : '创建'}
+        </button>
+        <button onClick={ignore} className="text-[10px] px-1.5 py-1 rounded shrink-0"
+          style={{ color: 'var(--text-muted)' }}>
+          忽略
         </button>
       </div>
     </div>

@@ -2,11 +2,12 @@ import { create } from 'zustand'
 import { getSessions, getSessionMessages, deleteSession, generateTitle, submitFeedback } from '../api/chat'
 
 interface ToolCall { type: 'tool_start' | 'tool_result'; name: string; input?: any; result?: string }
+interface SuggestionData { item_type: string; title: string; confidence: number; fields: Record<string, any> }
 interface Attachment { file_id: string; filename: string; extracted_text?: string }
 
 interface Message {
   id?: string; role: 'user' | 'assistant'; content: string
-  tool_calls?: ToolCall[]; attachments?: Attachment[]
+  tool_calls?: ToolCall[]; attachments?: Attachment[]; suggestions?: SuggestionData[]
   model?: string; tokens_used?: number; duration_ms?: number
   thinking?: string; created_at?: number
 }
@@ -23,6 +24,7 @@ interface ChatState {
   addUserMessage: (content: string, attachments?: Attachment[]) => void
   startAssistant: () => void; appendDelta: (text: string) => void
   addToolCall: (tc: ToolCall) => void
+  addSuggestion: (sg: SuggestionData) => void
   finishAssistant: (meta?: { model?: string; tokens_used?: number; duration_ms?: number }) => void
   setThinking: (text: string) => void
   setStreaming: (v: boolean) => void; setAbortController: (c: AbortController | null) => void
@@ -30,7 +32,7 @@ interface ChatState {
   toggleFeedback: (messageId: string, rating: 'up' | 'down') => Promise<void>
 }
 
-export type { ToolCall, Attachment, Message }
+export type { ToolCall, Attachment, Message, SuggestionData }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessions: [], currentSessionId: '', loadingSessions: false,
@@ -91,7 +93,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     messages: [...s.messages, { role: 'user', content, attachments, created_at: Date.now() / 1000 }],
   })),
   startAssistant: () => set((s) => ({
-    messages: [...s.messages, { role: 'assistant', content: '', tool_calls: [], created_at: Date.now() / 1000 }],
+    messages: [...s.messages, { role: 'assistant', content: '', tool_calls: [], suggestions: [], created_at: Date.now() / 1000 }],
   })),
   appendDelta: (text) => set((s) => {
     const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
@@ -101,6 +103,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   addToolCall: (tc) => set((s) => {
     const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
     if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, tool_calls: [...(last.tool_calls || []), tc] }
+    return { messages: msgs }
+  }),
+  addSuggestion: (sg) => set((s) => {
+    const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
+    if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, suggestions: [...(last.suggestions || []), sg] }
     return { messages: msgs }
   }),
   finishAssistant: (meta) => set((s) => {

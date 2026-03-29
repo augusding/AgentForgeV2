@@ -189,33 +189,24 @@ class ForgeEngine:
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
-
         await self._session_store.add_message(session_id, "user", msg.content)
-
         history = await self._session_store.get_history_as_llm_messages(session_id, limit=20)
         if history and history[-1].get("role") == "user":
             history = history[:-1]
 
         mission = Mission(
-            id=uuid4().hex[:12],
-            instruction=msg.content,
-            position_id=msg.position_id,
-            user_id=msg.user_id,
-            org_id=msg.org_id,
+            id=uuid4().hex[:12], instruction=msg.content,
+            position_id=msg.position_id, user_id=msg.user_id, org_id=msg.org_id,
             session_id=session_id,
-            context={"tool_names": [],
-                     "user_id": msg.user_id, "org_id": msg.org_id,
-                     "position_id": msg.position_id,
-                     "tool_hint": msg.metadata.get("tool_hint", "")},
+            context={"tool_names": [], "user_id": msg.user_id, "org_id": msg.org_id,
+                     "position_id": msg.position_id, "tool_hint": msg.metadata.get("tool_hint", "")},
             attachments=msg.attachments,
         )
-
         if self._mission_tracer:
             await self._mission_tracer.start(
                 mission_id=mission.id, user_id=msg.user_id, org_id=msg.org_id,
                 position_id=msg.position_id, instruction=msg.content,
             )
-
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         _up = ""
@@ -364,6 +355,14 @@ class ForgeEngine:
                         collected_tool_calls.append({"type": "tool_result", "name": tr["name"], "result": str(tr["result"])[:3000]})
                 except Exception as e:
                     logger.warning("自动文件创建失败: %s", e)
+
+        # ── 后处理：三层意图识别 → 建议卡片 ──
+        try:
+            from core.intent_detector import run_detection
+            async for sg in run_detection(msg, collected_tools, self._llm, self._signal_store):
+                yield sg
+        except Exception as e:
+            logger.warning("意图检测异常: %s", e)
 
         if lc:
             lc.info("pipeline", "stream_done", f"流式完成, 长度={len(full_content)}",

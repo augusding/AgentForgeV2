@@ -199,6 +199,21 @@ async def delete_item(req: web.Request) -> web.Response:
     return _j({"status": "deleted"})
 
 
+async def record_suggestion_ignore(req: web.Request) -> web.Response:
+    """POST /api/v1/work-items/suggestion-ignore — 记录用户忽略建议"""
+    uid, oid, _ = _user(req)
+    b = await req.json()
+    item_type = b.get("item_type", "")
+    if not item_type:
+        return _j({"error": "item_type 必填"}, 400)
+    engine = req.app["engine"]
+    if hasattr(engine, '_signal_store') and engine._signal_store:
+        from core.intent_detector import record_ignore
+        pid = await _get_position_id(req, b)
+        await record_ignore(engine._signal_store, uid, oid, pid, item_type)
+    return _j({"status": "recorded"})
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/work-items/tasks", create_task)
     app.router.add_patch("/api/v1/work-items/tasks/{id}", update_task)
@@ -215,3 +230,4 @@ def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/work-items/items", create_item)
     app.router.add_patch("/api/v1/work-items/items/{id}", update_item)
     app.router.add_delete("/api/v1/work-items/items/{id}", delete_item)
+    app.router.add_post("/api/v1/work-items/suggestion-ignore", record_suggestion_ignore)

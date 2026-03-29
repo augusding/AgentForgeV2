@@ -177,6 +177,13 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
                     "tool": chunk.get("name", ""),
                     "result": chunk.get("result", "")[:5000],
                 })
+            elif chunk_type == "suggestion":
+                await send_sse("suggestion", {
+                    "item_type": chunk.get("item_type", ""),
+                    "title": chunk.get("title", ""),
+                    "confidence": chunk.get("confidence", 0),
+                    "fields": chunk.get("fields", {}),
+                })
             elif chunk_type == "done":
                 mission_id = chunk.get("mission_id", "")
                 tokens_used = chunk.get("tokens_used", 0)
