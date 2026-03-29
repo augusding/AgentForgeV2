@@ -6,6 +6,7 @@ AgentForge V2 — 工作流路由
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from uuid import uuid4
