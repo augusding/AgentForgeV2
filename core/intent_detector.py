@@ -90,6 +90,22 @@ def _resolve_date(text: str) -> str:
         except ValueError:
             pass
 
+    # 相对时间：X分钟后/X小时后/半小时后/一小时后
+    m = re.search(r"(\d+)\s*(?:分钟|分)后", text)
+    if m:
+        delta = datetime.timedelta(minutes=int(m.group(1)))
+        return (now + delta).strftime("%Y-%m-%d")
+    m = re.search(r"(\d+)\s*(?:小时|个小时)后", text)
+    if m:
+        delta = datetime.timedelta(hours=int(m.group(1)))
+        return (now + delta).strftime("%Y-%m-%d")
+    if "半小时后" in text or "半个小时后" in text:
+        return (now + datetime.timedelta(minutes=30)).strftime("%Y-%m-%d")
+    if "一小时后" in text or "一个小时后" in text:
+        return (now + datetime.timedelta(hours=1)).strftime("%Y-%m-%d")
+    if "两小时后" in text or "两个小时后" in text:
+        return (now + datetime.timedelta(hours=2)).strftime("%Y-%m-%d")
+
     return ""
 
 
@@ -111,6 +127,24 @@ def _resolve_time(text: str) -> str:
         return "14:00"
     if "晚上" in text:
         return "19:00"
+
+    # 相对时间：X分钟后/X小时后/半小时后
+    now = datetime.datetime.now()
+    m = re.search(r"(\d+)\s*(?:分钟|分)后", text)
+    if m:
+        target = now + datetime.timedelta(minutes=int(m.group(1)))
+        return target.strftime("%H:%M")
+    m = re.search(r"(\d+)\s*(?:小时|个小时)后", text)
+    if m:
+        target = now + datetime.timedelta(hours=int(m.group(1)))
+        return target.strftime("%H:%M")
+    if "半小时后" in text or "半个小时后" in text:
+        return (now + datetime.timedelta(minutes=30)).strftime("%H:%M")
+    if "一小时后" in text or "一个小时后" in text:
+        return (now + datetime.timedelta(hours=1)).strftime("%H:%M")
+    if "两小时后" in text or "两个小时后" in text:
+        return (now + datetime.timedelta(hours=2)).strftime("%H:%M")
+
     return ""
 
 
