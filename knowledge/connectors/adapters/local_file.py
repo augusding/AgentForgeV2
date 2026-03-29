@@ -1,6 +1,7 @@
 """LocalFileAdapter：本地文件系统连接器。cursor = mtime 时间戳，增量只处理新文件。"""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from pathlib import Path

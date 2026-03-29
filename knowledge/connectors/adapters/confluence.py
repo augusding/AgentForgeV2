@@ -6,6 +6,7 @@ cursor：ISO 8601 时间戳，只拉取 lastModified > cursor 的页面。
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re

@@ -10,6 +10,7 @@ SQLAdapter：关系型数据库连接器
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re

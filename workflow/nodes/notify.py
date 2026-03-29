@@ -1,5 +1,6 @@
 """通知节点：notification（系统通知）"""
 
+import asyncio
 import logging
 
 from workflow.registry import NodeRegistry, NodeTypeInfo

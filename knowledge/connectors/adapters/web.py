@@ -8,6 +8,7 @@ cursor：已完成 URL 集合 JSON，跳过已成功 URL。
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
