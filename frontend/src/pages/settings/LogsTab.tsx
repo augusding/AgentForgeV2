@@ -39,7 +39,7 @@ function fmt(ts: number) {
   return d.toTimeString().slice(0, 8)
 }
 
-export default function LogsTab() {
+export default function LogsTab(_props: { isAdmin?: boolean }) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [category, setCategory] = useState('')
   const [level, setLevel] = useState('')

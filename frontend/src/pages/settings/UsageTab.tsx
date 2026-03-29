@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { BarChart3, Loader2, TrendingUp, MessageSquare, Zap } from 'lucide-react'
 import client from '../../api/client'
 
-export default function UsageTab() {
+export default function UsageTab(_props: { isAdmin?: boolean }) {
   const [stats, setStats] = useState<any>(null); const [models, setModels] = useState<any[]>([]); const [loading, setLoading] = useState(true)
 
   useEffect(() => {

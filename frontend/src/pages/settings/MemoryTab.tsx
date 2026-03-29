@@ -12,7 +12,7 @@ const TS: Record<string, { label: string; color: string }> = {
   behavior: { label: '行为', color: '#22c55e' }, insight: { label: '洞察', color: '#f59e0b' },
 }
 
-export default function MemoryTab() {
+export default function MemoryTab(_props: { isAdmin?: boolean }) {
   const [signals, setSignals] = useState<any[]>([]); const [loading, setLoading] = useState(true); const [filter, setFilter] = useState<FK>('')
 
   const load = () => { setLoading(true); client.get('/analytics/signal?limit=50').then((d: any) => setSignals(Array.isArray(d) ? d : d.signals || d.items || [])).catch(() => {}).finally(() => setLoading(false)) }

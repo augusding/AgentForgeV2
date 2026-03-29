@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import client from '../../api/client'
 
-export default function SystemTab() {
+export default function SystemTab(_props: { isAdmin?: boolean }) {
   const [h, setH] = useState<any>(null)
   useEffect(() => { client.get('/health').then((d: any) => setH(d)).catch(() => {}) }, [])
   if (!h) return <div className="text-center py-8"><Loader2 className="animate-spin mx-auto" size={20} style={{ color: 'var(--accent)' }} /></div>

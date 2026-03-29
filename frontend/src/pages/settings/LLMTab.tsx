@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Check, X, Loader2, Eye, EyeOff, Save } from 'lucide-react'
+import { Check, X, Loader2, Eye, EyeOff, Save, Cpu } from 'lucide-react'
 import client from '../../api/client'
 import toast from 'react-hot-toast'
 
@@ -11,7 +11,15 @@ const LABELS: Record<string, { emoji: string; title: string; desc: string }> = {
   tier3: { emoji: '🥉', title: '备选 2', desc: '前两级均不可用时切换' },
 }
 
-export default function LLMTab() {
+export default function LLMTab({ isAdmin }: { isAdmin?: boolean }) {
+  if (!isAdmin) return (
+    <div className="rounded-2xl p-12 text-center" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      <Cpu size={40} className="mx-auto mb-4" style={{ color: 'var(--border)' }} />
+      <h3 className="text-base font-medium mb-2">LLM 配置</h3>
+      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>当前使用管理员统一配置的 AI 模型，如需调整请联系管理员。</p>
+    </div>
+  )
+
   const [cfg, setCfg] = useState<any>(null)
   const [tiers, setTiers] = useState<Record<string, TierForm>>({
     tier1: { provider: '', model: '', apiKeyEnv: '', apiKeyValue: '', enabled: true },

@@ -110,6 +110,10 @@ def create_app(engine: ForgeEngine) -> web.Application:
     from api.routes.toolbox import register as reg_toolbox
     reg_toolbox(app)
 
+    # 配置路由（config + LLM）
+    from api.routes.config import register as reg_config
+    reg_config(app)
+
     # 兼容路由（放在最后，真实路由优先匹配）
     try:
         from api.routes.compat import register as reg_compat

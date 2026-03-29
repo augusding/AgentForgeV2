@@ -135,17 +135,6 @@ async def handle_agents_list(request):
     } for p in engine.get_positions_list()])
 
 
-async def handle_config_get(request):
-    """GET /api/v1/config"""
-    engine = request.app["engine"]
-    cfg = engine.config
-    return _json({
-        "name": cfg.name if cfg else "AgentForge",
-        "version": cfg.version if cfg else "2.0.0",
-        "language": cfg.language if cfg else "zh-CN",
-    })
-
-
 async def handle_profiles_list(request):
     """GET /api/v1/profiles"""
     engine = request.app["engine"]
@@ -362,8 +351,7 @@ def register(app: web.Application) -> None:
 
     # Agents/Config/Profiles 兼容
     r.add_get("/api/v1/agents", handle_agents_list)
-    r.add_get("/api/v1/config", handle_config_get)
-    r.add_patch("/api/v1/config", _stub_ok)
+    # config 路由已迁移到 config.py
     r.add_get("/api/v1/profiles", handle_profiles_list)
     r.add_post("/api/v1/profiles/{profile_id}/switch", _stub_ok)
     r.add_get("/api/v1/squads", _stub_list)
@@ -389,7 +377,7 @@ def register(app: web.Application) -> None:
     ):
         r.add_get(path, _stub_list)
     r.add_get("/api/v1/learning/overview", _stub_obj)
-    r.add_post("/api/v1/llm/test-key", _stub_ok)
+    # llm/test-key 已迁移到 config.py
 
     # Analytics（前端 Dashboard 页面需要）
     r.add_get("/api/v1/analytics/daily", handle_analytics_daily)

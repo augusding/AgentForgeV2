@@ -23,7 +23,7 @@ const FIELDS: Array<{ key: keyof PosData; label: string; type: 'text' | 'textare
   { key: 'complex_model', label: '复杂模型', type: 'text', group: '模型' },
 ]
 
-export default function PositionsTab() {
+export default function PositionsTab({ isAdmin }: { isAdmin?: boolean }) {
   const [positions, setPositions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<PosData | null>(null)
@@ -39,7 +39,14 @@ export default function PositionsTab() {
         try { return await client.get(`/positions/${p.position_id}`) as PosData }
         catch { return p as PosData }
       }))
-      setPositions(detailed)
+      // 非 admin 只看自己的岗位
+      if (!isAdmin) {
+        const activePos = localStorage.getItem('agentforge_active_position') || ''
+        const myPos = detailed.filter((p: any) => p.position_id === activePos)
+        setPositions(myPos.length ? myPos : detailed.slice(0, 1))
+      } else {
+        setPositions(detailed)
+      }
     } catch {}
     finally { setLoading(false) }
   }
@@ -65,7 +72,7 @@ export default function PositionsTab() {
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-        管理岗位的六层专家配置：身份层 · 价值观层 · 行为层 · 知识层。点击卡片编辑。
+        {isAdmin ? '管理所有岗位的六层专家配置。点击卡片编辑。' : '查看和编辑你当前岗位的配置。'}
       </p>
 
       {!positions.length ? (

@@ -107,7 +107,7 @@ function ProfileViewer({ positions }: { positions: string[] }) {
 }
 
 type SubTab = 'signals' | 'profile'
-export default function EvolutionTab() {
+export default function EvolutionTab(_props: { isAdmin?: boolean }) {
   const [sub, setSub] = useState<SubTab>('signals')
   const [positions, setPositions] = useState<string[]>([])
   useEffect(() => {
