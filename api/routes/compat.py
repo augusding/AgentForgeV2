@@ -301,6 +301,43 @@ async def handle_system_logs(request):
     return _json({"logs": [], "count": 0})
 
 
+async def handle_analytics_signal_list(request):
+    """GET /api/v1/analytics/signal — 用户记忆信号列表"""
+    engine = request.app["engine"]
+    limit = int(request.query.get("limit", "50"))
+    user = request.get("user") or {}
+    user_id = user.get("sub", "") if isinstance(user, dict) else ""
+    org_id = user.get("org_id", "") if isinstance(user, dict) else ""
+
+    signal_store = getattr(engine, '_signal_store', None)
+    if not signal_store:
+        return _json([])
+
+    try:
+        signals = await signal_store.get_recent_signals(
+            user_id=user_id, org_id=org_id, limit=limit)
+        return _json(signals)
+    except Exception:
+        return _json([])
+
+
+async def handle_analytics_signal_delete(request):
+    """DELETE /api/v1/analytics/signal/{signal_id}"""
+    engine = request.app["engine"]
+    signal_id = request.match_info["signal_id"]
+    signal_store = getattr(engine, '_signal_store', None)
+    if not signal_store:
+        return _json({"error": "未启用"}, 503)
+
+    try:
+        async with signal_store._connect() as db:
+            await db.execute("DELETE FROM signals WHERE id = ?", (signal_id,))
+            await db.commit()
+        return _json({"status": "deleted"})
+    except Exception as e:
+        return _json({"error": str(e)}, 500)
+
+
 def register(app: web.Application) -> None:
     r = app.router
     r.add_get("/api/v1/audit-logs", handle_audit_logs)
@@ -360,7 +397,9 @@ def register(app: web.Application) -> None:
     r.add_get("/api/v1/analytics/quality", handle_analytics_quality)
     r.add_get("/api/v1/analytics/quality/trend", _stub_list)
     r.add_get("/api/v1/analytics/insights", _stub_list)
+    r.add_get("/api/v1/analytics/signal", handle_analytics_signal_list)
     r.add_post("/api/v1/analytics/signal", _stub_ok)
+    r.add_delete("/api/v1/analytics/signal/{signal_id}", handle_analytics_signal_delete)
     r.add_get("/api/v1/analytics/session/{session_id}", _stub_obj)
 
     # Work Items / Daily Context（真实数据）
