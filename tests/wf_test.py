@@ -18,8 +18,14 @@ import json
 import sys
 import time
 import os
+import io
 import argparse
 from datetime import datetime
+
+# Windows GBK 编码兼容：强制 stdout/stderr 使用 utf-8
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     import requests
