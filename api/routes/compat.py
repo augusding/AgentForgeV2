@@ -86,14 +86,27 @@ async def handle_chat_upload(request):
 
 
 async def handle_chat_quick_commands(request):
-    """GET /api/v1/chat/quick-commands"""
+    """GET /api/v1/chat/quick-commands?position_id=xxx"""
     engine = request.app["engine"]
+    target_pid = request.query.get("position_id", "")
+
+    # 优先从请求用户的 active_position 获取
+    if not target_pid:
+        user = request.get("user") or {}
+        if isinstance(user, dict):
+            target_pid = user.get("active_position", "")
+
     commands = []
     for bundle in engine._bundles.values():
         for pos in bundle.positions.values():
-            for p in pos.onboarding.get("prompts", [])[:3]:
+            # 如果指定了岗位，只返回该岗位的 prompts
+            if target_pid and pos.position_id != target_pid:
+                continue
+            for p in pos.onboarding.get("prompts", []):
                 commands.append({"text": p, "position_id": pos.position_id})
-    return _json(commands[:10])
+
+    # 如果指定岗位没有 prompts 或未指定岗位，返回空而不是混合推荐
+    return _json(commands[:8])
 
 
 # ── Auth 兼容 ────────────────────────────────────────────

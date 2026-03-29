@@ -49,12 +49,12 @@ export default function Chat() {
   useEffect(() => {
     if (user?.active_position) setPositionId(user.active_position)
     else client.get('/workstation/home').then((d: any) => { if (d.position?.position_id) setPositionId(d.position.position_id); setPosInfo(d.position) }).catch(() => {})
-    getQuickCommands().then(c => setQuickCmds((c || []).map((x: any) => x.text))).catch(() => {})
   }, [user?.active_position])
   useEffect(() => {
     if (!positionId) return
     client.get(`/positions/${positionId}`).then((d: any) => { setPosInfo(d); setPersonality(d.role || d.description || '') }).catch(() => {})
     client.get('/knowledge/stats').then((d: any) => setHasKB((d.count || d.total_chunks || 0) > 0)).catch(() => {})
+    getQuickCommands(positionId).then(c => setQuickCmds((c || []).map((x: any) => x.text))).catch(() => {})
   }, [positionId])
 
   const adjustH = useCallback(() => { const el = taRef.current; if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' } }, [])

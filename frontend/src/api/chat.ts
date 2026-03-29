@@ -25,8 +25,9 @@ export async function uploadChatFile(file: File) {
   }) as Promise<{ file_id: string; filename: string; size: number; extracted_text?: string }>
 }
 
-export async function getQuickCommands() {
-  return client.get('/chat/quick-commands') as Promise<Array<{ text: string; position_id?: string }>>
+export async function getQuickCommands(positionId?: string) {
+  const params = positionId ? `?position_id=${positionId}` : ''
+  return client.get(`/chat/quick-commands${params}`) as Promise<Array<{ text: string; position_id?: string }>>
 }
 
 export async function submitFeedback(messageId: string, sessionId: string, rating: 'up' | 'down') {
