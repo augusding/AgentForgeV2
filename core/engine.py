@@ -454,9 +454,7 @@ class ForgeEngine:
     def sync_manager(self): return self._sync_manager
     @property
     def user_profile_store(self): return self._user_profile_store
-
     # ── 生命周期 ──────────────────────────────────────────
-
     async def serve(self, host: str = "0.0.0.0", api_port: int = 8080) -> None:
         """启动 HTTP API 服务。"""
         await self.init()
@@ -468,6 +466,9 @@ class ForgeEngine:
         await runner.setup()
         site = aiohttp.web.TCPSite(runner, host, api_port)
         await site.start()
+        if self._wf_engine:
+            try: await self._wf_engine.recover_on_startup()
+            except Exception: pass  # noqa
         if self._scheduler:
             await self._scheduler.start()
         # 主动推送引擎

@@ -57,6 +57,9 @@ class WorkflowStore(BaseStore):
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_org ON workflows(org_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_wf ON workflow_executions(workflow_id)")
+        for col, dflt in [("timeout_seconds", "300")]:
+            try: await db.execute(f"ALTER TABLE workflows ADD COLUMN {col} INTEGER DEFAULT {dflt}")
+            except Exception: pass
 
     # ── 工作流定义 ────────────────────────────────────────
 
@@ -71,12 +74,13 @@ class WorkflowStore(BaseStore):
             await db.execute(
                 "INSERT OR REPLACE INTO workflows "
                 "(id, name, description, org_id, position_id, nodes, edges, trigger_config, "
-                "variables, version, enabled, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "variables, version, enabled, timeout_seconds, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (wf.id, wf.name, wf.description, wf.org_id, wf.position_id,
                  nodes_json, edges_json, json.dumps(wf.trigger, ensure_ascii=False),
                  json.dumps(wf.variables, ensure_ascii=False),
-                 wf.version, 1 if wf.enabled else 0, now, now),
+                 wf.version, 1 if wf.enabled else 0,
+                 getattr(wf, 'timeout_seconds', 300), now, now),
             )
             await db.commit()
 
@@ -188,6 +192,16 @@ class WorkflowStore(BaseStore):
             d["variables"] = json.loads(d.get("variables", "{}"))
         return rows
 
+    async def list_by_status(self, status: str, limit: int = 100) -> list[dict]:
+        await self.ensure_tables()
+        async with self._db() as db:
+            cursor = await db.execute("SELECT * FROM workflow_executions WHERE status=? ORDER BY started_at DESC LIMIT ?", (status, limit))
+            rows = [dict(r) for r in await cursor.fetchall()]
+        for d in rows:
+            d["node_results"] = json.loads(d.get("node_results", "{}"))
+            d["variables"] = json.loads(d.get("variables", "{}"))
+        return rows
+
     # ── 工具方法 ──────────────────────────────────────────
 
     @staticmethod
@@ -214,4 +228,5 @@ class WorkflowStore(BaseStore):
             variables=json.loads(row.get("variables", "{}")),
             version=row.get("version", 1),
             enabled=bool(row.get("enabled", 1)),
+            timeout_seconds=row.get("timeout_seconds", 300) or 300,
         )

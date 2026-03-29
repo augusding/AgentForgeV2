@@ -40,6 +40,7 @@ class WorkflowDefinition:
     variables: dict = field(default_factory=dict)         # 全局变量
     version: int = 1
     enabled: bool = True
+    timeout_seconds: int = 300
 
 
 @dataclass
@@ -57,7 +58,7 @@ class WorkflowExecution:
     """工作流执行实例。"""
     id: str
     workflow_id: str
-    status: str = "running"     # "running" | "completed" | "failed" | "paused"
+    status: str = "running"     # "running" | "completed" | "failed" | "paused" | "timeout" | "interrupted"
     trigger_type: str = "manual"
     trigger_data: dict = field(default_factory=dict)
     node_results: dict[str, NodeResult] = field(default_factory=dict)

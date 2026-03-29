@@ -31,16 +31,32 @@ class WorkflowEngine:
         execution = await engine.run(workflow_def, trigger_data)
     """
 
-    def __init__(self, registry: NodeRegistry | None = None, store=None):
+    def __init__(self, registry: NodeRegistry | None = None, store=None, max_concurrency: int = 10):
         self._registry = registry or NodeRegistry()
         self._store = store
+        self._max_concurrency = max_concurrency
+        self._node_semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def run(
-        self, workflow: WorkflowDefinition,
-        trigger_data: dict | None = None, context: dict | None = None,
-        stop_at_node: str = "",
-    ) -> WorkflowExecution:
-        """执行工作流。"""
+    async def run(self, workflow: WorkflowDefinition, trigger_data: dict | None = None,
+                  context: dict | None = None, stop_at_node: str = "") -> WorkflowExecution:
+        """执行工作流（含超时控制）。"""
+        timeout = getattr(workflow, 'timeout_seconds', 300) or 300
+        if timeout > 0:
+            try:
+                return await asyncio.wait_for(self._run_internal(workflow, trigger_data, context, stop_at_node), timeout=timeout)
+            except asyncio.TimeoutError:
+                ex = WorkflowExecution(id=uuid4().hex[:12], workflow_id=workflow.id, status="timeout",
+                    error=f"工作流超时({timeout}s)", started_at=time.time(), completed_at=time.time())
+                if self._store:
+                    try: await self._store.save_execution(exec_id=ex.id, workflow_id=workflow.id, status="timeout",
+                        node_results={}, variables={}, error=ex.error, started_at=ex.started_at, completed_at=ex.completed_at)
+                    except Exception: pass
+                logger.error("工作流超时: wf=%s timeout=%ds", workflow.id, timeout)
+                return ex
+        return await self._run_internal(workflow, trigger_data, context, stop_at_node)
+
+    async def _run_internal(self, workflow: WorkflowDefinition, trigger_data: dict | None = None,
+                             context: dict | None = None, stop_at_node: str = "") -> WorkflowExecution:
         exec_id = uuid4().hex[:12]
         execution = WorkflowExecution(
             id=exec_id, workflow_id=workflow.id,
@@ -49,6 +65,10 @@ class WorkflowEngine:
                        "_workflow_id": workflow.id, "_execution_id": exec_id},
             started_at=time.time(),
         )
+        if self._store:
+            try: await self._store.save_execution(exec_id=exec_id, workflow_id=workflow.id, status="running",
+                    node_results={}, variables=execution.variables, started_at=execution.started_at)
+            except Exception as e: logger.warning("持久化失败(start): %s", e)
         ctx = context or {}
         ctx.setdefault("wf_engine", self)
         ctx.setdefault("wf_store", self._store)
@@ -95,6 +115,11 @@ class WorkflowEngine:
                     ctx["_node_outputs"] = label_outputs
 
                     _push_node_status(ctx, execution, nid, nr)
+                    if self._store:
+                        try:
+                            _nrd = {k: {"status": v.status, "output": v.output, "error": v.error, "duration": v.duration} for k, v in execution.node_results.items()}
+                            await self._store.update_execution_status(execution.id, "running", node_results=_nrd, variables=execution.variables)
+                        except Exception: pass
                     # 审批节点挂起
                     if nr and nr.status == "waiting_approval":
                         execution.status = "paused"; execution.paused_at_node = nid
@@ -135,9 +160,13 @@ class WorkflowEngine:
 
     async def _execute_node(self, node: WorkflowNode, execution: WorkflowExecution,
                             edges: list[dict], ctx: dict) -> NodeResult:
-        """执行单个节点：表达式解析 → 执行器调用 → 失败重试。"""
         if node.disabled:
             return NodeResult(node_id=node.id, status="skipped", output={"skipped_reason": "disabled"})
+        async with self._node_semaphore:
+            return await self._execute_node_inner(node, execution, edges, ctx)
+
+    async def _execute_node_inner(self, node: WorkflowNode, execution: WorkflowExecution,
+                                   edges: list[dict], ctx: dict) -> NodeResult:
         executor = self._registry.get_executor(node.type)
         if not executor:
             return NodeResult(node_id=node.id, status="failed", error=f"未知节点类型: {node.type}")
@@ -168,6 +197,17 @@ class WorkflowEngine:
             except Exception as e:
                 last_result = NodeResult(node_id=node.id, status="failed", error=str(e), duration=time.time() - start)
         return last_result or NodeResult(node_id=node.id, status="failed", error="执行失败", duration=time.time() - start)
+
+    async def recover_on_startup(self) -> int:
+        if not self._store: return 0
+        count = 0
+        try:
+            running = await self._store.list_by_status("running")
+            for ex in running:
+                await self._store.update_execution_status(ex["id"], "interrupted", error="服务重启中断", completed_at=time.time())
+                count += 1; logger.warning("标记中断: %s (wf=%s)", ex["id"], ex.get("workflow_id"))
+        except Exception as e: logger.error("恢复检查失败: %s", e)
+        return count
 
 
 def _find_edge(edges: list[dict], source: str, target: str) -> dict | None:
