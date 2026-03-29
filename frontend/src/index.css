@@ -46,9 +46,18 @@ body {
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
 }
 
-/* React Flow v12 handle 连接修复 */
-.react-flow__handle { pointer-events: all !important; cursor: crosshair; z-index: 10; }
-.react-flow__handle:hover { transform: scale(1.6); transition: transform 0.15s ease; }
+/* React Flow v12 handle — 确保可交互 + 暗色主题适配 */
+.react-flow__handle {
+  width: 10px !important; height: 10px !important;
+  background: var(--accent) !important; border: 2px solid var(--bg) !important;
+  pointer-events: all !important; cursor: crosshair !important; z-index: 5;
+}
+.react-flow__handle:hover {
+  width: 14px !important; height: 14px !important;
+  filter: brightness(1.3); transition: all 0.15s ease;
+}
+.react-flow__handle-left { left: 0 !important; top: 50% !important; transform: translate(-50%, -50%) !important; }
+.react-flow__handle-right { right: 0 !important; top: 50% !important; transform: translate(50%, -50%) !important; }
 
 @keyframes wf-flow { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }

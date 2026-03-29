@@ -34,9 +34,7 @@ function WfNodeComponent({ data, selected }: NodeProps) {
       {isPinned && !disabled && <div className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] z-10"
         style={{ background: 'var(--accent)', border: '2px solid var(--bg)' }}>📌</div>}
 
-      {ins > 0 && <Handle type="target" position={Position.Left} id="in-0"
-        className="!pointer-events-auto"
-        style={{ width: 10, height: 10, background: baseClr, border: '2px solid var(--bg)', zIndex: 10 }} />}
+      {ins > 0 && <Handle type="target" position={Position.Left} id="in-0" />}
 
       <div className={`px-3 py-2 rounded-lg text-xs transition-all ${selected ? 'shadow-lg' : 'shadow-sm'}`}
         style={{ background: 'var(--bg-surface)', border: `2px solid ${borderClr}`, borderLeft: `4px solid ${baseClr}` }}>
@@ -65,9 +63,7 @@ function WfNodeComponent({ data, selected }: NodeProps) {
 
       {Array.from({ length: outs }).map((_, i) => (
         <Handle key={i} type="source" position={Position.Right} id={`out-${i}`}
-          className="!pointer-events-auto"
-          style={{ width: 10, height: 10, background: baseClr, border: '2px solid var(--bg)', zIndex: 10,
-            top: outs === 1 ? '50%' : `${20 + (i * 60) / Math.max(outs - 1, 1)}%` }} />
+          style={outs > 1 ? { top: `${20 + (i * 60) / Math.max(outs - 1, 1)}%` } : undefined} />
       ))}
     </div>
   )

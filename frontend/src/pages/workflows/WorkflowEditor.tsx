@@ -50,7 +50,8 @@ function WorkflowEditorInner() {
     const ln = (wf.nodes || []).map((n: any) => ({ id: n.id, type: 'wfNode', position: n.position || { x: 0, y: 0 },
       data: { label: n.label || n.type, nodeType: n.type, config: n.config || {}, catalog: [], disabled: n.disabled || false } }))
     const le = (wf.edges || []).map((e: any, i: number) => ({ id: `e-${i}`, source: e.source, target: e.target,
-      sourceHandle: e.sourceOutput != null ? `out-${e.sourceOutput}` : undefined,
+      sourceHandle: e.sourceOutput != null ? `out-${e.sourceOutput}` : 'out-0',
+      targetHandle: 'in-0',
       markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }))
     // Auto-layout if positions overlap or all at origin
     const needsLayout = ln.length > 1 && (ln.every((n: any) => !n.position.x && !n.position.y) ||
@@ -83,7 +84,9 @@ function WorkflowEditorInner() {
     } catch {} }; ws.onclose = () => { wsRef.current = null } } catch {}
     return () => { wsRef.current?.close() } }, [])
 
-  const onConnect = useCallback((p: Connection) => setEdges(es => addEdge({ ...p, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }, es)), [])
+  const onConnect = useCallback((p: Connection) => setEdges(es => addEdge({ ...p,
+    sourceHandle: p.sourceHandle || 'out-0', targetHandle: p.targetHandle || 'in-0',
+    markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--border)' } }, es)), [])
   const addNode = useCallback((td: NodeTypeDef) => {
     const maxX = nodes.length ? Math.max(...nodes.map(n => n.position?.x || 0)) : 50
     const avgY = nodes.length ? nodes.reduce((s, n) => s + (n.position?.y || 0), 0) / nodes.length : 200
@@ -102,7 +105,9 @@ function WorkflowEditorInner() {
 
   const toWfData = () => ({ name: wfName,
     nodes: nodes.map(n => ({ id: n.id, type: n.data.nodeType, label: n.data.label, config: n.data.config || {}, position: n.position, disabled: n.data.disabled || false })),
-    edges: edges.map(e => ({ source: e.source, target: e.target, sourceOutput: e.sourceHandle ? parseInt(e.sourceHandle.replace('out-', '')) : 0 })) })
+    edges: edges.map(e => ({ source: e.source, target: e.target,
+      sourceOutput: e.sourceHandle ? parseInt(e.sourceHandle.replace('out-', '')) : 0,
+      targetHandle: e.targetHandle || 'in-0' })) })
 
   const handleSave = async () => { setSaving(true); try { if (wfId) { await updateWorkflow(wfId, toWfData()); toast.success('已保存') }
     else { const r = await createWorkflow(toWfData()); if (r.id) { setWfId(r.id); navigate(`/workflows/${r.id}`, { replace: true }); toast.success('已创建') } }
@@ -185,7 +190,7 @@ function WorkflowEditorInner() {
         <NodePalette catalog={catalog} onAdd={addNode} />
         <div className="flex-1 relative">
           <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-            onConnect={onConnect} connectionRadius={25} onNodeClick={(_, n) => { setSelected(n); const es = execStatus[n.id]; if (es?.output) setResultPopup({ nodeId: n.id, data: es }) }}
+            onConnect={onConnect} connectionRadius={30} connectOnClick={true} onNodeClick={(_, n) => { setSelected(n); const es = execStatus[n.id]; if (es?.output) setResultPopup({ nodeId: n.id, data: es }) }}
             onNodeDoubleClick={(_, n) => setEditModal(n)}
             onPaneClick={() => { setSelected(null); setResultPopup(null); setCtxMenu(null) }}
             onNodeContextMenu={onNodeCtx} nodeTypes={nodeTypes} fitView proOptions={{ hideAttribution: true }}
