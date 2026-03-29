@@ -46,6 +46,10 @@ body {
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
 }
 
+/* React Flow v12 handle 连接修复 */
+.react-flow__handle { pointer-events: all !important; cursor: crosshair; z-index: 10; }
+.react-flow__handle:hover { transform: scale(1.6); transition: transform 0.15s ease; }
+
 @keyframes wf-flow { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .wf-edge-running .react-flow__edge-path { stroke: #3b82f6 !important; stroke-width: 2.5 !important; stroke-dasharray: 8 4; animation: wf-flow 0.6s linear infinite; }

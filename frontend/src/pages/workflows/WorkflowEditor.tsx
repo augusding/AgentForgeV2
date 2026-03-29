@@ -185,7 +185,7 @@ function WorkflowEditorInner() {
         <NodePalette catalog={catalog} onAdd={addNode} />
         <div className="flex-1 relative">
           <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-            onConnect={onConnect} onNodeClick={(_, n) => { setSelected(n); const es = execStatus[n.id]; if (es?.output) setResultPopup({ nodeId: n.id, data: es }) }}
+            onConnect={onConnect} connectionRadius={25} onNodeClick={(_, n) => { setSelected(n); const es = execStatus[n.id]; if (es?.output) setResultPopup({ nodeId: n.id, data: es }) }}
             onNodeDoubleClick={(_, n) => setEditModal(n)}
             onPaneClick={() => { setSelected(null); setResultPopup(null); setCtxMenu(null) }}
             onNodeContextMenu={onNodeCtx} nodeTypes={nodeTypes} fitView proOptions={{ hideAttribution: true }}
