@@ -49,13 +49,18 @@ START_TIME = 0.0
 
 def auth():
     global TOKEN
-    try:
-        r = requests.post(f"{BASE}/auth/login", json={"username": USERNAME, "password": PASSWORD}, timeout=5)
-        TOKEN = r.json().get("token", "")
-    except Exception as e:
-        print(f"❌ 连接失败: {e}")
-        print(f"   请确认服务运行在 {BASE}")
-        sys.exit(1)
+    for attempt in range(3):
+        try:
+            r = requests.post(f"{BASE}/auth/login", json={"username": USERNAME, "password": PASSWORD},
+                              headers={"Connection": "close"}, timeout=5)
+            TOKEN = r.json().get("token", "")
+            break
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(1); continue
+            print(f"❌ 连接失败: {e}")
+            print(f"   请确认服务运行在 {BASE}")
+            sys.exit(1)
     if not TOKEN:
         print("❌ 登录失败，请检查用户名密码")
         sys.exit(1)
@@ -63,64 +68,68 @@ def auth():
 
 
 def hdr():
-    return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json", "Connection": "close"}
+
+
+def _req(method, url, **kwargs):
+    """带重试的 HTTP 请求，解决 Windows aiohttp 连接池兼容问题"""
+    kwargs.setdefault("timeout", 30)
+    kwargs.setdefault("headers", hdr())
+    for attempt in range(3):
+        try:
+            return getattr(requests, method)(url, **kwargs)
+        except (requests.ConnectionError, requests.exceptions.ChunkedEncodingError):
+            if attempt < 2:
+                time.sleep(0.5)
+                continue
+            raise
 
 
 def cleanup_all_workflows():
     """清空所有工作流"""
-    r = requests.get(f"{BASE}/workflows", headers=hdr(), timeout=10)
+    try:
+        r = _req("get", f"{BASE}/workflows", timeout=10)
+    except Exception as e:
+        print(f"  ⚠️ 获取工作流列表失败: {e}"); return 0
     if r.status_code != 200:
-        print(f"  ⚠️ 获取工作流列表失败: {r.status_code}")
-        return 0
+        print(f"  ⚠️ 获取工作流列表失败: {r.status_code}"); return 0
     wfs = r.json().get("workflows", [])
     if not wfs:
-        print("  ✅ 工作流列表已为空")
-        return 0
+        print("  ✅ 工作流列表已为空"); return 0
     deleted = 0
     for wf in wfs:
-        wf_id = wf.get("id", "")
-        wf_name = wf.get("name", "")
+        wf_id, wf_name = wf.get("id", ""), wf.get("name", "")
         try:
-            requests.delete(f"{BASE}/workflows/{wf_id}", headers=hdr(), timeout=5)
-            deleted += 1
-            print(f"  🗑️  删除: {wf_name} ({wf_id})")
+            _req("delete", f"{BASE}/workflows/{wf_id}", timeout=5)
+            deleted += 1; print(f"  🗑️  删除: {wf_name} ({wf_id})")
         except Exception as e:
             print(f"  ⚠️ 删除失败: {wf_name} — {e}")
-    print(f"  ✅ 共删除 {deleted} 个工作流")
-    return deleted
+    print(f"  ✅ 共删除 {deleted} 个工作流"); return deleted
 
 
 def cleanup_test_workflows():
     """只清理带测试前缀的工作流"""
-    r = requests.get(f"{BASE}/workflows", headers=hdr(), timeout=10)
-    if r.status_code != 200:
+    try:
+        r = _req("get", f"{BASE}/workflows", timeout=10)
+    except Exception:
         return
-    wfs = r.json().get("workflows", [])
-    for wf in wfs:
+    if r.status_code != 200: return
+    for wf in r.json().get("workflows", []):
         if wf.get("name", "").startswith(TEST_PREFIX):
-            try:
-                requests.delete(f"{BASE}/workflows/{wf['id']}", headers=hdr(), timeout=5)
-            except Exception:
-                pass
+            try: _req("delete", f"{BASE}/workflows/{wf['id']}", timeout=5)
+            except Exception: pass
 
 
 def create_and_run(name, nodes, edges, trigger_data=None, keep=False):
     """创建工作流 → 执行 → 返回结果 → 清理（除非 keep=True）"""
     wf_id = ""
     try:
-        wf = {
-            "name": f"{TEST_PREFIX} {name}",
-            "description": "自动化测试",
-            "nodes": nodes,
-            "edges": edges,
-        }
-        r = requests.post(f"{BASE}/workflows", json=wf, headers=hdr(), timeout=10)
+        wf = {"name": f"{TEST_PREFIX} {name}", "description": "自动化测试", "nodes": nodes, "edges": edges}
+        r = _req("post", f"{BASE}/workflows", json=wf, timeout=10)
         if r.status_code != 200:
             return None, f"创建失败 [{r.status_code}]: {r.text[:100]}"
         wf_id = r.json().get("id", "")
-
-        body = {"trigger_data": trigger_data or {}}
-        r = requests.post(f"{BASE}/workflows/{wf_id}/execute", json=body, headers=hdr(), timeout=30)
+        r = _req("post", f"{BASE}/workflows/{wf_id}/execute", json={"trigger_data": trigger_data or {}})
         if r.status_code != 200:
             return None, f"执行失败 [{r.status_code}]: {r.text[:100]}"
         return r.json(), None
@@ -130,10 +139,8 @@ def create_and_run(name, nodes, edges, trigger_data=None, keep=False):
         return None, str(e)
     finally:
         if wf_id and not keep:
-            try:
-                requests.delete(f"{BASE}/workflows/{wf_id}", headers=hdr(), timeout=5)
-            except Exception:
-                pass
+            try: _req("delete", f"{BASE}/workflows/{wf_id}", timeout=5)
+            except Exception: pass
 
 
 def log(status, test_id, name, detail=""):
