@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { CheckCircle, Circle, Clock, Users, Download,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
-import { createTask, createSchedule, createFollowup } from '../api/workitems'
+import { createTask, createSchedule, createFollowup, updateTask as apiUpdateTask } from '../api/workitems'
 import type { SuggestionData } from '../stores/useChatStore'
 import toast from 'react-hot-toast'
 
@@ -66,7 +66,7 @@ function TaskCard({ data }: { data: any }) {
 
   const toggle = async (id: string, cur: string) => {
     const ns = cur === 'done' ? 'active' : 'done'
-    try { await client.post('/daily-context/priorities', { action: 'update', id, status: ns }); setItems(p => p.map(x => x.id === id ? { ...x, status: ns } : x)); toast.success(ns === 'done' ? '已完成' : '已恢复') } catch { toast.error('操作失败') }
+    try { await apiUpdateTask(id, { status: ns }); setItems(p => p.map(x => x.id === id ? { ...x, status: ns } : x)); toast.success(ns === 'done' ? '已完成' : '已恢复') } catch { toast.error('操作失败') }
   }
 
   if (created) return (

@@ -6,7 +6,7 @@ import { useWorkstationStore } from '../stores/useWorkstationStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import client from '../api/client'
 import { createTask, updateTask, deleteTask, createSchedule, updateSchedule, deleteSchedule,
-         createFollowup, updateFollowup, deleteFollowup } from '../api/workitems'
+         createFollowup, updateFollowup, deleteFollowup, updateWorkItem, deleteWorkItem } from '../api/workitems'
 import toast from 'react-hot-toast'
 
 // ── Types ──
@@ -72,7 +72,7 @@ function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: Ar
   }, [onClose])
   return (
     <div ref={ref} className="fixed z-50 py-1 rounded-lg shadow-xl min-w-[140px]"
-      style={{ left: x, top: y, background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+      style={{ left: Math.min(x, window.innerWidth - 160), top: Math.min(y, window.innerHeight - 200), background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
       {items.map((item, i) => (
         <button key={i} onClick={() => { item.onClick(); onClose() }}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--bg-hover)] transition-colors"
@@ -296,25 +296,31 @@ export default function Workstation() {
   // ── CRUD handlers ──
   const handleTaskUpdate = async (task: TaskItem, field: string, value: string) => {
     try {
-      if (task.source === 'priority') {
-        await updateTask(task.id, { [field]: value })
-      } else {
+      if (task.source === 'work_item') {
         const mapped = field === 'status' ? { status: STATUS_MAP[value] || value } : { [field]: value }
-        await updateTask(task.id, mapped)
+        await updateWorkItem(task.id, mapped)
+      } else {
+        await updateTask(task.id, { [field]: value })
       }
       await loadBrief()
     } catch { toast.error('更新失败') }
   }
 
   const handleTaskDelete = async (task: TaskItem) => {
-    try { await deleteTask(task.id); toast.success('已删除'); await loadBrief() }
-    catch { toast.error('删除失败') }
+    try {
+      if (task.source === 'work_item') await deleteWorkItem(task.id)
+      else await deleteTask(task.id)
+      toast.success('已删除'); await loadBrief()
+    } catch { toast.error('删除失败') }
   }
 
-  const handleTaskDrop = async (taskId: string, _source: string, newStatus: string) => {
+  const handleTaskDrop = async (taskId: string, source: string, newStatus: string) => {
     const statusValue = newStatus === 'todo' ? 'active' : newStatus === 'doing' ? 'in_progress' : 'done'
-    try { await updateTask(taskId, { status: statusValue }); await loadBrief() }
-    catch { toast.error('状态更新失败') }
+    try {
+      if (source === 'work_item') await updateWorkItem(taskId, { status: statusValue })
+      else await updateTask(taskId, { status: statusValue })
+      await loadBrief()
+    } catch { toast.error('状态更新失败') }
   }
 
   const handleScheduleDelete = async (id: string) => {
