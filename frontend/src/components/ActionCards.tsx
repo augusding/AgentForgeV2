@@ -9,6 +9,26 @@ import { createTask, createSchedule, createFollowup, updateTask as apiUpdateTask
 import type { SuggestionData } from '../stores/useChatStore'
 import toast from 'react-hot-toast'
 
+/** 卡片状态持久化：用 localStorage 记住确认/忽略 */
+function _cardKey(prefix: string, data: Record<string, any>): string {
+  const raw = `${prefix}_${data.item_type || data.workflow_id || ''}_${(data.title || data.proposed?.title || '').slice(0, 30)}_${data.proposed?.scheduled_time || data.proposed?.due_date || data.scheduled_time || ''}`
+  let hash = 0
+  for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0 }
+  return `af_card_${prefix}_${Math.abs(hash).toString(36)}`
+}
+function _saveCardState(key: string, state: string, id?: string) {
+  try { localStorage.setItem(key, JSON.stringify({ state, id: id || '', t: Date.now() })) } catch {}
+}
+function _loadCardState(key: string): { state: string; id: string } | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const d = JSON.parse(raw)
+    if (Date.now() - (d.t || 0) > 7 * 86400 * 1000) { localStorage.removeItem(key); return null }
+    return d
+  } catch { return null }
+}
+
 interface CardData { type: string; data: any; toolName: string }
 
 /** 从工具名和结果解析卡片类型 */
@@ -340,8 +360,10 @@ function WorkflowListCard({ data }: { data: any }) {
 
 /* ── 工作流确认执行卡片 ── */
 function WorkflowConfirmCard({ data }: { data: any }) {
+  const _key = _cardKey('wfc', { workflow_id: data.workflow_id, title: data.workflow_name })
+  const _saved = _loadCardState(_key)
   const [executing, setExecuting] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  const [result, setResult] = useState<string | null>(_saved?.state || null)
   const run = async () => {
     setExecuting(true)
     try {
@@ -349,7 +371,9 @@ function WorkflowConfirmCard({ data }: { data: any }) {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('agentforge_token') || ''}` }, body: '{}',
       })
       const r = await resp.json()
-      setResult(r.status === 'completed' ? '✅ 执行完成' : r.error ? `❌ ${r.error}` : '⏳ 已提交')
+      const msg = r.status === 'completed' ? '✅ 执行完成' : r.error ? `❌ ${r.error}` : '⏳ 已提交'
+      setResult(msg)
+      _saveCardState(_key, msg)
     } catch (e: any) { setResult(`❌ ${e.message}`) }
     setExecuting(false)
   }
@@ -377,9 +401,11 @@ function WorkflowConfirmCard({ data }: { data: any }) {
 function WorkItemConfirmCard({ data }: { data: any }) {
   const proposed = data.proposed || {}
   const itemType = data.item_type || 'task'
+  const _key = _cardKey('wic', { item_type: itemType, ...proposed })
+  const _saved = _loadCardState(_key)
   const [fields, setFields] = useState<Record<string, string>>({ ...proposed })
-  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>('pending')
-  const [createdId, setCreatedId] = useState('')
+  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>(_saved?.state as any || 'pending')
+  const [createdId, setCreatedId] = useState(_saved?.id || '')
 
   const updateField = (key: string, value: string) => setFields(f => ({ ...f, [key]: value }))
 
@@ -415,8 +441,10 @@ function WorkItemConfirmCard({ data }: { data: any }) {
           description: fields.description || undefined,
         })
       }
-      setCreatedId(result?.id || '')
+      const cid = result?.id || ''
+      setCreatedId(cid)
       setStatus('created')
+      _saveCardState(_key, 'created', cid)
       toast.success(`${typeLabel}已创建`)
     } catch {
       toast.error('创建失败')
@@ -530,7 +558,7 @@ function WorkItemConfirmCard({ data }: { data: any }) {
 
       {/* 操作按钮 */}
       <div className="flex justify-end gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'var(--border)' }}>
-        <button onClick={() => setStatus('ignored')}
+        <button onClick={() => { setStatus('ignored'); _saveCardState(_key, 'ignored') }}
           className="px-4 py-1.5 rounded-lg text-xs"
           style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
           忽略
@@ -547,7 +575,9 @@ function WorkItemConfirmCard({ data }: { data: any }) {
 
 /* ── AI 主动建议卡片（一行式轻量设计） ── */
 export function SuggestionCard({ suggestion }: { suggestion: SuggestionData }) {
-  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>('pending')
+  const _key = _cardKey('sgc', { item_type: suggestion.item_type, title: suggestion.title, ...suggestion.fields })
+  const _saved = _loadCardState(_key)
+  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>(_saved?.state as any || 'pending')
   const [fields, setFields] = useState<Record<string, any>>({
     title: suggestion.title,
     ...suggestion.fields,
@@ -569,6 +599,7 @@ export function SuggestionCard({ suggestion }: { suggestion: SuggestionData }) {
         await createFollowup({ title: fields.title, target: fields.target || undefined, due_date: fields.due_date || undefined })
       }
       setStatus('created')
+      _saveCardState(_key, 'created')
       toast.success(`${typeLabel}已创建`)
     } catch {
       toast.error('创建失败')
@@ -578,6 +609,7 @@ export function SuggestionCard({ suggestion }: { suggestion: SuggestionData }) {
 
   const ignore = async () => {
     setStatus('ignored')
+    _saveCardState(_key, 'ignored')
     try { await client.post('/work-items/suggestion-ignore', { item_type: suggestion.item_type }) } catch {}
   }
 
