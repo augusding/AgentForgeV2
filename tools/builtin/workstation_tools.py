@@ -12,6 +12,11 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
     async def _manage_priority(args: dict) -> str:
         action = args.get("action", "list")
         uid, oid, pid = args.get("user_id", ""), args.get("org_id", ""), args.get("position_id", "")
+        if action == "propose":
+            return json.dumps({"action": "propose", "item_type": "task", "proposed": {
+                "title": args.get("title", ""), "description": args.get("description", ""),
+                "priority": args.get("priority", "P1"), "due_date": args.get("due_date", ""),
+            }}, ensure_ascii=False)
         if action == "list":
             return json.dumps({"priorities": await work_item_store.get_priorities(uid, oid, pid)}, ensure_ascii=False)
         elif action == "add":
@@ -31,6 +36,11 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
     async def _manage_schedule(args: dict) -> str:
         action = args.get("action", "list")
         uid, oid, pid = args.get("user_id", ""), args.get("org_id", ""), args.get("position_id", "")
+        if action == "propose":
+            return json.dumps({"action": "propose", "item_type": "schedule", "proposed": {
+                "title": args.get("title", ""), "description": args.get("description", ""),
+                "scheduled_time": args.get("time", ""), "duration_minutes": args.get("duration", 60),
+            }}, ensure_ascii=False)
         if action == "list":
             return json.dumps({"schedules": await work_item_store.get_schedules(uid, oid, date=args.get("date", ""))}, ensure_ascii=False)
         elif action == "add":
@@ -52,6 +62,11 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
     async def _manage_followup(args: dict) -> str:
         action = args.get("action", "list")
         uid, oid = args.get("user_id", ""), args.get("org_id", "")
+        if action == "propose":
+            return json.dumps({"action": "propose", "item_type": "followup", "proposed": {
+                "title": args.get("title", ""), "description": args.get("description", ""),
+                "target": args.get("target", ""), "due_date": args.get("due_date", ""),
+            }}, ensure_ascii=False)
         if action == "list":
             return json.dumps({"followups": await work_item_store.get_followups(uid, oid)}, ensure_ascii=False)
         elif action == "add":
@@ -99,9 +114,9 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
     return [
         ToolDefinition(
             name="manage_priority",
-            description="管理用户的待办事项和优先级任务。当用户提到待办、任务、要做的事、截止日期、优先级、P0/P1/P2、提醒我、记一下、todo 时使用。支持 list(查看)/add(创建)/update(更新)/delete(删除)。创建时需要 title，可选 priority 和 due_date(YYYY-MM-DD)。",
+            description="管理用户的待办事项和优先级任务。当用户提到待办、任务、要做的事、截止日期、优先级、P0/P1/P2、提醒我、记一下、todo 时使用。支持 propose(提议创建，返回确认卡片)/list(查看)/add(直接创建)/update(更新)/delete(删除)。**创建新项目时优先使用 propose**，让用户确认后再写入。创建时需要 title，可选 priority 和 due_date(YYYY-MM-DD)。",
             input_schema={"type": "object", "properties": {
-                "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
+                "action": {"type": "string", "enum": ["propose", "list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "事项标题"},
                 "description": {"type": "string"},
                 "priority": {"type": "string", "enum": ["P0", "P1", "P2"], "default": "P1"},
@@ -114,9 +129,9 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_schedule",
-            description="管理用户的日程安排和会议。当用户提到日程、会议、安排、几点、上午/下午、开会、约了、schedule 时使用。支持 list(查看，可按日期过滤)/add(添加)/update(更新)/delete(删除)。创建需要 title 和 time(YYYY-MM-DD HH:MM)。",
+            description="管理用户的日程安排和会议。当用户提到日程、会议、安排、几点、上午/下午、开会、约了、schedule 时使用。支持 propose(提议创建，返回确认卡片)/list(查看，可按日期过滤)/add(直接添加)/update(更新)/delete(删除)。**创建新日程时优先使用 propose**，让用户确认后再写入。创建需要 title 和 time(YYYY-MM-DD HH:MM)。",
             input_schema={"type": "object", "properties": {
-                "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
+                "action": {"type": "string", "enum": ["propose", "list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "日程标题"},
                 "time": {"type": "string", "description": "日程时间 YYYY-MM-DD HH:MM"},
                 "duration": {"type": "integer", "description": "时长（分钟）", "default": 60},
@@ -129,9 +144,9 @@ def create_workstation_tools(work_item_store) -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="manage_followup",
-            description="管理用户的跟进事项和提醒。当用户提到跟进、提醒我、联系、回访、follow up、客户跟进、等回复、催一下时使用。支持 list/add/update/delete。创建需要 title，可选 target(跟进对象) 和 due_date。",
+            description="管理用户的跟进事项和提醒。当用户提到跟进、提醒我、联系、回访、follow up、客户跟进、等回复、催一下时使用。支持 propose(提议创建，返回确认卡片)/list/add(直接创建)/update/delete。**创建新跟进时优先使用 propose**，让用户确认后再写入。创建需要 title，可选 target(跟进对象) 和 due_date。",
             input_schema={"type": "object", "properties": {
-                "action": {"type": "string", "enum": ["list", "add", "update", "delete"]},
+                "action": {"type": "string", "enum": ["propose", "list", "add", "update", "delete"]},
                 "title": {"type": "string", "description": "跟进标题"},
                 "target": {"type": "string", "description": "跟进对象（人/团队）"},
                 "due_date": {"type": "string", "description": "截止日期 YYYY-MM-DD"},

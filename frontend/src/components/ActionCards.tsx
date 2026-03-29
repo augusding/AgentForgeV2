@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { CheckCircle, Circle, Clock, Users, Download,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
+import { createTask, createSchedule, createFollowup } from '../api/workitems'
 import toast from 'react-hot-toast'
 
 interface CardData { type: string; data: any; toolName: string }
@@ -18,6 +19,10 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     if ((data.status === 'converted' || (data.status === 'created' && data.path)) &&
         ['document_converter', 'word_processor', 'excel_processor', 'pdf_processor', 'ppt_processor'].includes(toolName))
       return { type: 'file', data, toolName }
+    // propose 确认卡片（优先匹配）
+    if (data.action === 'propose' && data.proposed) {
+      return { type: 'work_item_confirm', data, toolName }
+    }
     if (toolName === 'manage_priority' || toolName === 'manage_work_item') {
       if (data.priorities || data.work_items || data.status) return { type: 'task', data, toolName }
     }
@@ -36,6 +41,7 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
 /** 渲染交互卡片 */
 export default function ActionCard({ card, onFileClick }: { card: CardData; onFileClick?: (f: any) => void }) {
   switch (card.type) {
+    case 'work_item_confirm': return <WorkItemConfirmCard data={card.data} />
     case 'task': return <TaskCard data={card.data} />
     case 'schedule': return <ScheduleCard data={card.data} />
     case 'followup': return <FollowupCard data={card.data} />
@@ -361,6 +367,178 @@ function WorkflowConfirmCard({ data }: { data: any }) {
             <button className="px-4 py-1.5 rounded-lg text-xs" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>取消</button>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/* ── 工位数据确认卡片（propose 模式） ── */
+function WorkItemConfirmCard({ data }: { data: any }) {
+  const proposed = data.proposed || {}
+  const itemType = data.item_type || 'task'
+  const [fields, setFields] = useState<Record<string, string>>({ ...proposed })
+  const [status, setStatus] = useState<'pending' | 'creating' | 'created' | 'ignored'>('pending')
+  const [createdId, setCreatedId] = useState('')
+
+  const updateField = (key: string, value: string) => setFields(f => ({ ...f, [key]: value }))
+
+  const typeLabel = itemType === 'task' ? '任务' : itemType === 'schedule' ? '日程' : '跟进'
+  const typeIcon = itemType === 'task' ? '✅' : itemType === 'schedule' ? '📅' : '👤'
+  const typeColor = itemType === 'task' ? '#3b82f6' : itemType === 'schedule' ? '#22c55e' : '#a855f7'
+
+  const confirm = async () => {
+    setStatus('creating')
+    try {
+      let result: any
+      if (itemType === 'task') {
+        result = await createTask({
+          title: fields.title || '未命名任务',
+          priority: fields.priority || 'P1',
+          due_date: fields.due_date || undefined,
+          description: fields.description || undefined,
+        })
+      } else if (itemType === 'schedule') {
+        const st = fields.scheduled_time || fields.time || ''
+        if (!st) { toast.error('请填写日程时间'); setStatus('pending'); return }
+        result = await createSchedule({
+          title: fields.title || '未命名日程',
+          scheduled_time: st,
+          duration_minutes: parseInt(fields.duration_minutes || '60', 10),
+          description: fields.description || undefined,
+        })
+      } else {
+        result = await createFollowup({
+          title: fields.title || '未命名跟进',
+          target: fields.target || undefined,
+          due_date: fields.due_date || undefined,
+          description: fields.description || undefined,
+        })
+      }
+      setCreatedId(result?.id || '')
+      setStatus('created')
+      toast.success(`${typeLabel}已创建`)
+    } catch {
+      toast.error('创建失败')
+      setStatus('pending')
+    }
+  }
+
+  if (status === 'created') {
+    return (
+      <div className="rounded-xl p-3 my-2 flex items-center gap-2" style={{ background: '#22c55e08', border: '1px solid #22c55e30' }}>
+        <CheckCircle size={16} style={{ color: '#22c55e' }} />
+        <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{typeLabel}已创建</span>
+        {createdId && <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>#{createdId.slice(0, 8)}</span>}
+      </div>
+    )
+  }
+
+  if (status === 'ignored') {
+    return (
+      <div className="rounded-xl p-3 my-2 flex items-center gap-2" style={{ ...cs, opacity: 0.5 }}>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>已忽略{typeLabel}建议</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl overflow-hidden my-2" style={{ border: `1px solid ${typeColor}30`, background: 'var(--bg-surface)' }}>
+      {/* 标题栏 */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: `${typeColor}20`, background: `${typeColor}06` }}>
+        <span className="text-base">{typeIcon}</span>
+        <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>确认创建{typeLabel}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded ml-auto" style={{ background: `${typeColor}15`, color: typeColor }}>待确认</span>
+      </div>
+
+      {/* 编辑区 */}
+      <div className="px-4 py-3 space-y-2.5">
+        <div>
+          <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>标题</label>
+          <input value={fields.title || ''} onChange={e => updateField('title', e.target.value)}
+            className="w-full px-3 py-1.5 rounded-lg text-xs outline-none"
+            style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}
+            placeholder={`${typeLabel}标题`} />
+        </div>
+
+        {itemType === 'task' && (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>优先级</label>
+              <select value={fields.priority || 'P1'} onChange={e => updateField('priority', e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                <option value="P0">P0 紧急</option><option value="P1">P1 重要</option><option value="P2">P2 普通</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>截止日期</label>
+              <input type="date" value={fields.due_date || ''} onChange={e => updateField('due_date', e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+            </div>
+          </div>
+        )}
+
+        {itemType === 'schedule' && (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>时间</label>
+              <input type="datetime-local" value={(fields.scheduled_time || fields.time || '').replace(' ', 'T')}
+                onChange={e => updateField('scheduled_time', e.target.value.replace('T', ' '))}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div className="w-24">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>时长</label>
+              <select value={fields.duration_minutes || '60'} onChange={e => updateField('duration_minutes', e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                <option value="15">15分</option><option value="30">30分</option><option value="60">1小时</option><option value="120">2小时</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {itemType === 'followup' && (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>跟进对象</label>
+              <input value={fields.target || ''} onChange={e => updateField('target', e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                placeholder="人名或团队" />
+            </div>
+            <div className="flex-1">
+              <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>截止日期</label>
+              <input type="date" value={fields.due_date || ''} onChange={e => updateField('due_date', e.target.value)}
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+            </div>
+          </div>
+        )}
+
+        {fields.description && (
+          <div>
+            <label className="text-[10px] block mb-1" style={{ color: 'var(--text-muted)' }}>备注</label>
+            <input value={fields.description} onChange={e => updateField('description', e.target.value)}
+              className="w-full px-3 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }} />
+          </div>
+        )}
+      </div>
+
+      {/* 操作按钮 */}
+      <div className="flex justify-end gap-2 px-4 py-2.5 border-t" style={{ borderColor: 'var(--border)' }}>
+        <button onClick={() => setStatus('ignored')}
+          className="px-4 py-1.5 rounded-lg text-xs"
+          style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+          忽略
+        </button>
+        <button onClick={confirm} disabled={status === 'creating' || !fields.title?.trim()}
+          className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+          style={{ background: status === 'creating' ? 'var(--border)' : typeColor }}>
+          {status === 'creating' ? '创建中...' : '确认创建'}
+        </button>
       </div>
     </div>
   )
