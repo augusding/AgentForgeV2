@@ -66,6 +66,7 @@ function WorkflowEditorInner() {
   useEffect(() => {
     const hasExec = Object.keys(execStatus).length > 0
     setEdges(eds => eds.map(e => {
+      if (e.sourceHandle === 'out--1') return { ...e, style: { stroke: '#ef4444', strokeDasharray: '6 3' }, animated: false }
       if (!hasExec) return { ...e, className: '', animated: false, style: { stroke: 'var(--border)' } }
       const ss = execStatus[e.source]?.status; const ts = execStatus[e.target]?.status
       if (ss === 'completed' && ts === 'completed') return { ...e, className: 'wf-edge-completed', animated: false, style: { stroke: '#22c55e' } }
@@ -104,7 +105,7 @@ function WorkflowEditorInner() {
     data: { ...clipboard.data, label: `${clipboard.data.label} (复制)`, execState: undefined, disabled: false } }]); toast.success('已粘贴') }, [clipboard])
 
   const toWfData = () => ({ name: wfName,
-    nodes: nodes.map(n => ({ id: n.id, type: n.data.nodeType, label: n.data.label, config: n.data.config || {}, position: n.position, disabled: n.data.disabled || false })),
+    nodes: nodes.map(n => ({ id: n.id, type: (n.data as any).nodeType, label: (n.data as any).label, config: (n.data as any).config || {}, position: n.position, disabled: (n.data as any).disabled || false, on_error: (n.data as any).config?.on_error || 'stop' })),
     edges: edges.map(e => ({ source: e.source, target: e.target,
       sourceOutput: e.sourceHandle ? parseInt(e.sourceHandle.replace('out-', '')) : 0,
       targetHandle: e.targetHandle || 'in-0' })) })

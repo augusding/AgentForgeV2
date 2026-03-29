@@ -78,7 +78,7 @@ class WorkflowStore(BaseStore):
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (wf.id, wf.name, wf.description, wf.org_id, wf.position_id,
                  nodes_json, edges_json, json.dumps(wf.trigger, ensure_ascii=False),
-                 json.dumps(wf.variables, ensure_ascii=False),
+                 json.dumps({**wf.variables, **({'_on_error_notify': wf.on_error_notify} if getattr(wf, 'on_error_notify', None) else {})}, ensure_ascii=False),
                  wf.version, 1 if wf.enabled else 0,
                  getattr(wf, 'timeout_seconds', 300), now, now),
             )
@@ -211,6 +211,7 @@ class WorkflowStore(BaseStore):
             "config": node.config, "inputs": node.inputs, "outputs": node.outputs,
             "next_nodes": node.next_nodes, "position": node.position,
             "disabled": node.disabled, "retry_count": node.retry_count, "retry_delay": node.retry_delay,
+            "on_error": getattr(node, 'on_error', 'stop'),
         }
 
     @staticmethod

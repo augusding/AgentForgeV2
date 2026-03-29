@@ -65,6 +65,10 @@ function WfNodeComponent({ data, selected }: NodeProps) {
         <Handle key={i} type="source" position={Position.Right} id={`out-${i}`}
           style={outs > 1 ? { top: `${20 + (i * 60) / Math.max(outs - 1, 1)}%` } : undefined} />
       ))}
+      {(data as any).config?.on_error === 'error_output' && (
+        <Handle type="source" position={Position.Bottom} id="out--1"
+          style={{ background: '#ef4444', border: '2px solid var(--bg)' }} />
+      )}
     </div>
   )
 }

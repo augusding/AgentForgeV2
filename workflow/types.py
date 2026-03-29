@@ -24,6 +24,7 @@ class WorkflowNode:
     disabled: bool = False
     retry_count: int = 0        # 失败重试次数（0=不重试）
     retry_delay: float = 2.0   # 重试间隔秒数
+    on_error: str = "stop"     # "stop" | "continue" | "error_output"
 
 
 @dataclass
@@ -41,6 +42,7 @@ class WorkflowDefinition:
     version: int = 1
     enabled: bool = True
     timeout_seconds: int = 300
+    on_error_notify: dict = field(default_factory=dict)
 
 
 @dataclass

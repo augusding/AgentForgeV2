@@ -75,6 +75,17 @@ export default function PropertyPanel({ node, catalog, execData, upstreamOutput,
               {p.description && <p className="text-[9px] mb-1" style={{ color: 'var(--text-muted)' }}>{p.description}</p>}
               <PInput param={p} value={config[p.name] ?? p.default ?? ''} onChange={v => onUpdateConfig({ ...config, [p.name]: v })} />
             </div>)})}
+          {!['manualTrigger', 'scheduleTrigger', 'webhookTrigger'].includes(nodeType) && (
+            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+              <label className="text-[10px] mb-1 block" style={{ color: 'var(--text-muted)' }}>失败时</label>
+              <select value={config.on_error || 'stop'} onChange={e => onUpdateConfig({ ...config, on_error: e.target.value })}
+                className="w-full px-2 py-1.5 rounded text-xs outline-none" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text)' }}>
+                <option value="stop">停止执行</option>
+                <option value="continue">忽略错误，继续</option>
+                <option value="error_output">走错误分支（红色输出口）</option>
+              </select>
+            </div>
+          )}
         </>}
 
         {tab === 'input' && <>

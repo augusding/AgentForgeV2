@@ -120,6 +120,26 @@ class WorkflowEngine:
                             _nrd = {k: {"status": v.status, "output": v.output, "error": v.error, "duration": v.duration} for k, v in execution.node_results.items()}
                             await self._store.update_execution_status(execution.id, "running", node_results=_nrd, variables=execution.variables)
                         except Exception: pass
+                    # 错误路由
+                    if nr and nr.status == "failed":
+                        nd = node_map.get(nid)
+                        oe = getattr(nd, 'on_error', 'stop') if nd else 'stop'
+                        if oe == "error_output":
+                            for nxt in adjacency.get(nid, []):
+                                ei = _find_edge(edges, nid, nxt)
+                                if ei and ei.get("sourceOutput") == -1:
+                                    execution.node_results[nid] = NodeResult(node_id=nid, status="failed", error=nr.error,
+                                        output={"_error": True, "error_message": nr.error, "error_node": nid}, duration=nr.duration)
+                                    in_degree[nxt] -= 1
+                                    if in_degree[nxt] <= 0: queue.append(nxt)
+                            continue
+                        elif oe == "continue":
+                            for nxt in adjacency.get(nid, []):
+                                ei = _find_edge(edges, nid, nxt)
+                                if ei and ei.get("sourceOutput", 0) != -1:
+                                    in_degree[nxt] -= 1
+                                    if in_degree[nxt] <= 0: queue.append(nxt)
+                            continue
                     # 审批节点挂起
                     if nr and nr.status == "waiting_approval":
                         execution.status = "paused"; execution.paused_at_node = nid
@@ -152,6 +172,11 @@ class WorkflowEngine:
             execution.status = "failed"; execution.error = str(e)
 
         execution.completed_at = time.time()
+        # 检查是否有失败节点 → 标记工作流失败
+        if execution.status == "completed" and any(nr.status == "failed" for nr in execution.node_results.values()):
+            if not any(getattr(node_map.get(nid), 'on_error', 'stop') in ('continue', 'error_output')
+                       for nid, nr in execution.node_results.items() if nr.status == "failed"):
+                execution.status = "failed"
         _push_execution_done(ctx, execution)
         logger.info("工作流完成: wf=%s status=%s nodes=%d %.1fs",
                      workflow.id, execution.status, len(execution.node_results),
