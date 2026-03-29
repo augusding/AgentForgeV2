@@ -275,6 +275,9 @@ export default function Workstation() {
 
   // QuickCreate popover state
   const [showCreate, setShowCreate] = useState<'task' | 'schedule' | 'followup' | null>(null)
+  // 右键菜单 state
+  const [scheduleCtx, setScheduleCtx] = useState<{ x: number; y: number; item: any } | null>(null)
+  const [followupCtx, setFollowupCtx] = useState<{ x: number; y: number; item: any } | null>(null)
 
   const location = useLocation()
   const assignPosition = async (pid: string) => { await rawAssign(pid); setActivePosition(pid) }
@@ -370,10 +373,6 @@ export default function Workstation() {
   const allFollowups = (brief?.followups || []).filter(f => f.status !== 'done')
   const filteredFollowups = followupRange === 'week' ? allFollowups : allFollowups.filter(f => !f.due_date || rangeFilter(f.due_date, followupRange))
   const overdue = allTasks.filter(t => ['active', 'todo', 'pending'].includes(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()))
-
-  // ── 右键菜单 state（日程和跟进共用）──
-  const [scheduleCtx, setScheduleCtx] = useState<{ x: number; y: number; item: any } | null>(null)
-  const [followupCtx, setFollowupCtx] = useState<{ x: number; y: number; item: any } | null>(null)
 
   return (
     <div className="h-full overflow-auto">
