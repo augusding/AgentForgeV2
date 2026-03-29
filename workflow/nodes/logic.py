@@ -32,19 +32,35 @@ async def _set_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeR
     return NodeResult(node_id=node.id, status="completed", output=output)
 
 
+_SAFE_MODULES = {"json", "re", "math", "datetime", "hashlib", "base64", "collections",
+    "itertools", "functools", "random", "string", "time", "urllib.parse", "decimal",
+    "fractions", "statistics", "textwrap", "difflib", "copy", "pprint", "operator"}
+
+def _safe_import(name, *args, **kwargs):
+    if name.split(".")[0] not in _SAFE_MODULES:
+        raise ImportError(f"模块 '{name}' 不在安全白名单中")
+    return __import__(name, *args, **kwargs)
+
 async def _code_executor(node: WorkflowNode, variables: dict, ctx: dict) -> NodeResult:
-    """Python 代码执行：直接 exec，不限制 import，适用于企业内部可信场景。"""
+    """Python 代码执行：安全 import 白名单 + exec。"""
     code = node.config.get("code", "")
     if not code.strip():
         return NodeResult(node_id=node.id, status="completed", output={})
-
+    import builtins as _bi
+    _sb = {k: getattr(_bi, k) for k in ["abs","all","any","bool","bytes","chr","dict","enumerate",
+        "filter","float","format","getattr","hasattr","hash","hex","int","isinstance","iter","len",
+        "list","map","max","min","next","oct","ord","pow","print","range","repr","reversed","round",
+        "set","slice","sorted","str","sum","tuple","type","zip","ValueError","TypeError","KeyError",
+        "IndexError","AttributeError","RuntimeError","Exception","StopIteration","True","False","None"]
+        if hasattr(_bi, k)}
+    _sb["__import__"] = _safe_import
     sandbox = {
+        "__builtins__": _sb,
         "input_data": ctx.get("_last_output", {}),
         "variables": dict(variables),
         "items": ctx.get("_last_output", {}),
         **variables,
     }
-
     try:
         exec(code, sandbox)
         result = sandbox.get("result", {})

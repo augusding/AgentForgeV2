@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from uuid import uuid4
 
 from aiohttp import web
@@ -53,10 +54,37 @@ async def _get_wf_engine(request):
     return request.app["wf_engine"]
 
 
+def _get_org_id(request) -> str:
+    user = request.get("user") or {}
+    return user.get("org_id", "") if isinstance(user, dict) else ""
+
+
+async def handle_workflow_stats(request: web.Request) -> web.Response:
+    """GET /api/v1/workflows/stats?days=7"""
+    store = await _get_wf_store(request)
+    days = int(request.query.get("days", "7"))
+    cutoff = time.time() - days * 86400
+    try:
+        import aiosqlite
+        async with store._db() as db:
+            db.row_factory = aiosqlite.Row
+            total = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE started_at>?", (cutoff,))).fetchone())["c"]
+            success = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE status='completed' AND started_at>?", (cutoff,))).fetchone())["c"]
+            failed = (await (await db.execute("SELECT COUNT(*) as c FROM workflow_executions WHERE status IN ('failed','timeout') AND started_at>?", (cutoff,))).fetchone())["c"]
+            avg_row = await (await db.execute("SELECT AVG(completed_at-started_at) as a FROM workflow_executions WHERE status='completed' AND completed_at>0 AND started_at>?", (cutoff,))).fetchone()
+            avg_dur = round(avg_row["a"] or 0, 2)
+            cur = await db.execute("SELECT date(started_at,'unixepoch','localtime') as day, COUNT(*) as total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as success FROM workflow_executions WHERE started_at>? GROUP BY day ORDER BY day", (cutoff,))
+            daily = [dict(r) for r in await cur.fetchall()]
+        return _json({"days": days, "total_executions": total, "success": success, "failed": failed,
+            "success_rate": round(success / max(total, 1) * 100, 1), "avg_duration": avg_dur, "daily": daily})
+    except Exception as e:
+        return _json({"error": str(e)}, 500)
+
+
 async def handle_workflow_list(request: web.Request) -> web.Response:
     """GET /api/v1/workflows"""
     store = await _get_wf_store(request)
-    org_id = request.query.get("org_id", "")
+    org_id = request.query.get("org_id", "") or _get_org_id(request)
     position_id = request.query.get("position_id", "")
     workflows = await store.list_workflows(org_id=org_id, position_id=position_id)
     return _json({"workflows": workflows})
@@ -338,6 +366,7 @@ def register(app: web.Application) -> None:
     app.router.add_delete("/api/v1/workflows/{workflow_id}", handle_workflow_delete)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute", handle_workflow_execute)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute/stream", handle_workflow_execute_stream)
+    app.router.add_get("/api/v1/workflows/stats", handle_workflow_stats)
     app.router.add_get("/api/v1/workflows/approvals", handle_approval_list)
     app.router.add_post("/api/v1/workflows/executions/{exec_id}/approve", handle_approval_action)
     app.router.add_get("/api/v1/workflows/{workflow_id}/executions", handle_workflow_executions)

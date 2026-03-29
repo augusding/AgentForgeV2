@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, Play, Trash2, RefreshCw, Plus, Edit3 } from 'lucide-react'
-import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow } from '../api/workflow'
+import { Zap, Play, Trash2, RefreshCw, Plus, Edit3, BarChart3, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow, getWorkflowStats } from '../api/workflow'
 import toast from 'react-hot-toast'
 
 const TPLS = [
@@ -115,9 +115,10 @@ export default function Workflows() {
   const [loading, setLoading] = useState(true)
   const [executing, setExecuting] = useState<string | null>(null)
   const [showTpls, setShowTpls] = useState(false)
+  const [stats, setStats] = useState<any>(null)
   const navigate = useNavigate()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); getWorkflowStats(7).then(setStats).catch(() => {}) }, [])
   useEffect(() => { if (!loading && wfs.length === 0) setShowTpls(true) }, [loading, wfs])
   const load = async () => { setLoading(true); try { const d: any = await listWorkflows(); setWfs(Array.isArray(d) ? d : d.workflows || []) } catch {} finally { setLoading(false) } }
 
@@ -143,6 +144,22 @@ export default function Workflows() {
           <button onClick={handleCreate} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm text-white" style={{ background: 'var(--accent)' }}><Plus size={14} /> 新建</button>
         </div>
       </div>
+      {stats && stats.total_executions > 0 && (
+        <div className="flex gap-3 mb-6">
+          {[{ label: '总执行', value: stats.total_executions, icon: BarChart3, color: 'var(--text)' },
+            { label: '成功率', value: `${stats.success_rate}%`, icon: CheckCircle, color: '#22c55e' },
+            { label: '失败', value: stats.failed, icon: XCircle, color: '#ef4444' },
+            { label: '平均耗时', value: `${stats.avg_duration}s`, icon: Clock, color: 'var(--accent)' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <div key={label} className="flex items-center gap-3 px-4 py-3 rounded-lg flex-1"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <Icon size={18} style={{ color }} />
+              <div><div className="text-lg font-bold" style={{ color }}>{value}</div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</div></div>
+            </div>
+          ))}
+        </div>
+      )}
       {wfs.length === 0 ? (
         <div className="text-center py-12"><Zap size={48} className="mx-auto mb-4" style={{ color: 'var(--border)' }} />
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>暂无工作流，从模板开始或点击"新建"</p></div>

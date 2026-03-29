@@ -27,6 +27,9 @@ export async function testNode(type: string, config: any, input?: any) {
 export async function getExecutions(workflowId: string) {
   return client.get(`/workflows/${workflowId}/executions`) as Promise<any>
 }
+export async function getWorkflowStats(days: number = 7) {
+  return client.get(`/workflows/stats?days=${days}`) as Promise<any>
+}
 
 export interface NodeTypeDef {
   name: string; displayName: string; description: string; group: string; icon: string
