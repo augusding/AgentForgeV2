@@ -3,7 +3,11 @@ import { getSessions, getSessionMessages, deleteSession, generateTitle, submitFe
 
 interface ToolCall { type: 'tool_start' | 'tool_result'; name: string; input?: any; result?: string }
 interface SuggestionData { item_type: string; title: string; confidence: number; fields: Record<string, any> }
-interface Attachment { file_id: string; filename: string; extracted_text?: string }
+interface Attachment {
+  file_id: string; filename: string; extracted_text?: string
+  type?: 'file' | 'image' | 'audio'; thumbnail?: string
+  server_path?: string; vision_text?: string; processing?: boolean
+}
 
 interface Message {
   id?: string; role: 'user' | 'assistant'; content: string

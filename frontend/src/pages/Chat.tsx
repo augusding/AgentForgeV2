@@ -14,7 +14,6 @@ import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../co
 import Toolbox, { type ToolDef } from '../components/Toolbox'
 import ToolPanel from '../components/ToolPanel'
 import VoiceInputButton from '../components/VoiceInputButton'
-import ImageChoiceCard from '../components/ImageChoiceCard'
 import toast from 'react-hot-toast'
 
 export default function Chat() {
@@ -24,8 +23,8 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false); const [webSearch] = useState(true)
   const [recording, setRecording] = useState(false); const [recordSec, setRecordSec] = useState(0)
   const mediaRecRef = useRef<MediaRecorder | null>(null); const audioChunks = useRef<Blob[]>([]); const recTimer = useRef<number>(0)
-  const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string }>>([])
-  const [pendingImage, setPendingImage] = useState<{ file_id: string; filename: string; size: number } | null>(null)
+  const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string; type?: string; thumbnail?: string; server_path?: string; vision_text?: string; processing?: boolean }>>([])
+
   const [quickCmds, setQuickCmds] = useState<string[]>([])
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
   const [hasKB, setHasKB] = useState(false)
@@ -116,23 +115,26 @@ export default function Chat() {
     for (const f of Array.from(files).slice(0, 3)) {
       const ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'))
       try {
-        const r = await uploadChatFile(f)
         if (_IMG.includes(ext)) {
-          setPendingImage({ file_id: r.file_id, filename: r.filename, size: f.size })
+          const localUrl = URL.createObjectURL(f)
+          const tempId = `tmp_${Date.now()}`
+          setAttachments(p => [...p, { file_id: tempId, filename: f.name, type: 'image', thumbnail: localUrl, processing: true }])
+          const r = await uploadChatFile(f)
+          setAttachments(p => p.map(a => a.file_id === tempId ? { ...a, file_id: r.file_id, server_path: `data/uploads/${r.file_id}` } : a))
+          client.post('/media/process', { file_id: r.file_id, mode: 'vision' }, { timeout: 120000 })
+            .then((res: any) => { setAttachments(p => p.map(a => a.file_id === r.file_id ? { ...a, processing: false, vision_text: res.success ? res.text : '' } : a)) })
+            .catch(() => { setAttachments(p => p.map(a => a.file_id === r.file_id ? { ...a, processing: false } : a)) })
         } else if (_AUD.includes(ext)) {
+          const r = await uploadChatFile(f)
           toast('识别语音中...')
           try {
             const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' }, { timeout: 300000 })
-            if (sr.success && sr.text) {
-              setInput(prev => (prev ? prev + '\n' : '') + `[语音转录 — ${r.filename}]\n${sr.text}`)
-              toast.success('语音识别完成')
-            } else {
-              toast.error(sr.error || '语音识别失败')
-              setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }])
-            }
-          } catch { setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }]) }
+            if (sr.success && sr.text) { setInput(prev => (prev ? prev + '\n' : '') + `[语音转录 — ${r.filename}]\n${sr.text}`); toast.success('语音识别完成') }
+            else { toast.error(sr.error || '语音识别失败'); setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'audio' }]) }
+          } catch { setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'audio' }]) }
         } else {
-          setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }])
+          const r = await uploadChatFile(f)
+          setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'file' }])
         }
       } catch { toast.error(`${f.name} 失败`) }
     }
@@ -142,7 +144,12 @@ export default function Chat() {
   const send = async (ov?: string, extraFiles?: Array<{ file_id: string; filename: string }>) => {
     const text = (ov || input).trim(); if (!text || store.streaming) return
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
-    const ca = [...attachments, ...(extraFiles || [])]; setAttachments([])
+    const ca = [...attachments, ...(extraFiles || [])].map((a: any) => {
+      if (a.type === 'image' && a.vision_text) return { ...a, extracted_text: `[AI看图 — ${a.filename}]\n${a.vision_text}` }
+      return a
+    })
+    attachments.forEach(a => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
+    setAttachments([])
     store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
     lastEventTime.current = Date.now()
     if (idleTimer.current) clearInterval(idleTimer.current)
@@ -268,24 +275,26 @@ export default function Chat() {
         {/* Input area */}
         <div className="px-4 pb-4 pt-2">
           <div className="max-w-[900px] mx-auto">
-            {pendingImage && (
-              <ImageChoiceCard
-                fileId={pendingImage.file_id} filename={pendingImage.filename} fileSize={pendingImage.size}
-                onResult={(text, source) => {
-                  const label = source.includes('ocr') ? `图片OCR — ${pendingImage.filename}` : `AI看图 — ${pendingImage.filename}`
-                  setInput(prev => (prev ? prev + '\n\n' : '') + `[${label}]\n${text}`)
-                  setPendingImage(null)
-                }}
-                onCancel={() => { setAttachments(p => [...p, { file_id: pendingImage.file_id, filename: pendingImage.filename }]); setPendingImage(null) }}
-              />
-            )}
-            {attachments.length > 0 && <div className="flex gap-2 mb-2 flex-wrap">
-              {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                <Paperclip size={10} style={{ color: 'var(--accent)' }} />
-                <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
-                <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
-              </div>)}</div>}
+            {attachments.length > 0 && <div className="flex gap-2 mb-2 px-3 flex-wrap">
+              {attachments.map(a => a.type === 'image' && a.thumbnail ? (
+                <div key={a.file_id} className="relative group" style={{ width: 64, height: 64 }}>
+                  <img src={a.thumbnail} alt={a.filename} className="w-full h-full object-cover rounded-lg" style={{ border: '1px solid var(--border)' }} />
+                  {a.processing && <div className="absolute inset-0 rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /></div>}
+                  {!a.processing && a.vision_text && <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'var(--accent)' }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg></div>}
+                  <button onClick={() => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail); setAttachments(p => p.filter(x => x.file_id !== a.file_id)) }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}><X size={10} style={{ color: 'var(--text-muted)' }} /></button>
+                </div>
+              ) : (
+                <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                  <Paperclip size={10} style={{ color: 'var(--accent)' }} />
+                  <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
+                  <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
+                </div>
+              ))}</div>}
             {activeTool && (
               <ToolPanel tool={activeTool}
                 onSubmit={(prompt, toolFiles, toolHint) => {
@@ -345,13 +354,24 @@ export default function Chat() {
 function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { msg: any; idx: number; isLast: boolean; streaming: boolean; onRegen: () => void; pos?: any; onFileClick?: (f: any) => void }) {
   const msgId = msg.id || `msg-${idx}`; const clr = pos?.color || 'var(--accent)'
 
-  if (msg.role === 'user') return (
+  if (msg.role === 'user') {
+    const imageAtts = (msg.attachments || []).filter((a: any) => a.type === 'image')
+    const otherAtts = (msg.attachments || []).filter((a: any) => a.type !== 'image')
+    return (
     <div className="flex justify-end"><div className="max-w-[70%]">
-      {msg.attachments?.length > 0 && <div className="flex gap-1 mb-1 justify-end">{msg.attachments.map((a: any) =>
+      {imageAtts.length > 0 && <div className="flex gap-1.5 mb-1.5 justify-end flex-wrap">
+        {imageAtts.map((a: any) => <div key={a.file_id} className="rounded-xl overflow-hidden" style={{ maxWidth: 200, border: '1px solid var(--border)' }}>
+          {a.thumbnail ? <img src={a.thumbnail} alt={a.filename} className="w-full max-h-[200px] object-cover" />
+            : <div className="w-[120px] h-[80px] flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              </div>}
+        </div>)}</div>}
+      {otherAtts.length > 0 && <div className="flex gap-1 mb-1 justify-end">{otherAtts.map((a: any) =>
         <span key={a.file_id} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>📎 {a.filename}</span>)}</div>}
       <div className="bg-[var(--accent)] text-white px-4 py-2.5 rounded-xl text-sm whitespace-pre-wrap">{msg.content}</div>
       {msg.created_at && <div className="text-[10px] mt-1 text-right" style={{ color: 'var(--text-muted)' }}>{timeAgo(msg.created_at)}</div>}
     </div></div>)
+  }
 
   return (
     <div className="flex gap-3 justify-start group">
