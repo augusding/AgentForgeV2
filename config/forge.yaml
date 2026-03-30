@@ -5,13 +5,17 @@ forge:
   language: zh-CN
 
 llm:
-  cooldown_seconds: 300
+  cooldown_seconds: 30
   tiers:
     tier1:
+      provider: qwen
+      model: qwen3.5-plus
+      api_key_env: DASHSCOPE_API_KEY
+    tier2:
       provider: deepseek
       model: deepseek-chat
       api_key_env: DEEPSEEK_API_KEY
-    tier2:
+    tier3:
       enabled: true
       provider: anthropic
       model: claude-sonnet-4-5-20250929

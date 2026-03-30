@@ -57,7 +57,7 @@ async def _resolve_attachments(engine, request, body) -> list[dict]:
     if not file_ids:
         return []
     from core.file_parser import extract_text
-    from core.media_processor import is_image, is_audio, process_image, transcribe_audio
+    from core.media_processor import is_image, is_audio, encode_image_base64, transcribe_audio
     user = request.get("user") or {}
     u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
@@ -84,10 +84,11 @@ async def _resolve_attachments(engine, request, body) -> list[dict]:
         from pathlib import Path as P
         fp = P(str(found))
         if is_image(fp):
-            img = process_image(fp)
-            extracted = img["ocr_text"] or img["summary"]
+            image_block = encode_image_base64(fp)
+            size_kb = fp.stat().st_size / 1024
             attachments.append({"file_id": fid, "filename": found.name, "path": rel,
-                "type": "image", "extracted_text": extracted[:5000], "image_block": img["image_block"]})
+                "type": "image", "extracted_text": f"[图片: {found.name}, {size_kb:.0f}KB]",
+                "image_block": image_block})
         elif is_audio(fp):
             text = await transcribe_audio(fp)
             attachments.append({"file_id": fid, "filename": found.name, "path": rel,

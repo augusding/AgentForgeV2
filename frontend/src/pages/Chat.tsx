@@ -116,14 +116,14 @@ export default function Chat() {
       const ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'))
       try {
         if (_IMG.includes(ext)) {
+          // 图片：本地预览 + 上传 → qwen3.5-plus 在 chat 管道中直接看图
           const localUrl = URL.createObjectURL(f)
           const tempId = `tmp_${Date.now()}`
           setAttachments(p => [...p, { file_id: tempId, filename: f.name, type: 'image', thumbnail: localUrl, processing: true }])
           const r = await uploadChatFile(f)
-          setAttachments(p => p.map(a => a.file_id === tempId ? { ...a, file_id: r.file_id, server_path: `data/uploads/${r.file_id}` } : a))
-          client.post('/media/process', { file_id: r.file_id, mode: 'vision' }, { timeout: 120000 })
-            .then((res: any) => { setAttachments(p => p.map(a => a.file_id === r.file_id ? { ...a, processing: false, vision_text: res.success ? res.text : '' } : a)) })
-            .catch(() => { setAttachments(p => p.map(a => a.file_id === r.file_id ? { ...a, processing: false } : a)) })
+          setAttachments(p => p.map(a => a.file_id === tempId
+            ? { ...a, file_id: r.file_id, processing: false }
+            : a))
         } else if (_AUD.includes(ext)) {
           const r = await uploadChatFile(f)
           toast('识别语音中...')
@@ -144,11 +144,8 @@ export default function Chat() {
   const send = async (ov?: string, extraFiles?: Array<{ file_id: string; filename: string }>) => {
     const text = (ov || input).trim(); if (!text || store.streaming) return
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
-    const ca = [...attachments, ...(extraFiles || [])].map((a: any) => {
-      if (a.type === 'image' && a.vision_text) return { ...a, extracted_text: `[AI看图 — ${a.filename}]\n${a.vision_text}` }
-      return a
-    })
-    attachments.forEach(a => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
+    const ca = [...attachments, ...(extraFiles || [])]
+    attachments.forEach((a: any) => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
     setAttachments([])
     store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
     lastEventTime.current = Date.now()
