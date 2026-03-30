@@ -14,6 +14,7 @@ import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../co
 import Toolbox, { type ToolDef } from '../components/Toolbox'
 import ToolPanel from '../components/ToolPanel'
 import VoiceInputButton from '../components/VoiceInputButton'
+import ImageChoiceCard from '../components/ImageChoiceCard'
 import toast from 'react-hot-toast'
 
 export default function Chat() {
@@ -24,6 +25,7 @@ export default function Chat() {
   const [recording, setRecording] = useState(false); const [recordSec, setRecordSec] = useState(0)
   const mediaRecRef = useRef<MediaRecorder | null>(null); const audioChunks = useRef<Blob[]>([]); const recTimer = useRef<number>(0)
   const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string }>>([])
+  const [pendingImage, setPendingImage] = useState<{ file_id: string; filename: string; size: number } | null>(null)
   const [quickCmds, setQuickCmds] = useState<string[]>([])
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
   const [hasKB, setHasKB] = useState(false)
@@ -107,9 +109,33 @@ export default function Chat() {
   const stopRec = () => { if (mediaRecRef.current?.state === 'recording') mediaRecRef.current.stop() }
 
   const adjustH = useCallback(() => { const el = taRef.current; if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' } }, [])
+  const _IMG = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']
+  const _AUD = ['.mp3', '.wav', '.m4a', '.ogg', '.webm', '.flac']
   const handleUpload = async (files: FileList | null) => {
     if (!files) return; setUploading(true)
-    for (const f of Array.from(files).slice(0, 3)) { try { const r = await uploadChatFile(f); setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }]) } catch { toast.error(`${f.name} 失败`) } }
+    for (const f of Array.from(files).slice(0, 3)) {
+      const ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'))
+      try {
+        const r = await uploadChatFile(f)
+        if (_IMG.includes(ext)) {
+          setPendingImage({ file_id: r.file_id, filename: r.filename, size: f.size })
+        } else if (_AUD.includes(ext)) {
+          toast('识别语音中...')
+          try {
+            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' })
+            if (sr.success && sr.text) {
+              setInput(prev => (prev ? prev + '\n' : '') + `[语音转录 — ${r.filename}]\n${sr.text}`)
+              toast.success('语音识别完成')
+            } else {
+              toast.error(sr.error || '语音识别失败')
+              setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }])
+            }
+          } catch { setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }]) }
+        } else {
+          setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename }])
+        }
+      } catch { toast.error(`${f.name} 失败`) }
+    }
     setUploading(false)
   }
 
@@ -242,6 +268,17 @@ export default function Chat() {
         {/* Input area */}
         <div className="px-4 pb-4 pt-2">
           <div className="max-w-[900px] mx-auto">
+            {pendingImage && (
+              <ImageChoiceCard
+                fileId={pendingImage.file_id} filename={pendingImage.filename} fileSize={pendingImage.size}
+                onResult={(text, source) => {
+                  const label = source.includes('ocr') ? `图片OCR — ${pendingImage.filename}` : `AI看图 — ${pendingImage.filename}`
+                  setInput(prev => (prev ? prev + '\n\n' : '') + `[${label}]\n${text}`)
+                  setPendingImage(null)
+                }}
+                onCancel={() => { setAttachments(p => [...p, { file_id: pendingImage.file_id, filename: pendingImage.filename }]); setPendingImage(null) }}
+              />
+            )}
             {attachments.length > 0 && <div className="flex gap-2 mb-2 flex-wrap">
               {attachments.map(a => <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>

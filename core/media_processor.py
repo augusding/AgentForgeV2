@@ -209,3 +209,97 @@ def get_media_capabilities() -> dict:
         "stt_engine": "faster-whisper" if _whisper_available else (
             "dashscope" if os.environ.get("DASHSCOPE_API_KEY") else "不可用"),
     }
+
+
+# ═══════════════════════════════════════════
+# 独立 API 接口（返回 dict，供 media route 使用）
+# ═══════════════════════════════════════════
+
+async def ocr_extract(path: Path) -> dict:
+    """异步 OCR，返回 {"text", "source", "success", "error?"}。"""
+    ocr = _get_ocr()
+    if not ocr:
+        return {"text": "", "source": "paddleocr", "success": False,
+                "error": "PaddleOCR 未安装（pip install paddleocr）"}
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: ocr.ocr(str(path), cls=True))
+        if not result or not result[0]:
+            return {"text": "", "source": "paddleocr", "success": True, "error": "未检测到文字"}
+        lines = []
+        for line in result[0]:
+            text = line[1][0] if line[1] else ""
+            score = line[1][1] if line[1] and len(line[1]) > 1 else 0
+            if text.strip() and score > 0.5:
+                lines.append(text.strip())
+        return {"text": "\n".join(lines), "source": "paddleocr", "success": True}
+    except Exception as e:
+        return {"text": "", "source": "paddleocr", "success": False, "error": str(e)[:200]}
+
+
+async def vision_understand(path: Path, prompt: str = "请详细描述这张图片的内容") -> dict:
+    """调用 Qwen-VL 看图，返回 {"text", "source", "success", "error?"}。"""
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        return {"text": "", "source": "qwen-vl", "success": False,
+                "error": "未配置 DASHSCOPE_API_KEY，AI看图不可用"}
+    if not path.is_file() or path.stat().st_size > _MAX_IMAGE_SIZE:
+        return {"text": "", "source": "qwen-vl", "success": False, "error": "图片无效或超过 10MB"}
+    try:
+        mime = _MIME_MAP.get(path.suffix.lower(), "image/png")
+        b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+        import openai
+        client = openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        model = os.environ.get("VISION_MODEL", "qwen-vl-max")
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                {"type": "text", "text": prompt},
+            ]}],
+            max_tokens=2000, temperature=0.3,
+        )
+        text = resp.choices[0].message.content or ""
+        return {"text": text.strip(), "source": f"qwen-vl ({model})", "success": True}
+    except Exception as e:
+        logger.error("Vision 调用失败: %s", e)
+        return {"text": "", "source": "qwen-vl", "success": False, "error": str(e)[:200]}
+
+
+async def stt_transcribe(path: Path) -> dict:
+    """音频转文字，返回 {"text", "source", "success", "error?"}。"""
+    model = _get_whisper()
+    if model:
+        try:
+            loop = asyncio.get_event_loop()
+            text = await asyncio.wait_for(
+                loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)),
+                timeout=300,
+            )
+            return {"text": text, "source": "faster-whisper", "success": True}
+        except asyncio.TimeoutError:
+            return {"text": "", "source": "faster-whisper", "success": False, "error": "转录超时"}
+        except Exception as e:
+            logger.warning("本地 STT 失败: %s", e)
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if api_key:
+        try:
+            text = await _dashscope_stt(path, api_key)
+            if text:
+                return {"text": text, "source": "dashscope-whisper", "success": True}
+        except Exception as e:
+            return {"text": "", "source": "dashscope", "success": False, "error": str(e)[:200]}
+    return {"text": "", "source": "none", "success": False,
+            "error": "请安装 faster-whisper 或配置 DASHSCOPE_API_KEY"}
+
+
+def get_capabilities() -> dict:
+    """供前端判断按钮是否可点。"""
+    return {
+        "ocr": _get_ocr() is not None,
+        "vision": bool(os.environ.get("DASHSCOPE_API_KEY")),
+        "stt": _get_whisper() is not None or bool(os.environ.get("DASHSCOPE_API_KEY")),
+    }
