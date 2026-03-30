@@ -303,9 +303,18 @@ function ChartCard({ data }: { data: any }) {
       if (!ec || !chartRef.current) return
       chart = ec.init(chartRef.current)
       const dark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches
-      const opt = { ...data.option, backgroundColor: 'transparent', textStyle: { color: dark ? '#e0e0e0' : '#333' } }
-      if (opt.xAxis) opt.xAxis = { ...opt.xAxis, axisLine: { lineStyle: { color: dark ? '#555' : '#ccc' } } }
-      if (opt.yAxis) opt.yAxis = { ...opt.yAxis, axisLine: { lineStyle: { color: dark ? '#555' : '#ccc' } } }
+      const tc = dark ? '#c8c8c8' : '#555'
+      const lc = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+      const ac = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'
+      const opt = { ...data.option, backgroundColor: 'transparent',
+        textStyle: { color: tc, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' } }
+      if (opt.title?.textStyle) opt.title.textStyle = { ...opt.title.textStyle, color: dark ? '#e8e8e8' : '#333' }
+      else if (opt.title) opt.title = { ...opt.title, textStyle: { color: dark ? '#e8e8e8' : '#333', fontSize: 14, fontWeight: 500 } }
+      if (opt.xAxis) opt.xAxis = { ...opt.xAxis, axisLine: { lineStyle: { color: ac } }, axisLabel: { ...opt.xAxis.axisLabel, color: tc }, splitLine: { lineStyle: { color: lc } } }
+      if (opt.yAxis) opt.yAxis = { ...opt.yAxis, axisLine: { show: false }, axisLabel: { ...opt.yAxis.axisLabel, color: tc }, splitLine: { lineStyle: { color: lc, type: 'dashed' } } }
+      if (opt.legend) opt.legend = { ...opt.legend, textStyle: { ...opt.legend.textStyle, color: tc } }
+      if (opt.tooltip) opt.tooltip = { ...opt.tooltip, backgroundColor: dark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.98)', textStyle: { color: dark ? '#e0e0e0' : '#333', fontSize: 12 }, borderColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }
+      if (opt.radar) opt.radar = { ...opt.radar, axisLine: { lineStyle: { color: ac } }, splitLine: { lineStyle: { color: lc } }, splitArea: { show: false }, name: { textStyle: { color: tc } } }
       chart.setOption(opt)
       ro = new ResizeObserver(() => chart?.resize()); ro.observe(chartRef.current!)
     }).catch(e => setError(e.message))
@@ -314,13 +323,9 @@ function ChartCard({ data }: { data: any }) {
 
   return (
     <div className="my-2 rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
-      <div className="flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-base">📈</span>
-        <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{data?.option?.title?.text || '图表'}</span>
-      </div>
       {error
         ? <div className="px-4 py-6 text-center text-xs" style={{ color: '#ef4444' }}>{error}</div>
-        : <div ref={chartRef} style={{ width: '100%', height: 300 }} />}
+        : <div ref={chartRef} style={{ width: '100%', height: 340, padding: '12px 8px 4px' }} />}
     </div>
   )
 }

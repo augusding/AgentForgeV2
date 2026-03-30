@@ -121,42 +121,58 @@ async def _chart_handler(args: dict) -> str:
     return json.dumps({"type": "echarts", "option": option}, ensure_ascii=False)
 
 
+_CHART_COLORS = ["#5b8ff9", "#5ad8a6", "#f6bd16", "#e86452", "#6dc8ec",
+                  "#945fb9", "#ff9845", "#1e9493", "#ff99c3", "#269a99"]
+
 def _build_echarts_option(chart_type: str, title: str, data) -> dict:
     option: dict = {
-        "title": {"text": title, "left": "center"} if title else {},
-        "tooltip": {"trigger": "axis" if chart_type in ("bar", "line") else "item"},
+        "color": _CHART_COLORS,
+        "title": {"text": title, "left": "center", "textStyle": {"fontSize": 14, "fontWeight": 500}} if title else {},
+        "tooltip": {"trigger": "axis" if chart_type in ("bar", "line") else "item", "borderWidth": 0, "padding": [8, 12]},
+        "grid": {"left": "3%", "right": "4%", "bottom": "3%", "top": title and "15%" or "8%", "containLabel": True},
     }
 
     if chart_type in ("bar", "line"):
         categories = data.get("categories", []) if isinstance(data, dict) else []
         series_data = data.get("series", []) if isinstance(data, dict) else []
-        option["xAxis"] = {"type": "category", "data": categories}
-        option["yAxis"] = {"type": "value"}
+        option["xAxis"] = {"type": "category", "data": categories,
+            "axisLabel": {"fontSize": 11, "rotate": 30 if len(categories) > 6 else 0}}
+        option["yAxis"] = {"type": "value", "axisLabel": {"fontSize": 11}}
         option["series"] = [
-            {"name": s.get("name", f"系列{i+1}"), "type": chart_type, "data": s.get("values", [])}
+            {"name": s.get("name", f"系列{i+1}"), "type": chart_type, "data": s.get("values", []),
+             "barMaxWidth": 32, "itemStyle": {"borderRadius": [3, 3, 0, 0]} if chart_type == "bar" else {}}
             for i, s in enumerate(series_data)
         ]
         if len(series_data) > 1:
-            option["legend"] = {"data": [s.get("name", "") for s in series_data], "top": "30"}
+            option["legend"] = {"data": [s.get("name", "") for s in series_data], "top": "30", "textStyle": {"fontSize": 11}}
 
     elif chart_type == "pie":
         items = data if isinstance(data, list) else data.get("items", [])
-        option["series"] = [{"type": "pie", "radius": "50%", "data": items}]
+        option["series"] = [{"type": "pie", "radius": ["40%", "65%"], "data": items,
+            "label": {"fontSize": 11}, "itemStyle": {"borderRadius": 4, "borderWidth": 2}}]
+        option.pop("grid", None)
 
     elif chart_type == "scatter":
         series_data = data.get("series", []) if isinstance(data, dict) else []
-        option["xAxis"] = {"type": "value", "name": data.get("xLabel", "")}
-        option["yAxis"] = {"type": "value", "name": data.get("yLabel", "")}
+        option["xAxis"] = {"type": "value", "name": data.get("xLabel", ""), "nameTextStyle": {"fontSize": 11}}
+        option["yAxis"] = {"type": "value", "name": data.get("yLabel", ""), "nameTextStyle": {"fontSize": 11}}
         option["series"] = [
-            {"name": s.get("name", ""), "type": "scatter", "data": s.get("values", [])}
+            {"name": s.get("name", ""), "type": "scatter", "data": s.get("values", []), "symbolSize": 8}
             for s in series_data
         ]
 
     elif chart_type == "radar":
         indicators = data.get("indicators", []) if isinstance(data, dict) else []
         series_data = data.get("series", []) if isinstance(data, dict) else []
-        option["radar"] = {"indicator": [{"name": i.get("name", i) if isinstance(i, dict) else str(i), "max": i.get("max", 100) if isinstance(i, dict) else 100} for i in indicators]}
-        option["series"] = [{"type": "radar", "data": [{"name": s.get("name", ""), "value": s.get("values", [])} for s in series_data]}]
+        option["radar"] = {"indicator": [
+            {"name": i.get("name", i) if isinstance(i, dict) else str(i),
+             "max": i.get("max", 100) if isinstance(i, dict) else 100}
+            for i in indicators
+        ]}
+        option["series"] = [{"type": "radar", "data": [
+            {"name": s.get("name", ""), "value": s.get("values", [])} for s in series_data
+        ], "areaStyle": {"opacity": 0.15}}]
+        option.pop("grid", None)
 
     return option
 
