@@ -35,6 +35,7 @@ class WorkflowDefinition:
     description: str = ""
     org_id: str = ""
     position_id: str = ""
+    created_by: str = ""
     nodes: list[WorkflowNode] = field(default_factory=list)
     edges: list[dict] = field(default_factory=list)       # [{source, target, condition?}]
     trigger: dict = field(default_factory=dict)           # {type: "cron"|"webhook"|"manual", config: {...}}

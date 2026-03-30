@@ -30,6 +30,7 @@ class WorkflowStore(BaseStore):
                 description TEXT DEFAULT '',
                 org_id TEXT DEFAULT '',
                 position_id TEXT DEFAULT '',
+                created_by TEXT NOT NULL DEFAULT '',
                 nodes TEXT DEFAULT '[]',
                 edges TEXT DEFAULT '[]',
                 trigger_config TEXT DEFAULT '{}',
@@ -44,6 +45,8 @@ class WorkflowStore(BaseStore):
             CREATE TABLE IF NOT EXISTS workflow_executions (
                 id TEXT PRIMARY KEY,
                 workflow_id TEXT NOT NULL,
+                user_id TEXT DEFAULT '',
+                org_id TEXT DEFAULT '',
                 status TEXT DEFAULT 'running',
                 trigger_type TEXT DEFAULT 'manual',
                 trigger_data TEXT DEFAULT '{}',
@@ -56,10 +59,18 @@ class WorkflowStore(BaseStore):
             )
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_org ON workflows(org_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_creator ON workflows(created_by)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_wf ON workflow_executions(workflow_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_user ON workflow_executions(user_id, org_id)")
         for col, dflt in [("timeout_seconds", "300")]:
             try: await db.execute(f"ALTER TABLE workflows ADD COLUMN {col} INTEGER DEFAULT {dflt}")
             except Exception: pass
+        # 自动迁移：给旧表加新字段
+        for col, tbl in [("created_by", "workflows"), ("user_id", "workflow_executions"), ("org_id", "workflow_executions")]:
+            try:
+                await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT DEFAULT ''")
+            except Exception:
+                pass
 
     # ── 工作流定义 ────────────────────────────────────────
 
@@ -73,10 +84,11 @@ class WorkflowStore(BaseStore):
         async with self._db() as db:
             await db.execute(
                 "INSERT OR REPLACE INTO workflows "
-                "(id, name, description, org_id, position_id, nodes, edges, trigger_config, "
+                "(id, name, description, org_id, position_id, created_by, nodes, edges, trigger_config, "
                 "variables, version, enabled, timeout_seconds, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (wf.id, wf.name, wf.description, wf.org_id, wf.position_id,
+                 getattr(wf, 'created_by', ''),
                  nodes_json, edges_json, json.dumps(wf.trigger, ensure_ascii=False),
                  json.dumps({**wf.variables, **({'_on_error_notify': wf.on_error_notify} if getattr(wf, 'on_error_notify', None) else {})}, ensure_ascii=False),
                  wf.version, 1 if wf.enabled else 0,
@@ -94,13 +106,16 @@ class WorkflowStore(BaseStore):
                 return None
             return self._row_to_workflow(dict(row))
 
-    async def list_workflows(self, org_id: str = "", position_id: str = "") -> list[dict]:
-        """列出工作流。"""
+    async def list_workflows(self, org_id: str = "", position_id: str = "", user_id: str = "") -> list[dict]:
+        """列出工作流。user_id 不为空时只返回该用户创建的。"""
         await self.ensure_tables()
-        query = "SELECT id, name, description, position_id, enabled, version, updated_at FROM workflows WHERE 1=1"
+        query = "SELECT id, name, description, position_id, enabled, version, updated_at, created_by FROM workflows WHERE 1=1"
         params: list[Any] = []
+        if user_id:
+            query += " AND (created_by = ? OR created_by = '' OR created_by IS NULL)"
+            params.append(user_id)
         if org_id:
-            query += " AND org_id = ?"
+            query += " AND (org_id = ? OR org_id = '' OR org_id IS NULL)"
             params.append(org_id)
         if position_id:
             query += " AND position_id = ?"
@@ -111,27 +126,36 @@ class WorkflowStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
-    async def delete_workflow(self, workflow_id: str) -> None:
+    async def delete_workflow(self, workflow_id: str, user_id: str = "") -> int:
+        """删除工作流。返回受影响行数（0=无权或不存在）。"""
         await self.ensure_tables()
         async with self._db() as db:
-            await db.execute("DELETE FROM workflow_executions WHERE workflow_id = ?", (workflow_id,))
-            await db.execute("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+            if user_id:
+                cur = await db.execute(
+                    "DELETE FROM workflows WHERE id = ? AND (created_by = ? OR created_by = '' OR created_by IS NULL)",
+                    (workflow_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+            if cur.rowcount > 0:
+                await db.execute("DELETE FROM workflow_executions WHERE workflow_id = ?", (workflow_id,))
             await db.commit()
+            return cur.rowcount
 
     # ── 执行记录 ──────────────────────────────────────────
 
     async def save_execution(self, exec_id: str, workflow_id: str, status: str,
                              node_results: dict, variables: dict,
                              trigger_type: str = "manual", trigger_data: dict | None = None,
-                             error: str = "", started_at: float = 0, completed_at: float = 0) -> None:
+                             error: str = "", started_at: float = 0, completed_at: float = 0,
+                             user_id: str = "", org_id: str = "") -> None:
         await self.ensure_tables()
         async with self._db() as db:
             await db.execute(
                 "INSERT OR REPLACE INTO workflow_executions "
-                "(id, workflow_id, status, trigger_type, trigger_data, node_results, "
+                "(id, workflow_id, user_id, org_id, status, trigger_type, trigger_data, node_results, "
                 "variables, error, started_at, completed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (exec_id, workflow_id, status, trigger_type,
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (exec_id, workflow_id, user_id, org_id, status, trigger_type,
                  json.dumps(trigger_data or {}, ensure_ascii=False),
                  json.dumps(node_results, ensure_ascii=False, default=str),
                  json.dumps(variables, ensure_ascii=False, default=str),
@@ -223,6 +247,7 @@ class WorkflowStore(BaseStore):
             description=row.get("description", ""),
             org_id=row.get("org_id", ""),
             position_id=row.get("position_id", ""),
+            created_by=row.get("created_by", ""),
             nodes=nodes,
             edges=json.loads(row.get("edges", "[]")),
             trigger=json.loads(row.get("trigger_config", "{}")),

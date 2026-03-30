@@ -91,7 +91,9 @@ async def handle_workflow_list(request: web.Request) -> web.Response:
     store = await _get_wf_store(request)
     org_id = request.query.get("org_id", "") or _get_org_id(request)
     position_id = request.query.get("position_id", "")
-    workflows = await store.list_workflows(org_id=org_id, position_id=position_id)
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    workflows = await store.list_workflows(org_id=org_id, position_id=position_id, user_id=uid)
     return _json({"workflows": workflows})
 
 
@@ -115,12 +117,15 @@ async def handle_workflow_create(request: web.Request) -> web.Response:
     body = await request.json()
     url_id = request.match_info.get("workflow_id", "")
 
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
     wf = WorkflowDefinition(
         id=url_id or body.get("id", uuid4().hex[:12]),
         name=body.get("name", "未命名工作流"),
         description=body.get("description", ""),
-        org_id=body.get("org_id", ""),
+        org_id=body.get("org_id", "") or _get_org_id(request),
         position_id=body.get("position_id", ""),
+        created_by=uid,
         nodes=[WorkflowNode(**n) for n in body.get("nodes", [])],
         edges=body.get("edges", []),
         trigger=body.get("trigger", {}),
@@ -134,7 +139,12 @@ async def handle_workflow_delete(request: web.Request) -> web.Response:
     """DELETE /api/v1/workflows/{workflow_id}"""
     store = await _get_wf_store(request)
     wf_id = request.match_info["workflow_id"]
-    await store.delete_workflow(wf_id)
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    role = user.get("role", "") if isinstance(user, dict) else ""
+    deleted = await store.delete_workflow(wf_id, user_id="" if role == "admin" else uid)
+    if deleted == 0:
+        return _json({"error": "工作流不存在或无权删除"}, 403)
     return _json({"status": "deleted"})
 
 
@@ -174,11 +184,12 @@ async def handle_workflow_execute(request: web.Request) -> web.Response:
         nid: {"status": nr.status, "output": nr.output, "error": nr.error, "duration": nr.duration}
         for nid, nr in execution.node_results.items()
     }
+    oid = user.get("org_id", "") if isinstance(user, dict) else ""
     await store.save_execution(
         exec_id=execution.id, workflow_id=wf_id, status=execution.status,
         node_results=node_results_dict, variables=execution.variables,
         started_at=execution.started_at, completed_at=execution.completed_at,
-        error=execution.error,
+        error=execution.error, user_id=uid, org_id=oid,
     )
 
     return _json({
@@ -201,6 +212,7 @@ async def handle_workflow_execute_stream(request: web.Request) -> web.StreamResp
     body = await request.json() if request.can_read_body else {}
     user = request.get("user") or {}
     uid = user.get("sub", "") if isinstance(user, dict) else ""
+    oid = user.get("org_id", "") if isinstance(user, dict) else ""
     resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"})
     await resp.prepare(request)
 
@@ -242,7 +254,7 @@ async def handle_workflow_execute_stream(request: web.Request) -> web.StreamResp
                        for nid, nr in ex.node_results.items()}
                 await store.save_execution(exec_id=ex.id, workflow_id=wf_id, status=ex.status,
                     node_results=nrd, variables=ex.variables, started_at=ex.started_at,
-                    completed_at=ex.completed_at, error=ex.error)
+                    completed_at=ex.completed_at, error=ex.error, user_id=uid, org_id=oid)
                 await sse("done", {"execution_id": ex.id, "status": ex.status,
                     "duration": ex.completed_at - ex.started_at, "node_results": nrd})
                 break

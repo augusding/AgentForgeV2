@@ -168,7 +168,10 @@ export default function Workflows() {
           <div key={wf.id} className="flex items-center gap-4 p-4 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <Zap size={18} style={{ color: 'var(--accent)' }} />
             <div className="flex-1 min-w-0"><h3 className="text-sm font-medium truncate">{wf.name}</h3>
-              {wf.description && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{wf.description}</p>}</div>
+              <div className="flex items-center gap-2">
+                {wf.description && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{wf.description}</p>}
+                {wf.created_by && <span className="text-[9px] px-1.5 py-0.5 rounded shrink-0" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>@{wf.created_by.slice(0, 8)}</span>}
+              </div></div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button onClick={() => navigate(`/workflows/${wf.id}`)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs hover:bg-[var(--bg-hover)]"
                 style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}><Edit3 size={12} /> 编辑</button>
