@@ -35,10 +35,36 @@ export default function Knowledge() {
   const loadFiles = async () => { try { const d = await listFiles(); setFiles(d.files || []) } catch {} }
   const loadStats = async () => { try { setStats(await getKnowledgeStats()) } catch {} }
 
+  const [uploadProgress, setUploadProgress] = useState<Array<{ filename: string; status: string; percent: number; message: string }>>([])
+
   const handleUpload = async (fl: FileList | null) => {
-    if (!fl?.length) return; setUploading(true); let ok = 0
-    for (const f of Array.from(fl)) { try { await uploadFile(f, 'knowledge'); ok++ } catch { toast.error(`${f.name} 失败`) } }
-    if (ok) { toast.success(`${ok} 个文件上传成功`); await loadFiles(); await loadStats() }
+    if (!fl?.length) return
+    setUploading(true)
+    const files = Array.from(fl)
+    const progress = files.map(f => ({ filename: f.name, status: 'uploading', percent: 0, message: '等待上传...' }))
+    setUploadProgress([...progress])
+    let ok = 0
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i]
+      progress[i] = { ...progress[i], status: 'uploading', percent: 30, message: '上传文件...' }
+      setUploadProgress([...progress])
+      try {
+        progress[i] = { ...progress[i], status: 'processing', percent: 60, message: '解析文档 & 构建索引...' }
+        setUploadProgress([...progress])
+        const result = await uploadFile(f, 'knowledge')
+        const chunks = (result as any)?.knowledge?.chunks || 0
+        progress[i] = { ...progress[i], status: 'done', percent: 100, message: `完成（${chunks} 个文本片段）` }
+        setUploadProgress([...progress])
+        ok++
+      } catch (e: any) {
+        progress[i] = { ...progress[i], status: 'error', percent: 100, message: e?.message || '上传失败' }
+        setUploadProgress([...progress])
+        toast.error(`${f.name} 上传失败`)
+      }
+    }
+    if (ok) toast.success(`${ok} 个文件处理完成`)
+    await loadFiles(); await loadStats()
+    setTimeout(() => setUploadProgress([]), 3000)
     setUploading(false)
   }
   const handleSearch = async () => {
@@ -89,10 +115,34 @@ export default function Knowledge() {
         onDragOver={e => { e.preventDefault(); setDragOver(true) }} onDragLeave={() => setDragOver(false)} onDrop={onDrop}
         onClick={() => document.getElementById('file-input')?.click()}>
         <Upload size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
-        <p className="text-sm mb-1">{uploading ? '上传中...' : '拖拽文件到此处，或点击选择'}</p>
+        <p className="text-sm mb-1">{uploading ? '处理中，请稍候...' : '拖拽文件到此处，或点击选择'}</p>
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>支持 PDF, DOCX, TXT, MD, CSV, JSON（最大 20MB）</p>
         <input id="file-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json" onChange={e => handleUpload(e.target.files)} />
       </div>
+
+      {uploadProgress.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {uploadProgress.map((p, i) => (
+            <div key={i} className="rounded-lg px-4 py-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium truncate flex-1" style={{ color: 'var(--text)' }}>{p.filename}</span>
+                <span className="text-[10px] shrink-0 ml-2" style={{
+                  color: p.status === 'done' ? '#22c55e' : p.status === 'error' ? '#ef4444' : 'var(--accent)'
+                }}>
+                  {p.status === 'uploading' ? '上传中' : p.status === 'processing' ? '索引中' : p.status === 'done' ? '完成' : '失败'}
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{
+                  width: `${p.percent}%`,
+                  background: p.status === 'done' ? '#22c55e' : p.status === 'error' ? '#ef4444' : 'var(--accent)',
+                }} />
+              </div>
+              <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>{p.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex gap-2 mb-6">
         <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}
