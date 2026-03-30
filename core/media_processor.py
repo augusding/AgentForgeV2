@@ -151,36 +151,9 @@ def _whisper_transcribe_sync(model, file_path: str) -> str:
 
 
 async def transcribe_audio(path: Path) -> str:
-    """音频 → 文字。自动选择最优方案。"""
-    # 策略 1: faster-whisper 本地
-    model = _get_whisper()
-    if model:
-        try:
-            loop = asyncio.get_event_loop()
-            text = await asyncio.wait_for(
-                loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)),
-                timeout=300,
-            )
-            if text:
-                logger.info("本地 STT 完成: %s → %d 字", path.name, len(text))
-                return text
-        except asyncio.TimeoutError:
-            logger.warning("本地 STT 超时: %s", path.name)
-            return "[语音转录超时，音频过长请分段处理]"
-        except Exception as e:
-            logger.warning("本地 STT 失败: %s — %s", path.name, e)
-
-    # 策略 2: dashscope API
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-    if api_key:
-        try:
-            text = await _dashscope_stt(path, api_key)
-            if text:
-                return text
-        except Exception as e:
-            logger.warning("dashscope STT 失败: %s", e)
-
-    return "[语音识别不可用] 请安装 faster-whisper: pip install faster-whisper"
+    """音频 → 文字（字符串版本，供旧代码兼容调用）。"""
+    result = await stt_transcribe(path)
+    return result["text"] if result["success"] else f"[{result.get('error', '语音识别失败')}]"
 
 
 async def _dashscope_stt(path: Path, api_key: str) -> str:
@@ -269,37 +242,89 @@ async def vision_understand(path: Path, prompt: str = "请详细描述这张图�
         return {"text": "", "source": "qwen-vl", "success": False, "error": str(e)[:200]}
 
 
-async def stt_transcribe(path: Path) -> dict:
-    """音频转文字，返回 {"text", "source", "success", "error?"}。"""
-    model = _get_whisper()
-    if model:
-        try:
-            loop = asyncio.get_event_loop()
-            text = await asyncio.wait_for(
-                loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)),
-                timeout=300,
-            )
-            return {"text": text, "source": "faster-whisper", "success": True}
-        except asyncio.TimeoutError:
-            return {"text": "", "source": "faster-whisper", "success": False, "error": "转录超时"}
-        except Exception as e:
-            logger.warning("本地 STT 失败: %s", e)
+async def _qwen_omni_stt(path: Path, prompt: str = "请将这段音频内容完整转录为文字") -> dict:
+    """通过 Qwen3-Omni-Flash 处理音频（STT + 去噪 + 多人对话识别）。"""
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        return {"text": "", "source": "qwen-omni", "success": False,
+                "error": "未配置 DASHSCOPE_API_KEY"}
+    max_audio_size = 50 * 1024 * 1024
+    if not path.is_file() or path.stat().st_size > max_audio_size:
+        return {"text": "", "source": "qwen-omni", "success": False,
+                "error": f"音频无效或超过 {max_audio_size // 1024 // 1024}MB"}
+    try:
+        audio_b64 = base64.b64encode(path.read_bytes()).decode("utf-8")
+        ext = path.suffix.lower().lstrip(".")
+        fmt_map = {"mp3": "mp3", "wav": "wav", "m4a": "m4a", "ogg": "ogg",
+                   "webm": "webm", "flac": "flac", "aac": "aac"}
+        audio_fmt = fmt_map.get(ext, "mp3")
+        import openai
+        client = openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        model = os.environ.get("OMNI_MODEL", "qwen3-omni-flash")
+        resp = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": [
+                {"type": "input_audio", "input_audio": {"data": audio_b64, "format": audio_fmt}},
+                {"type": "text", "text": prompt},
+            ]}],
+            max_tokens=4000, temperature=0.3,
+            stream=True, modalities=["text"],
+            stream_options={"include_usage": True},
+        )
+        text_parts = []
+        async for chunk in resp:
+            if chunk.choices:
+                delta = chunk.choices[0].delta
+                if hasattr(delta, "content") and delta.content:
+                    text_parts.append(delta.content)
+        text = "".join(text_parts).strip()
+        if text:
+            logger.info("Qwen-Omni STT 完成: %s → %d 字", path.name, len(text))
+            return {"text": text, "source": f"qwen-omni ({model})", "success": True}
+        return {"text": "", "source": "qwen-omni", "success": False, "error": "未识别到内容"}
+    except Exception as e:
+        logger.error("Qwen-Omni 音频处理失败: %s", e)
+        return {"text": "", "source": "qwen-omni", "success": False, "error": str(e)[:200]}
+
+
+async def stt_transcribe(path: Path, prompt: str = "请将这段音频内容完整转录为文字") -> dict:
+    """音频转文字。优先 Qwen-Omni → dashscope whisper → 提示配置。"""
     api_key = os.environ.get("DASHSCOPE_API_KEY", "")
     if api_key:
+        result = await _qwen_omni_stt(path, prompt)
+        if result["success"]:
+            return result
+        logger.warning("Qwen-Omni STT 失败，尝试降级: %s", result.get("error", ""))
         try:
             text = await _dashscope_stt(path, api_key)
             if text:
                 return {"text": text, "source": "dashscope-whisper", "success": True}
         except Exception as e:
-            return {"text": "", "source": "dashscope", "success": False, "error": str(e)[:200]}
+            logger.warning("dashscope whisper 降级也失败: %s", e)
+    # faster-whisper 入口保留但断开，如需启用取消下面注释：
+    # model = _get_whisper()
+    # if model:
+    #     try:
+    #         loop = asyncio.get_event_loop()
+    #         text = await asyncio.wait_for(
+    #             loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)), timeout=300)
+    #         return {"text": text, "source": "faster-whisper", "success": True}
+    #     except Exception as e:
+    #         logger.warning("本地 STT 失败: %s", e)
     return {"text": "", "source": "none", "success": False,
-            "error": "请安装 faster-whisper 或配置 DASHSCOPE_API_KEY"}
+            "error": "请配置 DASHSCOPE_API_KEY 以启用语音识别"}
 
 
 def get_capabilities() -> dict:
     """供前端判断按钮是否可点。"""
+    has_key = bool(os.environ.get("DASHSCOPE_API_KEY"))
     return {
         "ocr": _get_ocr() is not None,
-        "vision": bool(os.environ.get("DASHSCOPE_API_KEY")),
-        "stt": _get_whisper() is not None or bool(os.environ.get("DASHSCOPE_API_KEY")),
+        "vision": has_key,
+        "stt": has_key,
+        "stt_engine": "qwen-omni" if has_key else "不可用",
+        "vision_engine": "qwen-vl" if has_key else "不可用",
     }
