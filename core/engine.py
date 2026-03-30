@@ -207,7 +207,7 @@ class ForgeEngine:
                 mission_id=mission.id, user_id=msg.user_id, org_id=msg.org_id,
                 position_id=msg.position_id, instruction=msg.content,
             )
-        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
+        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         _up = ""
         if self._user_profile_store:
@@ -288,7 +288,7 @@ class ForgeEngine:
                      "tool_hint": msg.metadata.get("tool_hint", "")},
             attachments=msg.attachments,
         )
-        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id)
+        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
         if lc:
             lc.info("pipeline", "rag_done", f"RAG 检索: {len(rag_results)} 条",
                     data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
@@ -380,9 +380,9 @@ class ForgeEngine:
             asyncio.ensure_future(self._signal_store.increment_pending(msg.org_id, msg.position_id, msg.user_id))
     # ── 内部辅助 ─────────────────────────────────────────
 
-    def _search_rag(self, query: str, position: PositionConfig, org_id: str = "") -> list[dict]:
+    def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
         if self._knowledge_base:
-            return self._knowledge_base.search(query=query, top_k=self.config.knowledge.get("retrieval_top_k", 3), org_id=org_id)
+            return self._knowledge_base.search(query=query, top_k=self.config.knowledge.get("retrieval_top_k", 3), org_id=org_id, user_id=user_id)
         return []
 
     async def _record_observability(self, msg: UnifiedMessage, result: MissionResult) -> None:

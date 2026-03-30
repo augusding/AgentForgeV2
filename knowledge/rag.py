@@ -88,6 +88,7 @@ class KnowledgeBase:
         metadata: dict | None = None,
         is_markdown: bool = False,
         org_id: str = "",
+        user_id: str = "",
     ) -> int:
         """
         添加文档到知识库。
@@ -101,6 +102,8 @@ class KnowledgeBase:
         meta["doc_id"] = doc_id
         if org_id:
             meta["org_id"] = org_id
+        if user_id:
+            meta["user_id"] = user_id
 
         # 分块
         if is_markdown:
@@ -143,6 +146,7 @@ class KnowledgeBase:
         query: str,
         top_k: int = 3,
         org_id: str = "",
+        user_id: str = "",
         filter_metadata: dict | None = None,
     ) -> list[dict]:
         """
@@ -159,6 +163,8 @@ class KnowledgeBase:
             "n_results": top_k,
         }
         where_clause: dict[str, Any] = {}
+        if user_id:
+            where_clause["user_id"] = user_id
         if org_id:
             where_clause["org_id"] = org_id
         if filter_metadata:
@@ -192,12 +198,14 @@ class KnowledgeBase:
 
         return output
 
-    def delete_document(self, doc_id: str, org_id: str = "") -> int:
+    def delete_document(self, doc_id: str, org_id: str = "", user_id: str = "") -> int:
         """删除文档的所有分块。返回删除数。"""
         if not self._collection:
             return 0
         try:
             where: dict[str, Any] = {"doc_id": doc_id}
+            if user_id:
+                where["user_id"] = user_id
             if org_id:
                 where["org_id"] = org_id
             result = self._collection.get(where=where, include=[])
@@ -213,13 +221,18 @@ class KnowledgeBase:
             logger.error("删除文档失败: %s", e)
             return 0
 
-    def clear_all(self, org_id: str = "") -> int:
+    def clear_all(self, org_id: str = "", user_id: str = "") -> int:
         """清空知识库。返回删除的 chunk 数。"""
         if not self._collection:
             return 0
         try:
+            where: dict[str, Any] = {}
+            if user_id:
+                where["user_id"] = user_id
             if org_id:
-                result = self._collection.get(where={"org_id": org_id}, include=[])
+                where["org_id"] = org_id
+            if where:
+                result = self._collection.get(where=where, include=[])
             else:
                 result = self._collection.get(include=[])
             ids = result.get("ids", [])
@@ -232,12 +245,14 @@ class KnowledgeBase:
             logger.error("清空知识库失败: %s", e)
             return 0
 
-    def list_doc_ids_by_source(self, source_type: str, org_id: str = "") -> set[str]:
+    def list_doc_ids_by_source(self, source_type: str, org_id: str = "", user_id: str = "") -> set[str]:
         """获取 ChromaDB 中指定 source_type 的所有 doc_id（对账用）。"""
         if not self._collection:
             return set()
         try:
             where: dict[str, Any] = {"source_type": source_type}
+            if user_id:
+                where["user_id"] = user_id
             if org_id:
                 where["org_id"] = org_id
             result = self._collection.get(where=where, include=["metadatas"])
@@ -246,12 +261,14 @@ class KnowledgeBase:
             logger.error("list_doc_ids_by_source 失败: %s", e)
             return set()
 
-    def soft_delete_document(self, doc_id: str, org_id: str = "") -> int:
+    def soft_delete_document(self, doc_id: str, org_id: str = "", user_id: str = "") -> int:
         """软删除：标记 deleted=true，不物理删除。返回标记的 chunk 数。"""
         if not self._collection:
             return 0
         try:
             where: dict[str, Any] = {"doc_id": doc_id}
+            if user_id:
+                where["user_id"] = user_id
             if org_id:
                 where["org_id"] = org_id
             result = self._collection.get(where=where, include=["metadatas"])

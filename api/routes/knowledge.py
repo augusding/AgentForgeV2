@@ -23,6 +23,11 @@ def _org_id(request) -> str:
     return user.get("org_id", "") if isinstance(user, dict) else ""
 
 
+def _user_id(request) -> str:
+    user = request.get("user") or {}
+    return user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
+
+
 async def handle_knowledge_search(request: web.Request) -> web.Response:
     """POST /api/v1/knowledge/search  Body: {"query": "...", "top_k": 3}"""
     try:
@@ -33,7 +38,7 @@ async def handle_knowledge_search(request: web.Request) -> web.Response:
         query = body.get("query", "")
         if not query:
             return _json({"error": "query 不能为空"}, status=400)
-        results = kb.search(query, top_k=body.get("top_k", 3), org_id=_org_id(request))
+        results = kb.search(query, top_k=body.get("top_k", 3), org_id=_org_id(request), user_id=_user_id(request))
         return _json({"results": results})
     except Exception as e:
         traceback.print_exc()
@@ -56,6 +61,7 @@ async def handle_knowledge_add(request: web.Request) -> web.Response:
             metadata=body.get("metadata", {}),
             is_markdown=body.get("is_markdown", False),
             org_id=_org_id(request),
+            user_id=_user_id(request),
         )
         return _json({"doc_id": doc_id, "chunks": chunks})
     except Exception as e:
@@ -78,7 +84,7 @@ async def handle_knowledge_delete(request: web.Request) -> web.Response:
 
         if kb:
             try:
-                kb.delete_document(doc_id, org_id=o_id)
+                kb.delete_document(doc_id, org_id=o_id, user_id=_user_id(request))
                 deleted_db = True
             except Exception as e:
                 logger.warning("ChromaDB 删除失败: %s", e)
@@ -118,8 +124,14 @@ async def handle_knowledge_stats(request: web.Request) -> web.Response:
 
         if kb and kb._collection:
             try:
+                uid = _user_id(request)
+                where_filter: dict = {}
+                if uid and uid != "anonymous":
+                    where_filter["user_id"] = uid
+                elif o_id and o_id != "_default":
+                    where_filter["org_id"] = o_id
                 result = kb._collection.get(
-                    where={"org_id": o_id} if o_id != "_default" else None,
+                    where=where_filter if where_filter else None,
                     include=["metadatas"],
                 )
                 metadatas = result.get("metadatas") or []
@@ -159,8 +171,14 @@ async def handle_knowledge_files(request: web.Request) -> web.Response:
         files: list[dict] = []
         if kb and kb._collection:
             try:
+                uid = _user_id(request)
+                where_filter: dict = {}
+                if uid and uid != "anonymous":
+                    where_filter["user_id"] = uid
+                elif o_id and o_id != "_default":
+                    where_filter["org_id"] = o_id
                 result = kb._collection.get(
-                    where={"org_id": o_id} if o_id != "_default" else None,
+                    where=where_filter if where_filter else None,
                     include=["metadatas"],
                 )
             except Exception:
@@ -214,7 +232,7 @@ async def handle_knowledge_clear(request: web.Request) -> web.Response:
         u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
         o_id = _org_id(request) or "_default"
 
-        chunks = kb.clear_all(org_id=o_id if o_id != "_default" else "") if kb else 0
+        chunks = kb.clear_all(org_id=o_id if o_id != "_default" else "", user_id=_user_id(request)) if kb else 0
         files_deleted = 0
         for base in ("data/knowledge", "data/uploads"):
             d = engine.root_dir / base / o_id / u_id

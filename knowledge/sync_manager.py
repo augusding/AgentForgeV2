@@ -164,7 +164,7 @@ class SyncManager:
                     r.filtered += 1
                     continue
                 try:
-                    await self._index_retry(fr.doc, org_id)
+                    await self._index_retry(fr.doc, org_id, user_id=cfg.get("created_by", ""))
                     r.indexed += 1
                     _synced_ids.add(fr.doc.doc_id)
                     if r.indexed % 10 == 0 and raw.extra_meta.get("cursor"):
@@ -211,11 +211,11 @@ class SyncManager:
             logger.error("对账失败: %s", e)
             return 0
 
-    async def _index_retry(self, doc, org_id: str) -> None:
+    async def _index_retry(self, doc, org_id: str, user_id: str = "") -> None:
         exc = None
         for i in range(MAX_RETRY):
             try:
-                self._index(doc, org_id)
+                self._index(doc, org_id, user_id)
                 return
             except Exception as e:
                 exc = e
@@ -223,7 +223,7 @@ class SyncManager:
                     await asyncio.sleep(RETRY_BASE * (2 ** i))
         raise exc
 
-    def _index(self, doc, org_id: str) -> None:
+    def _index(self, doc, org_id: str, user_id: str = "") -> None:
         meta = {
             "source": doc.source_url, "source_type": doc.source_type,
             "title": doc.title, "filename": doc.title,
@@ -233,4 +233,4 @@ class SyncManager:
                if isinstance(v, (str, int, float, bool))},
         }
         self._kb.add_document(doc_id=doc.doc_id, content=doc.content,
-                               metadata=meta, org_id=org_id)
+                               metadata=meta, org_id=org_id, user_id=user_id)
