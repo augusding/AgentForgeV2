@@ -1,0 +1,211 @@
+"""
+AgentForge V2 — 多媒体处理器
+
+图片：PaddleOCR 本地 OCR（免费） + base64 编码（供 Vision LLM）
+音频：faster-whisper 本地转录（免费）+ 多级降级
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+_AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac", ".aac"}
+_MIME_MAP = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+}
+_MAX_IMAGE_SIZE = 10 * 1024 * 1024
+
+
+def is_image(path: Path) -> bool:
+    return path.suffix.lower() in _IMAGE_EXTS
+
+
+def is_audio(path: Path) -> bool:
+    return path.suffix.lower() in _AUDIO_EXTS
+
+
+# ═══════════════════════════════════════════
+# 图片处理
+# ═══════════════════════════════════════════
+
+_ocr_engine = None
+_ocr_available: bool | None = None
+
+
+def _get_ocr():
+    global _ocr_engine, _ocr_available
+    if _ocr_available is False:
+        return None
+    if _ocr_engine is not None:
+        return _ocr_engine
+    try:
+        from paddleocr import PaddleOCR
+        _ocr_engine = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+        _ocr_available = True
+        logger.info("PaddleOCR 初始化成功")
+        return _ocr_engine
+    except ImportError:
+        logger.info("PaddleOCR 未安装，图片 OCR 不可用")
+        _ocr_available = False
+        return None
+    except Exception as e:
+        logger.warning("PaddleOCR 初始化失败: %s", e)
+        _ocr_available = False
+        return None
+
+
+def ocr_extract_text(path: Path) -> str:
+    """用 PaddleOCR 从图片中提取文字。"""
+    ocr = _get_ocr()
+    if not ocr:
+        return ""
+    try:
+        result = ocr.ocr(str(path), cls=True)
+        if not result or not result[0]:
+            return ""
+        lines = []
+        for line in result[0]:
+            text = line[1][0] if line[1] else ""
+            score = line[1][1] if line[1] and len(line[1]) > 1 else 0
+            if text.strip() and score > 0.5:
+                lines.append(text.strip())
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning("OCR 失败 [%s]: %s", path.name, e)
+        return ""
+
+
+def encode_image_base64(path: Path) -> dict | None:
+    """图片 → image_url block（Vision LLM 通用格式）。"""
+    if not path.is_file() or path.stat().st_size > _MAX_IMAGE_SIZE:
+        return None
+    try:
+        mime = _MIME_MAP.get(path.suffix.lower(), "image/png")
+        data = base64.b64encode(path.read_bytes()).decode("utf-8")
+        return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+    except Exception as e:
+        logger.warning("图片编码失败 [%s]: %s", path.name, e)
+        return None
+
+
+def process_image(path: Path) -> dict[str, Any]:
+    """统一图片处理入口。"""
+    ocr_text = ocr_extract_text(path)
+    image_block = encode_image_base64(path)
+    size_kb = path.stat().st_size / 1024
+    if ocr_text:
+        summary = f"[图片 {path.name} ({size_kb:.0f}KB) — OCR 提取到 {len(ocr_text)} 字]"
+    else:
+        summary = f"[图片 {path.name} ({size_kb:.0f}KB)]"
+    return {"ocr_text": ocr_text, "image_block": image_block, "summary": summary}
+
+
+# ═══════════════════════════════════════════
+# 音频处理
+# ═══════════════════════════════════════════
+
+_whisper_model = None
+_whisper_available: bool | None = None
+
+
+def _get_whisper():
+    global _whisper_model, _whisper_available
+    if _whisper_available is False:
+        return None
+    if _whisper_model is not None:
+        return _whisper_model
+    try:
+        from faster_whisper import WhisperModel
+        model_size = os.environ.get("WHISPER_MODEL", "base")
+        logger.info("加载 faster-whisper 模型: %s ...", model_size)
+        _whisper_model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        _whisper_available = True
+        logger.info("faster-whisper 加载完成")
+        return _whisper_model
+    except ImportError:
+        logger.info("faster-whisper 未安装，语音识别不可用")
+        _whisper_available = False
+        return None
+    except Exception as e:
+        logger.warning("faster-whisper 加载失败: %s", e)
+        _whisper_available = False
+        return None
+
+
+def _whisper_transcribe_sync(model, file_path: str) -> str:
+    segments, info = model.transcribe(
+        file_path,
+        language=os.environ.get("WHISPER_LANGUAGE", "zh"),
+        beam_size=5, vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=300),
+    )
+    return "\n".join(seg.text.strip() for seg in segments)
+
+
+async def transcribe_audio(path: Path) -> str:
+    """音频 → 文字。自动选择最优方案。"""
+    # 策略 1: faster-whisper 本地
+    model = _get_whisper()
+    if model:
+        try:
+            loop = asyncio.get_event_loop()
+            text = await asyncio.wait_for(
+                loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)),
+                timeout=300,
+            )
+            if text:
+                logger.info("本地 STT 完成: %s → %d 字", path.name, len(text))
+                return text
+        except asyncio.TimeoutError:
+            logger.warning("本地 STT 超时: %s", path.name)
+            return "[语音转录超时，音频过长请分段处理]"
+        except Exception as e:
+            logger.warning("本地 STT 失败: %s — %s", path.name, e)
+
+    # 策略 2: dashscope API
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if api_key:
+        try:
+            text = await _dashscope_stt(path, api_key)
+            if text:
+                return text
+        except Exception as e:
+            logger.warning("dashscope STT 失败: %s", e)
+
+    return "[语音识别不可用] 请安装 faster-whisper: pip install faster-whisper"
+
+
+async def _dashscope_stt(path: Path, api_key: str) -> str:
+    try:
+        import openai
+        client = openai.AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        with open(path, "rb") as f:
+            result = await client.audio.transcriptions.create(model="whisper-1", file=f)
+        return result.text.strip()
+    except Exception as e:
+        logger.warning("dashscope whisper API 失败: %s", e)
+        return ""
+
+
+def get_media_capabilities() -> dict:
+    """返回当前系统的媒体处理能力。"""
+    _get_ocr()
+    _get_whisper()
+    return {
+        "ocr": _ocr_available or False,
+        "ocr_engine": "PaddleOCR" if _ocr_available else "不可用",
+        "stt": _whisper_available or False,
+        "stt_engine": "faster-whisper" if _whisper_available else (
+            "dashscope" if os.environ.get("DASHSCOPE_API_KEY") else "不可用"),
+    }

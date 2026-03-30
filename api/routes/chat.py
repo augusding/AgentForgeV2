@@ -52,15 +52,15 @@ async def _resolve_position_id(engine, body, request=None) -> str:
 
 
 async def _resolve_attachments(engine, request, body) -> list[dict]:
-    """从 file_ids 解析附件内容。"""
+    """从 file_ids 解析附件内容。自动处理图片 OCR 和音频转录。"""
     file_ids = body.get("file_ids", [])
     if not file_ids:
         return []
     from core.file_parser import extract_text
+    from core.media_processor import is_image, is_audio, process_image, transcribe_audio
     user = request.get("user") or {}
     u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
-    # 按隔离目录查找，fallback 到全局
     dirs = [engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id,
             engine.root_dir / "data" / "uploads"]
     attachments = []
@@ -75,16 +75,29 @@ async def _resolve_attachments(engine, request, body) -> list[dict]:
             matches = list(d.glob(f"{fid}*"))
             if matches:
                 found = matches[0]; break
-        if found:
+        if not found:
+            continue
+        try:
+            rel = str(found.relative_to(engine.root_dir)).replace("\\", "/")
+        except ValueError:
+            rel = str(found)
+        from pathlib import Path as P
+        fp = P(str(found))
+        if is_image(fp):
+            img = process_image(fp)
+            extracted = img["ocr_text"] or img["summary"]
+            attachments.append({"file_id": fid, "filename": found.name, "path": rel,
+                "type": "image", "extracted_text": extracted[:5000], "image_block": img["image_block"]})
+        elif is_audio(fp):
+            text = await transcribe_audio(fp)
+            attachments.append({"file_id": fid, "filename": found.name, "path": rel,
+                "type": "audio", "extracted_text": text[:10000]})
+        else:
             try:
                 text = await extract_text(str(found))
-                try:
-                    rel = str(found.relative_to(engine.root_dir)).replace("\\", "/")
-                except ValueError:
-                    rel = str(found)
-                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": text[:5000] if text else "", "path": rel})
+                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": text[:5000] if text else "", "path": rel, "type": "file"})
             except Exception as e:
-                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": f"[解析失败: {e}]"})
+                attachments.append({"file_id": fid, "filename": found.name, "extracted_text": f"[解析失败: {e}]", "type": "file"})
     return attachments
 
 

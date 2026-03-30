@@ -62,11 +62,22 @@ class ContextBuilder:
         messages: list[dict] = []
         if history:
             messages.extend(history)
-        messages.append({"role": "user", "content": mission.instruction})
+        # 构建 user message（支持图片 multimodal）
+        image_blocks = [
+            a["image_block"] for a in (mission.attachments or [])
+            if a.get("type") == "image" and a.get("image_block")
+        ]
+        text_parts = [mission.instruction]
         if mission.attachments:
             att_text = self._format_attachments(mission.attachments)
             if att_text:
-                messages[-1]["content"] += f"\n\n{att_text}"
+                text_parts.append(att_text)
+        full_text = "\n\n".join(text_parts)
+        if image_blocks:
+            content_blocks = list(image_blocks) + [{"type": "text", "text": full_text}]
+            messages.append({"role": "user", "content": content_blocks})
+        else:
+            messages.append({"role": "user", "content": full_text})
 
         return ContextResult(
             system_prompt=system_prompt, messages=messages,
@@ -128,16 +139,22 @@ class ContextBuilder:
             parts.append(f"[{i}] {r.get('title', f'文档{i}')}\n{r.get('content', '')[:500]}")
         return "\n\n".join(parts)
 
-    def _format_attachments(self, attachments: list[dict]) -> str:
+    def _format_attachments(self, attachments: list[dict] | None) -> str:
+        if not attachments:
+            return ""
         parts = []
         for att in attachments:
+            att_type = att.get("type", "file")
             name = att.get("filename", "附件")
-            path = att.get("path", "")
-            header = f"[附件: {name}]"
-            if path:
-                header += f"\n  路径: {path}"
             text = att.get("extracted_text", "")
-            parts.append(f"{header}\n{text[:3000]}" if text else f"{header}（无法提取文本）")
+            if att_type == "image":
+                if text and not text.startswith("[图片"):
+                    parts.append(f"[图片 {name} — OCR 提取文字]\n{text[:3000]}")
+            elif att_type == "audio":
+                parts.append(f"[语音转录 — {name}]\n{text[:5000]}")
+            else:
+                header = f"[附件: {name}]"
+                parts.append(f"{header}\n{text[:3000]}" if text else f"{header}（无法提取文本）")
         return "\n\n".join(parts)
 
     @staticmethod

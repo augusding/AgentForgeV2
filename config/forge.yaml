@@ -36,3 +36,8 @@ guardrails:
   budget:
     enabled: true
     daily_limit_usd: 100
+
+# 多媒体处理
+stt:
+  provider: local_whisper
+  model: base

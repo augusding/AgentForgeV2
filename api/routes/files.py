@@ -149,7 +149,14 @@ async def handle_upload(request: web.Request) -> web.Response:
         result["knowledge"] = {"doc_id": final_doc_id, "chunks": chunks}
 
     if target == "chat":
-        result["extracted_text"] = extracted[:3000]
+        from core.media_processor import is_audio, transcribe_audio
+        from pathlib import Path as _P
+        if is_audio(_P(str(file_path))):
+            stt_text = await transcribe_audio(_P(str(file_path)))
+            result["extracted_text"] = stt_text
+            result["media_type"] = "audio"
+        else:
+            result["extracted_text"] = extracted[:3000]
 
     return _json(result)
 

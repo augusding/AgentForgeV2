@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Send, Plus, MessageSquare, ChevronRight, Search, RefreshCw, Square,
-         Paperclip, X, Sparkles, BookOpen, Zap, Wrench, RotateCcw } from 'lucide-react'
+         Paperclip, X, Sparkles, BookOpen, Zap, Wrench, RotateCcw, Mic } from 'lucide-react'
 import { useChatStore } from '../stores/useChatStore'
 import { useAuthStore } from '../stores/useAuthStore'
 import { uploadChatFile, getQuickCommands } from '../api/chat'
@@ -21,6 +21,8 @@ export default function Chat() {
   const { user } = useAuthStore()
   const [input, setInput] = useState(''); const [positionId, setPositionId] = useState('')
   const [uploading, setUploading] = useState(false); const [webSearch] = useState(true)
+  const [recording, setRecording] = useState(false); const [recordSec, setRecordSec] = useState(0)
+  const mediaRecRef = useRef<MediaRecorder | null>(null); const audioChunks = useRef<Blob[]>([]); const recTimer = useRef<number>(0)
   const [attachments, setAttachments] = useState<Array<{ file_id: string; filename: string }>>([])
   const [quickCmds, setQuickCmds] = useState<string[]>([])
   const [posInfo, setPosInfo] = useState<any>(null); const [searchQ, setSearchQ] = useState('')
@@ -75,6 +77,34 @@ export default function Chat() {
     client.get('/knowledge/stats').then((d: any) => setHasKB((d.count || d.total_chunks || 0) > 0)).catch(() => {})
     getQuickCommands(positionId).then(c => setQuickCmds((c || []).map((x: any) => x.text))).catch(() => {})
   }, [positionId])
+
+  const startRec = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const rec = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4' })
+      audioChunks.current = []
+      rec.ondataavailable = e => { if (e.data.size > 0) audioChunks.current.push(e.data) }
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        clearInterval(recTimer.current)
+        const blob = new Blob(audioChunks.current, { type: rec.mimeType })
+        setRecording(false); setRecordSec(0)
+        if (blob.size < 1000) { toast.error('录音太短'); return }
+        toast('识别中...')
+        try {
+          const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' })
+          const r = await uploadChatFile(file)
+          const text = (r as any)?.extracted_text || ''
+          if (text && !text.startsWith('[语音识别不可用')) { setInput(prev => (prev ? prev + ' ' : '') + text); toast.success('语音识别完成') }
+          else { toast.error(text || '识别失败') }
+        } catch { toast.error('语音上传失败') }
+      }
+      mediaRecRef.current = rec; rec.start()
+      setRecording(true); setRecordSec(0)
+      recTimer.current = window.setInterval(() => setRecordSec(s => s + 1), 1000)
+    } catch { toast.error('无法访问麦克风') }
+  }
+  const stopRec = () => { if (mediaRecRef.current?.state === 'recording') mediaRecRef.current.stop() }
 
   const adjustH = useCallback(() => { const el = taRef.current; if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' } }, [])
   const handleUpload = async (files: FileList | null) => {
@@ -246,8 +276,15 @@ export default function Chat() {
                 placeholder="输入消息，/ 快捷命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
                 className="w-full px-4 pt-3 pb-2 text-sm outline-none resize-none bg-transparent" style={{ color: 'var(--text)', maxHeight: 200 }} />
               <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
-                <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
+                <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.ogg,.webm,.flac" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
                 <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="上传附件"><Paperclip size={16} /></button>
+                <button onMouseDown={startRec} onMouseUp={stopRec} onMouseLeave={() => recording && stopRec()}
+                  onTouchStart={startRec} onTouchEnd={stopRec}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ color: recording ? '#ef4444' : 'var(--text-muted)', background: recording ? '#ef444415' : 'transparent' }}
+                  title="按住说话">
+                  {recording ? <span className="flex items-center gap-1 text-xs font-medium"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />{recordSec}s</span> : <Mic size={16} />}
+                </button>
                 <div className="flex-1" />
                 <VoiceInputButton onTranscript={t => { setInput(p => p + t); setTimeout(adjustH, 50) }} />
                 {store.streaming
