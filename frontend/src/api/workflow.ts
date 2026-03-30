@@ -31,6 +31,10 @@ export async function getWorkflowStats(days: number = 7) {
   return client.get(`/workflows/stats?days=${days}`) as Promise<any>
 }
 
+export async function clearAllWorkflows() {
+  return client.post('/workflows/clear') as Promise<any>
+}
+
 export interface NodeTypeDef {
   name: string; displayName: string; description: string; group: string; icon: string
   inputs: number; outputs: number; outputNames: string[]; parameters: NodeParamDef[]

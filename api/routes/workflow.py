@@ -135,6 +135,16 @@ async def handle_workflow_create(request: web.Request) -> web.Response:
     return _json({"id": wf.id, "status": "created"})
 
 
+async def handle_workflow_clear(request: web.Request) -> web.Response:
+    """POST /api/v1/workflows/clear — 清空所有工作流"""
+    store = await _get_wf_store(request)
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    role = user.get("role", "") if isinstance(user, dict) else ""
+    count = await store.clear_all_workflows(user_id="" if role == "admin" else uid)
+    return _json({"status": "cleared", "deleted": count})
+
+
 async def handle_workflow_delete(request: web.Request) -> web.Response:
     """DELETE /api/v1/workflows/{workflow_id}"""
     store = await _get_wf_store(request)
@@ -379,6 +389,7 @@ def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workflows", handle_workflow_list)
     app.router.add_get("/api/v1/workflows/{workflow_id}", handle_workflow_get)
     app.router.add_post("/api/v1/workflows", handle_workflow_create)
+    app.router.add_post("/api/v1/workflows/clear", handle_workflow_clear)
     app.router.add_put("/api/v1/workflows/{workflow_id}", handle_workflow_create)  # upsert
     app.router.add_delete("/api/v1/workflows/{workflow_id}", handle_workflow_delete)
     app.router.add_post("/api/v1/workflows/{workflow_id}/execute", handle_workflow_execute)

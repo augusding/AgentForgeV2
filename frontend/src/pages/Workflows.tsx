@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, Play, Trash2, RefreshCw, Plus, Edit3, BarChart3, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow, getWorkflowStats } from '../api/workflow'
+import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow, getWorkflowStats, clearAllWorkflows } from '../api/workflow'
 import toast from 'react-hot-toast'
 
 const TPLS = [
@@ -130,6 +130,10 @@ export default function Workflows() {
   }
   const handleExec = async (id: string) => { setExecuting(id); try { await executeWorkflow(id); toast.success('执行完成') } catch { toast.error('执行失败') } finally { setExecuting(null) } }
   const handleDel = async (id: string, name: string) => { if (!confirm(`删除「${name}」？`)) return; try { await deleteWorkflow(id); toast.success('已删除'); load() } catch {} }
+  const handleClearAll = async () => {
+    if (!confirm('确定清空所有工作流？此操作不可恢复，执行记录也会一并删除。')) return
+    try { const r: any = await clearAllWorkflows(); toast.success(`已清空 ${r.deleted || 0} 个工作流`); setStats(null); load() } catch { toast.error('清空失败') }
+  }
   const importTpl = async (tpl: typeof TPLS[0]) => { try { const r = await createWorkflow({ name: tpl.name, description: tpl.desc, nodes: tpl.nodes, edges: tpl.edges })
     if (r.id) { toast.success('模板导入成功'); navigate(`/workflows/${r.id}`) } } catch { toast.error('导入失败') } }
 
@@ -140,6 +144,8 @@ export default function Workflows() {
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-lg font-bold">工作流</h1><p className="text-xs" style={{ color: 'var(--text-muted)' }}>自动化任务编排</p></div>
         <div className="flex gap-2">
+          {wfs.length > 0 && <button onClick={handleClearAll} className="text-xs px-3 py-1.5 rounded-lg hover:bg-[#ef444410]"
+            style={{ color: '#ef4444', border: '1px solid #ef444430' }}>清空工作流</button>}
           <button onClick={load} className="p-2 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><RefreshCw size={16} /></button>
           <button onClick={handleCreate} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm text-white" style={{ background: 'var(--accent)' }}><Plus size={14} /> 新建</button>
         </div>

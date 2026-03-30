@@ -129,6 +129,31 @@ class WorkflowStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
+    async def clear_all_workflows(self, user_id: str = "") -> int:
+        """清空所有工作流及其执行记录。返回删除的工作流数。"""
+        await self.ensure_tables()
+        async with self._db() as db:
+            if user_id:
+                cur = await db.execute(
+                    "SELECT COUNT(*) FROM workflows WHERE created_by = ? OR created_by = '' OR created_by IS NULL",
+                    (user_id,))
+            else:
+                cur = await db.execute("SELECT COUNT(*) FROM workflows")
+            count = (await cur.fetchone())[0]
+            if user_id:
+                await db.execute(
+                    "DELETE FROM workflow_executions WHERE workflow_id IN "
+                    "(SELECT id FROM workflows WHERE created_by = ? OR created_by = '' OR created_by IS NULL)",
+                    (user_id,))
+                await db.execute(
+                    "DELETE FROM workflows WHERE created_by = ? OR created_by = '' OR created_by IS NULL",
+                    (user_id,))
+            else:
+                await db.execute("DELETE FROM workflow_executions")
+                await db.execute("DELETE FROM workflows")
+            await db.commit()
+            return count
+
     async def delete_workflow(self, workflow_id: str, user_id: str = "") -> int:
         """删除工作流。返回受影响行数（0=无权或不存在）。"""
         await self.ensure_tables()
