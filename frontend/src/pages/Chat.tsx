@@ -122,7 +122,7 @@ export default function Chat() {
         } else if (_AUD.includes(ext)) {
           toast('识别语音中...')
           try {
-            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' })
+            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' }, { timeout: 300000 })
             if (sr.success && sr.text) {
               setInput(prev => (prev ? prev + '\n' : '') + `[语音转录 — ${r.filename}]\n${sr.text}`)
               toast.success('语音识别完成')

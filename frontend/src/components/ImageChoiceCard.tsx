@@ -17,7 +17,7 @@ export default function ImageChoiceCard({ fileId, filename, fileSize, onResult, 
   const process = async () => {
     setProcessing(true)
     try {
-      const res: any = await client.post('/media/process', { file_id: fileId, mode: 'vision' })
+      const res: any = await client.post('/media/process', { file_id: fileId, mode: 'vision' }, { timeout: 120000 })
       if (res.success && res.text) {
         onResult(res.text, res.source || 'vision')
         toast.success('AI 识别完成')
