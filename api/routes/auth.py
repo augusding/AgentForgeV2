@@ -189,6 +189,16 @@ async def handle_me(request: web.Request) -> web.Response:
         "org_role": user.get("org_role", ""), "org_name": "",
         "authenticated": True,
     }
+    # 从 work_item_store 获取用户当前岗位分配
+    try:
+        engine = request.app.get("engine")
+        if engine and engine.work_item_store:
+            pos_id = await engine.work_item_store.get_assignment(
+                user.get("sub", ""), user.get("org_id", ""))
+            if pos_id:
+                result["active_position"] = pos_id
+    except Exception:
+        pass
     try:
         from memory.org_store import OrgStore
         org_store = OrgStore(str(request.app["engine"].root_dir / "data" / "orgs.db"))

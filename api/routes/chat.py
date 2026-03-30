@@ -31,14 +31,23 @@ def _get_user_field(request, body, field, default=""):
     return body.get(field) or (user.get(key, default) if isinstance(user, dict) else default)
 
 
-async def _resolve_position_id(engine, body) -> str:
-    """从 body 获取 position_id，如缺失则从 session 恢复。"""
+async def _resolve_position_id(engine, body, request=None) -> str:
+    """三级兜底：body → session → 用户岗位分配。"""
     position_id = body.get("position_id", "")
+    if position_id:
+        return position_id
     session_id = body.get("session_id", "")
-    if not position_id and session_id and engine.session_store:
+    if session_id and engine.session_store:
         session = await engine.session_store.get_session(session_id)
-        if session:
-            position_id = session.get("position_id", "")
+        if session and session.get("position_id"):
+            return session["position_id"]
+    if engine.work_item_store and request:
+        user = request.get("user") or {}
+        if isinstance(user, dict) and user.get("sub"):
+            try:
+                return await engine.work_item_store.get_assignment(user["sub"], user.get("org_id", ""))
+            except Exception:
+                pass
     return position_id
 
 
@@ -89,7 +98,7 @@ async def handle_chat(request: web.Request) -> web.Response:
         return _json({"error": "content 不能为空"}, status=400)
 
     attachments = await _resolve_attachments(engine, request, body)
-    position_id = await _resolve_position_id(engine, body)
+    position_id = await _resolve_position_id(engine, body, request)
 
     msg = UnifiedMessage(
         content=content,
@@ -116,7 +125,7 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
         await resp.prepare(request)
         return resp
 
-    position_id = await _resolve_position_id(engine, body)
+    position_id = await _resolve_position_id(engine, body, request)
 
     # ── 附件处理 ──
     attachments = await _resolve_attachments(engine, request, body)

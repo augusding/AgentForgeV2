@@ -40,21 +40,35 @@ export default function Chat() {
 
   useEffect(() => { store.loadSessions() }, [])
 
-  // URL ?prompt=xxx 自动发送（ref 防 StrictMode 双触发）
+  // URL ?prompt=xxx 自动发送（等 positionId 就绪）
   const promptSentRef = useRef(false)
+  const pendingPromptRef = useRef('')
   useEffect(() => {
     const p = searchParams.get('prompt')
     if (p && !promptSentRef.current) {
       promptSentRef.current = true
       setSearchParams({}, { replace: true })
-      setTimeout(() => send(p), 600)
+      pendingPromptRef.current = p
     }
   }, [])
+  useEffect(() => {
+    if (positionId && pendingPromptRef.current) {
+      const p = pendingPromptRef.current
+      pendingPromptRef.current = ''
+      setTimeout(() => send(p), 100)
+    }
+  }, [positionId])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [store.messages])
   useEffect(() => {
-    if (user?.active_position) setPositionId(user.active_position)
-    else client.get('/workstation/home').then((d: any) => { if (d.position?.position_id) setPositionId(d.position.position_id); setPosInfo(d.position) }).catch(() => {})
-  }, [user?.active_position])
+    if (user?.active_position) {
+      setPositionId(user.active_position)
+    } else if (user && !user.active_position) {
+      client.get('/workstation/home').then((d: any) => {
+        if (d.position?.position_id) setPositionId(d.position.position_id)
+        setPosInfo(d.position)
+      }).catch(() => {})
+    }
+  }, [user?.active_position, user?.id])
   useEffect(() => {
     if (!positionId) return
     client.get(`/positions/${positionId}`).then((d: any) => { setPosInfo(d); setPersonality(d.role || d.description || '') }).catch(() => {})
