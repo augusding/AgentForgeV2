@@ -238,7 +238,18 @@ async def record_suggestion_ignore(req: web.Request) -> web.Response:
     return _j({"status": "recorded"})
 
 
+async def list_tasks(req: web.Request) -> web.Response:
+    """GET /api/v1/work-items/tasks — 列出当前用户任务"""
+    uid, oid, _ = _user(req)
+    pid = req.query.get("position_id", "")
+    status = req.query.get("status", "")
+    store = _store(req)
+    items = await store.get_priorities(uid, oid, pid, status=status, limit=50)
+    return _j({"priorities": items})
+
+
 def register(app: web.Application) -> None:
+    app.router.add_get("/api/v1/work-items/tasks", list_tasks)
     app.router.add_post("/api/v1/work-items/tasks", create_task)
     app.router.add_patch("/api/v1/work-items/tasks/{id}", update_task)
     app.router.add_delete("/api/v1/work-items/tasks/{id}", delete_task)

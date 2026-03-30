@@ -1,6 +1,9 @@
 import client from './client'
 
 // ── Tasks ──
+export const listTasks = (status?: string) =>
+  client.get(`/work-items/tasks${status ? `?status=${status}` : ''}`) as Promise<{ priorities: any[] }>
+
 export const createTask = (data: { title: string; priority?: string; due_date?: string; description?: string }) =>
   client.post('/work-items/tasks', data) as Promise<{ status: string; id: string }>
 

@@ -170,7 +170,7 @@ export default function Chat() {
             <div className="flex flex-col items-center justify-center h-full max-w-[650px] mx-auto px-4">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: `${clr}15` }}>
                 <Sparkles size={26} style={{ color: clr }} /></div>
-              <h2 className="text-xl font-bold mb-1">{posInfo?.display_name || 'AI'} 助手</h2>
+              <h2 className="text-xl font-bold mb-1">{posInfo?.display_name || 'AI 助手'}</h2>
               {personality && <p className="text-xs mb-4 max-w-md text-center" style={{ color: clr }}>{personality.slice(0, 80)}</p>}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full mb-5">
                 {[{ icon: MessageSquare, t: '智能对话', d: '专业问答', ok: true },

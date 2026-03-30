@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { CheckCircle, Circle, Clock, Users, Download,
          BarChart3, Search, ChevronDown, ChevronRight, Target } from 'lucide-react'
 import client from '../api/client'
-import { createTask, createSchedule, createFollowup, updateTask as apiUpdateTask } from '../api/workitems'
+import { createTask, createSchedule, createFollowup, updateTask as apiUpdateTask, listTasks } from '../api/workitems'
 import type { SuggestionData } from '../stores/useChatStore'
 import toast from 'react-hot-toast'
 
@@ -83,6 +83,17 @@ const cs = { background: 'var(--bg)', border: '1px solid var(--border)' }
 function TaskCard({ data }: { data: any }) {
   const [items, setItems] = useState<any[]>(data.priorities || data.work_items || [])
   const created = data.status === 'created' || data.status === 'updated'
+
+  // 挂载时从后端拉最新状态，覆盖历史快照
+  useEffect(() => {
+    const ids = (data.priorities || data.work_items || []).map((p: any) => p.id).filter(Boolean)
+    if (!ids.length || created) return
+    listTasks().then(res => {
+      const fresh = res.priorities || []
+      const freshMap = new Map(fresh.map((p: any) => [p.id, p]))
+      setItems(prev => prev.map(p => freshMap.get(p.id) ? { ...p, status: freshMap.get(p.id)!.status } : p))
+    }).catch(() => {})
+  }, [])
 
   const toggle = async (id: string, cur: string) => {
     const ns = cur === 'done' ? 'active' : 'done'
