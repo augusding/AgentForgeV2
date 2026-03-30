@@ -63,8 +63,11 @@ async def create_task(req: web.Request) -> web.Response:
     uid, oid, _ = _user(req)
     b = await req.json()
     pid = await _get_position_id(req, b)
-    if not b.get("title", "").strip():
+    title = b.get("title", "").strip()
+    if not title:
         return _j({"error": "title 必填"}, 400)
+    if len(title) > 200:
+        return _j({"error": "标题不能超过 200 字"}, 400)
     task_id = await store.add_priority(
         uid, oid, pid,
         title=b["title"].strip(),

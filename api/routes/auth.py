@@ -79,7 +79,10 @@ async def _get_user_db(request) -> aiosqlite.Connection:
 
 async def handle_login(request: web.Request) -> web.Response:
     """POST /api/v1/auth/login  Body: {"username": "...", "password": "..."}"""
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return _json({"error": "请求体不是合法 JSON"}, 400)
     username = body.get("username", "").strip()
     password = body.get("password", "")
 

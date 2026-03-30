@@ -9,7 +9,41 @@ from aiohttp import web
 
 logger = logging.getLogger(__name__)
 
-_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+_MAX_FILE_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "20")) * 1024 * 1024
+
+_ALLOWED_EXTENSIONS = {
+    ".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".json",
+    ".xlsx", ".xls", ".pptx", ".ppt",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".zip",
+}
+_MAX_FILENAME_LENGTH = 255
+_MAGIC_SIGNATURES: dict[str, list[bytes]] = {
+    ".pdf": [b"%PDF"],
+    ".docx": [b"PK\x03\x04"],
+    ".xlsx": [b"PK\x03\x04"],
+    ".pptx": [b"PK\x03\x04"],
+    ".zip": [b"PK\x03\x04"],
+    ".png": [b"\x89PNG"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".gif": [b"GIF87a", b"GIF89a"],
+}
+
+
+def _check_file_type(filename: str, file_path) -> str | None:
+    """检查文件类型安全性。返回错误信息或 None。"""
+    from pathlib import Path
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        return f"不支持的文件类型: {ext}"
+    if len(filename) > _MAX_FILENAME_LENGTH:
+        return f"文件名过长（最大 {_MAX_FILENAME_LENGTH} 字符）"
+    if ext in _MAGIC_SIGNATURES and Path(file_path).exists():
+        with open(file_path, "rb") as f:
+            header = f.read(8)
+        if not any(header.startswith(sig) for sig in _MAGIC_SIGNATURES[ext]):
+            return f"文件内容与后缀 {ext} 不匹配（可能被篡改）"
+    return None
 
 
 def _json(data, status=200):
@@ -61,6 +95,26 @@ async def handle_upload(request: web.Request) -> web.Response:
 
     if not file_field or not file_path or not file_path.exists():
         return _json({"error": "未收到文件"}, status=400)
+
+    # 文件类型安全检查
+    type_error = _check_file_type(file_field.filename or "", file_path)
+    if type_error:
+        try:
+            os.unlink(file_path)
+        except Exception:
+            pass
+        return _json({"error": type_error}, status=400)
+
+    # 单用户存储限额检查
+    max_storage = int(os.environ.get("MAX_USER_STORAGE_MB", "500")) * 1024 * 1024
+    if upload_dir.exists():
+        current_size = sum(f.stat().st_size for f in upload_dir.rglob("*") if f.is_file())
+        if current_size > max_storage:
+            try:
+                os.unlink(file_path)
+            except Exception:
+                pass
+            return _json({"error": f"存储空间已满（已用 {current_size // 1024 // 1024}MB / {max_storage // 1024 // 1024}MB）"}, status=413)
 
     from core.file_parser import extract_text
     extracted = await extract_text(str(file_path))
