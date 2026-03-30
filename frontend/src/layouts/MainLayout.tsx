@@ -9,7 +9,6 @@ const NAV = [
   { path: '/knowledge', label: '知识库', icon: BookOpen },
   { path: '/workflows', label: '工作流', icon: Zap },
   { path: '/connectors', label: '数据源', icon: Database },
-  { path: '/settings', label: '设置', icon: Settings },
 ]
 
 export default function MainLayout() {
@@ -40,9 +39,17 @@ export default function MainLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+        <div className="p-3 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
           <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{user?.username || '用户'}</div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-xs hover:text-[var(--error)] transition-colors" style={{ color: 'var(--text-muted)' }}>
+          <NavLink to="/settings"
+            className={({ isActive }) =>
+              `flex items-center gap-2 text-xs py-1 rounded transition-colors ${
+                isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`
+            }>
+            <Settings size={14} /> 设置
+          </NavLink>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs py-1 hover:text-[var(--error)] transition-colors" style={{ color: 'var(--text-muted)' }}>
             <LogOut size={14} /> 退出登录
           </button>
         </div>
