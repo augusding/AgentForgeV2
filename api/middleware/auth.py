@@ -24,7 +24,7 @@ from aiohttp import web
 logger = logging.getLogger(__name__)
 
 _JWT_ALGORITHM = "HS256"
-_JWT_EXPIRY_DAYS = 7
+_JWT_EXPIRY_DAYS = int(os.environ.get("JWT_EXPIRY_DAYS", "1"))
 
 # 不需要认证的路径
 _PUBLIC_PATHS = {
@@ -89,6 +89,32 @@ def decode_jwt(secret: str, token: str) -> dict | None:
         return None
 
 
+def _extract_token(request: web.Request) -> str:
+    """从请求中提取 token。"""
+    token = request.cookies.get("agentforge_token", "")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    return token
+
+
+def refresh_jwt_if_needed(secret: str, token: str, refresh_hours: int = 4) -> str | None:
+    """如果 token 将在 refresh_hours 内过期，返回新 token，否则返回 None。"""
+    payload = decode_jwt(secret, token)
+    if not payload:
+        return None
+    exp = payload.get("exp", 0)
+    if isinstance(exp, datetime):
+        exp = exp.timestamp()
+    remaining = exp - datetime.now(timezone.utc).timestamp()
+    if 0 < remaining < refresh_hours * 3600:
+        return create_jwt(secret, payload["sub"], payload.get("username", ""),
+                          payload.get("role", "user"), payload.get("org_id", ""),
+                          payload.get("org_role", ""))
+    return None
+
+
 def validate_username(username: str) -> str | None:
     """验证用户名，返回错误信息或 None。"""
     if len(username) < 3 or len(username) > 32:
@@ -136,8 +162,13 @@ def make_auth_middleware(jwt_secret: str, api_key: str = ""):
                 if request.path.startswith(prefix):
                     return web.json_response({"error": "未认证"}, status=401)
 
-        # 其他路径：软认证，让路由自己处理 user=None
-        return await handler(request)
+        # 自动刷新即将过期的 token
+        resp = await handler(request)
+        if isinstance(auth_result, dict):
+            new_token = refresh_jwt_if_needed(jwt_secret, _extract_token(request), refresh_hours=4)
+            if new_token:
+                resp.headers["X-Refreshed-Token"] = new_token
+        return resp
 
     return auth_middleware
 
