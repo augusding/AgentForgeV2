@@ -59,18 +59,21 @@ class WorkflowStore(BaseStore):
             )
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_org ON workflows(org_id)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_creator ON workflows(created_by)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_wf ON workflow_executions(workflow_id)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_user ON workflow_executions(user_id, org_id)")
         for col, dflt in [("timeout_seconds", "300")]:
             try: await db.execute(f"ALTER TABLE workflows ADD COLUMN {col} INTEGER DEFAULT {dflt}")
             except Exception: pass
-        # 自动迁移：给旧表加新字段
+        # 自动迁移：给旧表加新字段（必须在索引创建之前）
         for col, tbl in [("created_by", "workflows"), ("user_id", "workflow_executions"), ("org_id", "workflow_executions")]:
             try:
                 await db.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT DEFAULT ''")
             except Exception:
                 pass
+        # 新字段的索引（迁移后创建）
+        try: await db.execute("CREATE INDEX IF NOT EXISTS idx_wf_creator ON workflows(created_by)")
+        except Exception: pass
+        try: await db.execute("CREATE INDEX IF NOT EXISTS idx_wfexec_user ON workflow_executions(user_id, org_id)")
+        except Exception: pass
 
     # ── 工作流定义 ────────────────────────────────────────
 
