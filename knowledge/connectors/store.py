@@ -77,6 +77,7 @@ class ConnectorStore:
             await db.executescript("""
                 CREATE TABLE IF NOT EXISTS connectors (
                     id TEXT PRIMARY KEY, org_id TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL DEFAULT '',
                     name TEXT NOT NULL, connector_type TEXT NOT NULL,
                     config TEXT NOT NULL DEFAULT '{}', scope TEXT DEFAULT '',
                     enabled INTEGER NOT NULL DEFAULT 1,
@@ -101,17 +102,22 @@ class ConnectorStore:
                     created_at REAL NOT NULL, updated_at REAL NOT NULL
                 );
             """)
+            # 自动迁移
+            try:
+                await db.execute("ALTER TABLE connectors ADD COLUMN created_by TEXT DEFAULT ''")
+            except Exception:
+                pass
             await db.commit()
 
     async def create(self, org_id: str, name: str, connector_type: str,
                      config: dict, sync_interval_minutes: int = 60,
-                     actor: str = "user") -> dict:
+                     actor: str = "user", created_by: str = "") -> dict:
         cid, now = uuid4().hex, time.time()
         async with aiosqlite.connect(self._db) as db:
             await db.execute(
-                "INSERT INTO connectors (id,org_id,name,connector_type,config,"
-                "sync_interval_minutes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
-                (cid, org_id, name, connector_type,
+                "INSERT INTO connectors (id,org_id,created_by,name,connector_type,config,"
+                "sync_interval_minutes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (cid, org_id, created_by, name, connector_type,
                  json.dumps(self._enc_cfg(config), ensure_ascii=False),
                  sync_interval_minutes, now, now))
             await db.execute(
@@ -129,13 +135,18 @@ class ConnectorStore:
                 row = await c.fetchone()
         return self._row(row) if row else None
 
-    async def list_by_org(self, org_id: str) -> list[dict]:
+    async def list_by_org(self, org_id: str, user_id: str = "") -> list[dict]:
         async with aiosqlite.connect(self._db) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute(
-                "SELECT * FROM connectors WHERE org_id=? ORDER BY created_at DESC", (org_id,)
-            ) as c:
-                rows = await c.fetchall()
+            if user_id:
+                sql = "SELECT * FROM connectors WHERE (created_by=? OR created_by='') AND (org_id=? OR org_id='') ORDER BY created_at DESC"
+                async with db.execute(sql, (user_id, org_id)) as c:
+                    rows = await c.fetchall()
+            else:
+                async with db.execute(
+                    "SELECT * FROM connectors WHERE org_id=? ORDER BY created_at DESC", (org_id,)
+                ) as c:
+                    rows = await c.fetchall()
         return [self._row(r) for r in rows]
 
     async def update(self, connector_id: str, actor: str = "user", **kwargs) -> dict | None:
@@ -158,14 +169,17 @@ class ConnectorStore:
             await db.commit()
         return await self.get(connector_id)
 
-    async def delete(self, connector_id: str, actor: str = "user") -> bool:
+    async def delete(self, connector_id: str, actor: str = "user", user_id: str = "") -> bool:
         async with aiosqlite.connect(self._db) as db:
             async with db.execute("SELECT org_id,name FROM connectors WHERE id=?",
                                   (connector_id,)) as c:
                 row = await c.fetchone()
             if not row:
                 return False
-            cur = await db.execute("DELETE FROM connectors WHERE id=?", (connector_id,))
+            if user_id:
+                cur = await db.execute("DELETE FROM connectors WHERE id=? AND (created_by=? OR created_by='')", (connector_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM connectors WHERE id=?", (connector_id,))
             await db.execute(
                 "INSERT INTO connector_audit_log "
                 "(id,connector_id,org_id,action,actor,detail,created_at) VALUES (?,?,?,'delete',?,?,?)",

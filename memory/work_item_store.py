@@ -116,21 +116,27 @@ class WorkItemStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
-    async def update_priority(self, priority_id: str, **kwargs) -> None:
+    async def update_priority(self, priority_id: str, user_id: str = "", **kwargs) -> int:
         allowed = {"title", "description", "priority", "status", "due_date"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
-        if not updates: return
+        if not updates: return 0
         updates["updated_at"] = time.time()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
+        where = "id = ?" + (" AND user_id = ?" if user_id else "")
+        params = list(updates.values()) + [priority_id] + ([user_id] if user_id else [])
         async with self._db() as db:
-            await db.execute(f"UPDATE priorities SET {set_clause} WHERE id = ?",
-                             list(updates.values()) + [priority_id])
+            cur = await db.execute(f"UPDATE priorities SET {set_clause} WHERE {where}", params)
             await db.commit()
+            return cur.rowcount
 
-    async def delete_priority(self, priority_id: str) -> None:
+    async def delete_priority(self, priority_id: str, user_id: str = "") -> int:
         async with self._db() as db:
-            await db.execute("DELETE FROM priorities WHERE id = ?", (priority_id,))
+            if user_id:
+                cur = await db.execute("DELETE FROM priorities WHERE id = ? AND user_id = ?", (priority_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM priorities WHERE id = ?", (priority_id,))
             await db.commit()
+            return cur.rowcount
 
     # ── Schedules ─────────────────────────────────────────
 
@@ -159,21 +165,26 @@ class WorkItemStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
-    async def update_schedule(self, schedule_id: str, **kwargs) -> None:
+    async def update_schedule(self, schedule_id: str, user_id: str = "", **kwargs) -> int:
         allowed = {"title", "description", "scheduled_time", "duration_minutes", "recurrence", "status"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
-        if not updates:
-            return
+        if not updates: return 0
         set_clause = ", ".join(f"{k} = ?" for k in updates)
+        where = "id = ?" + (" AND user_id = ?" if user_id else "")
+        params = list(updates.values()) + [schedule_id] + ([user_id] if user_id else [])
         async with self._db() as db:
-            await db.execute(f"UPDATE schedules SET {set_clause} WHERE id = ?",
-                             list(updates.values()) + [schedule_id])
+            cur = await db.execute(f"UPDATE schedules SET {set_clause} WHERE {where}", params)
             await db.commit()
+            return cur.rowcount
 
-    async def delete_schedule(self, schedule_id: str) -> None:
+    async def delete_schedule(self, schedule_id: str, user_id: str = "") -> int:
         async with self._db() as db:
-            await db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+            if user_id:
+                cur = await db.execute("DELETE FROM schedules WHERE id = ? AND user_id = ?", (schedule_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
             await db.commit()
+            return cur.rowcount
 
     # ── Followups ─────────────────────────────────────────
 
@@ -203,21 +214,27 @@ class WorkItemStore(BaseStore):
             cursor = await db.execute(query, params)
             return [dict(r) for r in await cursor.fetchall()]
 
-    async def update_followup(self, followup_id: str, **kwargs) -> None:
+    async def update_followup(self, followup_id: str, user_id: str = "", **kwargs) -> int:
         allowed = {"title", "description", "target", "due_date", "status"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
-        if not updates: return
+        if not updates: return 0
         updates["updated_at"] = time.time()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
+        where = "id = ?" + (" AND user_id = ?" if user_id else "")
+        params = list(updates.values()) + [followup_id] + ([user_id] if user_id else [])
         async with self._db() as db:
-            await db.execute(f"UPDATE followups SET {set_clause} WHERE id = ?",
-                             list(updates.values()) + [followup_id])
+            cur = await db.execute(f"UPDATE followups SET {set_clause} WHERE {where}", params)
             await db.commit()
+            return cur.rowcount
 
-    async def delete_followup(self, followup_id: str) -> None:
+    async def delete_followup(self, followup_id: str, user_id: str = "") -> int:
         async with self._db() as db:
-            await db.execute("DELETE FROM followups WHERE id = ?", (followup_id,))
+            if user_id:
+                cur = await db.execute("DELETE FROM followups WHERE id = ? AND user_id = ?", (followup_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM followups WHERE id = ?", (followup_id,))
             await db.commit()
+            return cur.rowcount
 
     # ── Work Items ────────────────────────────────────────
 
@@ -255,22 +272,28 @@ class WorkItemStore(BaseStore):
                 result.append(d)
             return result
 
-    async def update_work_item(self, item_id: str, **kwargs) -> None:
+    async def update_work_item(self, item_id: str, user_id: str = "", **kwargs) -> int:
         allowed = {"title", "description", "item_type", "status", "priority",
                    "assignee", "due_date", "tags"}
         updates = {}
         for k, v in kwargs.items():
             if k in allowed:
                 updates[k] = json.dumps(v) if k == "tags" else v
-        if not updates: return
+        if not updates: return 0
         updates["updated_at"] = time.time()
         set_clause = ", ".join(f"{k} = ?" for k in updates)
+        where = "id = ?" + (" AND user_id = ?" if user_id else "")
+        params = list(updates.values()) + [item_id] + ([user_id] if user_id else [])
         async with self._db() as db:
-            await db.execute(f"UPDATE work_items SET {set_clause} WHERE id = ?",
-                             list(updates.values()) + [item_id])
+            cur = await db.execute(f"UPDATE work_items SET {set_clause} WHERE {where}", params)
             await db.commit()
+            return cur.rowcount
 
-    async def delete_work_item(self, item_id: str) -> None:
+    async def delete_work_item(self, item_id: str, user_id: str = "") -> int:
         async with self._db() as db:
-            await db.execute("DELETE FROM work_items WHERE id = ?", (item_id,))
+            if user_id:
+                cur = await db.execute("DELETE FROM work_items WHERE id = ? AND user_id = ?", (item_id, user_id))
+            else:
+                cur = await db.execute("DELETE FROM work_items WHERE id = ?", (item_id,))
             await db.commit()
+            return cur.rowcount

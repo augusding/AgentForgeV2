@@ -77,17 +77,23 @@ async def create_task(req: web.Request) -> web.Response:
 
 async def update_task(req: web.Request) -> web.Response:
     store = _store(req)
+    uid, _, _ = _user(req)
     tid = req.match_info["id"]
     b = await req.json()
     kw = {k: v for k, v in b.items()
           if k in ("title", "description", "priority", "status", "due_date") and v is not None}
-    await store.update_priority(tid, **kw)
+    rows = await store.update_priority(tid, user_id=uid, **kw)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "updated", "id": tid})
 
 
 async def delete_task(req: web.Request) -> web.Response:
     store = _store(req)
-    await store.delete_priority(req.match_info["id"])
+    uid, _, _ = _user(req)
+    rows = await store.delete_priority(req.match_info["id"], user_id=uid)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "deleted"})
 
 
@@ -114,17 +120,23 @@ async def create_schedule(req: web.Request) -> web.Response:
 
 async def update_schedule(req: web.Request) -> web.Response:
     store = _store(req)
+    uid, _, _ = _user(req)
     sid = req.match_info["id"]
     b = await req.json()
     kw = {k: v for k, v in b.items()
           if k in ("title", "description", "scheduled_time", "duration_minutes", "status") and v is not None}
-    await store.update_schedule(sid, **kw)
+    rows = await store.update_schedule(sid, user_id=uid, **kw)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "updated", "id": sid})
 
 
 async def delete_schedule(req: web.Request) -> web.Response:
     store = _store(req)
-    await store.delete_schedule(req.match_info["id"])
+    uid, _, _ = _user(req)
+    rows = await store.delete_schedule(req.match_info["id"], user_id=uid)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "deleted"})
 
 
@@ -149,17 +161,23 @@ async def create_followup(req: web.Request) -> web.Response:
 
 async def update_followup(req: web.Request) -> web.Response:
     store = _store(req)
+    uid, _, _ = _user(req)
     fid = req.match_info["id"]
     b = await req.json()
     kw = {k: v for k, v in b.items()
           if k in ("title", "description", "target", "due_date", "status") and v is not None}
-    await store.update_followup(fid, **kw)
+    rows = await store.update_followup(fid, user_id=uid, **kw)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "updated", "id": fid})
 
 
 async def delete_followup(req: web.Request) -> web.Response:
     store = _store(req)
-    await store.delete_followup(req.match_info["id"])
+    uid, _, _ = _user(req)
+    rows = await store.delete_followup(req.match_info["id"], user_id=uid)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "deleted"})
 
 
@@ -185,17 +203,23 @@ async def create_item(req: web.Request) -> web.Response:
 
 async def update_item(req: web.Request) -> web.Response:
     store = _store(req)
+    uid, _, _ = _user(req)
     wid = req.match_info["id"]
     b = await req.json()
     kw = {k: v for k, v in b.items()
           if k in ("title", "description", "status", "priority", "due_date", "item_type") and v is not None}
-    await store.update_work_item(wid, **kw)
+    rows = await store.update_work_item(wid, user_id=uid, **kw)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "updated", "id": wid})
 
 
 async def delete_item(req: web.Request) -> web.Response:
     store = _store(req)
-    await store.delete_work_item(req.match_info["id"])
+    uid, _, _ = _user(req)
+    rows = await store.delete_work_item(req.match_info["id"], user_id=uid)
+    if rows == 0:
+        return _j({"error": "不存在或无权操作"}, 403)
     return _j({"status": "deleted"})
 
 

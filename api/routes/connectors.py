@@ -29,26 +29,27 @@ def _j(data, s: int = 200) -> web.Response:
     return web.Response(text=json.dumps(data, ensure_ascii=False, default=str),
                         content_type="application/json", status=s)
 
-def _org_actor(req) -> tuple[str, str]:
+def _org_actor(req) -> tuple[str, str, str]:
+    """返回 (org_id, actor/user_id, role)"""
     u = req.get("user") or {}
     if isinstance(u, dict):
-        return u.get("org_id", "_default"), u.get("sub", "user")
-    return "_default", "user"
+        return u.get("org_id", "_default"), u.get("sub", "user"), u.get("role", "user")
+    return "_default", "user", "user"
 
 def _mask(cfg: dict) -> dict:
     return {k: "***" if any(s in k.lower() for s in _SENSITIVE) else v for k, v in cfg.items()}
 
 
 async def handle_list(req: web.Request) -> web.Response:
-    org, _ = _org_actor(req)
+    org, uid, _ = _org_actor(req)
     store = req.app["engine"].connector_store
     if not store: return _j({"connectors": []})
-    items = await store.list_by_org(org)
+    items = await store.list_by_org(org, user_id=uid)
     for i in items: i["config"] = _mask(i.get("config", {}))
     return _j({"connectors": items})
 
 async def handle_create(req: web.Request) -> web.Response:
-    org, actor = _org_actor(req)
+    org, actor, _ = _org_actor(req)
     store = req.app["engine"].connector_store
     if not store: return _j({"error": "连接器功能未启用"}, 503)
     try:
@@ -56,7 +57,7 @@ async def handle_create(req: web.Request) -> web.Response:
         name, ct = b.get("name", "").strip(), b.get("connector_type", "").strip()
         if not name or not ct: return _j({"error": "name 和 connector_type 必填"}, 400)
         item = await store.create(org, name, ct, b.get("config", {}),
-                                   int(b.get("sync_interval_minutes", 60)), actor)
+                                   int(b.get("sync_interval_minutes", 60)), actor, created_by=actor)
         item["config"] = _mask(item.get("config", {}))
         return _j({"connector": item}, 201)
     except Exception as e:
@@ -72,7 +73,7 @@ async def handle_get(req: web.Request) -> web.Response:
 
 async def handle_update(req: web.Request) -> web.Response:
     cid = req.match_info["id"]
-    _, actor = _org_actor(req)
+    _, actor, _ = _org_actor(req)
     store = req.app["engine"].connector_store
     if not store: return _j({"error": "未启用"}, 503)
     try:
@@ -87,9 +88,9 @@ async def handle_update(req: web.Request) -> web.Response:
 
 async def handle_delete(req: web.Request) -> web.Response:
     cid = req.match_info["id"]
-    _, actor = _org_actor(req)
+    _, actor, role = _org_actor(req)
     store = req.app["engine"].connector_store
-    if store and await store.delete(cid, actor):
+    if store and await store.delete(cid, actor, user_id="" if role == "admin" else actor):
         return _j({"status": "deleted", "id": cid})
     return _j({"error": "not found"}, 404)
 
@@ -109,7 +110,7 @@ async def handle_test(req: web.Request) -> web.Response:
 
 async def handle_sync(req: web.Request) -> web.Response:
     cid = req.match_info["id"]
-    org, _ = _org_actor(req)
+    org, _, _ = _org_actor(req)
     sm = getattr(req.app["engine"], "sync_manager", None)
     if not sm: return _j({"error": "SyncManager 未初始化"}, 503)
     if sm.is_running(cid): return _j({"status": "already_running", "connector_id": cid})
@@ -198,7 +199,7 @@ async def handle_dlq_retry(req: web.Request) -> web.Response:
 async def handle_reconcile(req: web.Request) -> web.Response:
     """POST /api/v1/connectors/{id}/reconcile — 全量同步+对账"""
     cid = req.match_info["id"]
-    org, _ = _org_actor(req)
+    org, _, _ = _org_actor(req)
     sm = getattr(req.app["engine"], "sync_manager", None)
     if not sm: return _j({"error": "SyncManager 未初始化"}, 503)
     asyncio.create_task(sm.sync(cid, org_id=org, force_full=True))
