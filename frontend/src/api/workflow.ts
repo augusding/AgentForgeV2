@@ -35,6 +35,10 @@ export async function clearAllWorkflows() {
   return client.post('/workflows/clear') as Promise<any>
 }
 
+export async function generateWorkflow(prompt: string) {
+  return client.post('/workflows/generate', { prompt }) as Promise<{ id: string; name: string; description: string; nodes_count: number; error?: string }>
+}
+
 export interface NodeTypeDef {
   name: string; displayName: string; description: string; group: string; icon: string
   inputs: number; outputs: number; outputNames: string[]; parameters: NodeParamDef[]

@@ -111,6 +111,36 @@ async def handle_workflow_get(request: web.Request) -> web.Response:
     })
 
 
+async def handle_workflow_generate(request: web.Request) -> web.Response:
+    """POST /api/v1/workflows/generate — AI 生成工作流"""
+    engine = request.app["engine"]
+    if not engine._llm:
+        return _json({"error": "LLM 未配置"}, status=503)
+    body = await request.json()
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        return _json({"error": "请描述你想要的工作流"}, status=400)
+    from workflow.ai_generator import generate_workflow
+    result = await generate_workflow(engine._llm, prompt)
+    if "error" in result:
+        return _json(result, status=422)
+    store = await _get_wf_store(request)
+    user = request.get("user") or {}
+    uid = user.get("sub", "") if isinstance(user, dict) else ""
+    wf = WorkflowDefinition(
+        id=uuid4().hex[:12],
+        name=result.get("name", "AI 生成工作流"),
+        description=result.get("description", ""),
+        org_id=_get_org_id(request),
+        created_by=uid,
+        nodes=[WorkflowNode(**n) for n in result.get("nodes", [])],
+        edges=result.get("edges", []),
+    )
+    await store.save_workflow(wf)
+    return _json({"id": wf.id, "name": wf.name, "description": wf.description,
+                   "nodes_count": len(wf.nodes), "status": "created"})
+
+
 async def handle_workflow_create(request: web.Request) -> web.Response:
     """POST/PUT /api/v1/workflows — 创建或更新"""
     store = await _get_wf_store(request)
@@ -388,6 +418,7 @@ async def handle_test_node(request: web.Request) -> web.Response:
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/workflows", handle_workflow_list)
     app.router.add_get("/api/v1/workflows/{workflow_id}", handle_workflow_get)
+    app.router.add_post("/api/v1/workflows/generate", handle_workflow_generate)
     app.router.add_post("/api/v1/workflows", handle_workflow_create)
     app.router.add_post("/api/v1/workflows/clear", handle_workflow_clear)
     app.router.add_put("/api/v1/workflows/{workflow_id}", handle_workflow_create)  # upsert

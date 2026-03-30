@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, Play, Trash2, RefreshCw, Plus, Edit3, BarChart3, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow, getWorkflowStats, clearAllWorkflows } from '../api/workflow'
+import { Zap, Play, Trash2, RefreshCw, Plus, Edit3, BarChart3, CheckCircle, XCircle, Clock, Sparkles, X } from 'lucide-react'
+import { listWorkflows, createWorkflow, deleteWorkflow, executeWorkflow, getWorkflowStats, clearAllWorkflows, generateWorkflow } from '../api/workflow'
 import toast from 'react-hot-toast'
 
 export default function Workflows() {
@@ -9,6 +9,9 @@ export default function Workflows() {
   const [loading, setLoading] = useState(true)
   const [executing, setExecuting] = useState<string | null>(null)
   const [stats, setStats] = useState<any>(null)
+  const [showAI, setShowAI] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => { load(); getWorkflowStats(7).then(setStats).catch(() => {}) }, [])
@@ -19,6 +22,19 @@ export default function Workflows() {
       nodes: [{ id: 'trigger_1', type: 'manualTrigger', label: '手动触发', config: {}, position: { x: 250, y: 200 } }], edges: [] })
       if (r.id) navigate(`/workflows/${r.id}`)
     } catch { toast.error('创建失败') }
+  }
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) return
+    setAiLoading(true)
+    try {
+      const r = await generateWorkflow(aiPrompt.trim())
+      if (r.error) { toast.error(r.error); return }
+      toast.success(`已生成「${r.name}」（${r.nodes_count} 个节点）`)
+      setShowAI(false); setAiPrompt('')
+      navigate(`/workflows/${r.id}`)
+    } catch (e: any) {
+      toast.error(e?.message || 'AI 生成失败，请重试')
+    } finally { setAiLoading(false) }
   }
   const handleExec = async (id: string) => { setExecuting(id); try { await executeWorkflow(id); toast.success('执行完成') } catch { toast.error('执行失败') } finally { setExecuting(null) } }
   const handleDel = async (id: string, name: string) => { if (!confirm(`删除「${name}」？`)) return; try { await deleteWorkflow(id); toast.success('已删除'); load() } catch {} }
@@ -37,6 +53,10 @@ export default function Workflows() {
           {wfs.length > 0 && <button onClick={handleClearAll} className="text-xs px-3 py-1.5 rounded-lg hover:bg-[#ef444410]"
             style={{ color: '#ef4444', border: '1px solid #ef444430' }}>清空工作流</button>}
           <button onClick={load} className="p-2 rounded-lg hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><RefreshCw size={16} /></button>
+          <button onClick={() => setShowAI(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm"
+            style={{ color: 'var(--accent)', border: '1px solid var(--accent)40', background: 'var(--accent)08' }}>
+            <Sparkles size={14} /> AI 生成
+          </button>
           <button onClick={handleCreate} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm text-white" style={{ background: 'var(--accent)' }}><Plus size={14} /> 新建</button>
         </div>
       </div>
@@ -76,6 +96,40 @@ export default function Workflows() {
               <button onClick={() => handleDel(wf.id, wf.name)} className="p-1.5 rounded hover:text-[var(--error)]" style={{ color: 'var(--text-muted)' }}><Trash2 size={14} /></button>
             </div>
           </div>))}</div>
+      )}
+
+      {showAI && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => !aiLoading && setShowAI(false)}>
+          <div className="w-full max-w-lg mx-4 rounded-2xl p-6" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} style={{ color: 'var(--accent)' }} />
+                <h3 className="text-sm font-bold">AI 生成工作流</h3>
+              </div>
+              <button onClick={() => !aiLoading && setShowAI(false)} style={{ color: 'var(--text-muted)' }}><X size={16} /></button>
+            </div>
+            <textarea
+              value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+              placeholder={"描述你想要的工作流，例如：\n\n• 每天早上9点抓取竞品官网，用AI总结变化，发到飞书群\n• 收到 webhook 后解析数据，如果金额>1000 发邮件通知，否则记录到数据库\n• 手动触发，读取 Excel 文件，逐行调用 API 处理，合并结果生成报告"}
+              className="w-full h-36 px-4 py-3 rounded-xl text-sm resize-none outline-none"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              disabled={aiLoading}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAIGenerate() }}
+            />
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Ctrl+Enter 发送</span>
+              <button onClick={handleAIGenerate} disabled={aiLoading || !aiPrompt.trim()}
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm text-white transition-opacity"
+                style={{ background: 'var(--accent)', opacity: aiLoading || !aiPrompt.trim() ? 0.5 : 1 }}>
+                {aiLoading ? (
+                  <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> AI 正在设计...</>
+                ) : (
+                  <><Sparkles size={14} /> 生成工作流</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
