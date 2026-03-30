@@ -119,11 +119,15 @@ async def handle_upload(request: web.Request) -> web.Response:
     from core.file_parser import extract_text
     extracted = await extract_text(str(file_path))
 
+    try:
+        rel_path = str(file_path.relative_to(engine.root_dir)).replace("\\", "/")
+    except ValueError:
+        rel_path = str(file_path).replace("\\", "/")
     result = {
         "file_id": file_path.name,
         "filename": file_field.filename,
         "size": file_path.stat().st_size,
-        "path": str(file_path),
+        "path": rel_path,
         "extracted_length": len(extracted),
     }
 

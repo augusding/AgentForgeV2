@@ -120,9 +120,9 @@ export default function Chat() {
           const localUrl = URL.createObjectURL(f)
           const tempId = `tmp_${Date.now()}`
           setAttachments(p => [...p, { file_id: tempId, filename: f.name, type: 'image', thumbnail: localUrl, processing: true }])
-          const r = await uploadChatFile(f)
+          const r: any = await uploadChatFile(f)
           setAttachments(p => p.map(a => a.file_id === tempId
-            ? { ...a, file_id: r.file_id, processing: false }
+            ? { ...a, file_id: r.file_id, processing: false, server_path: r.path || '' }
             : a))
         } else if (_AUD.includes(ext)) {
           const r = await uploadChatFile(f)
@@ -144,7 +144,9 @@ export default function Chat() {
   const send = async (ov?: string, extraFiles?: Array<{ file_id: string; filename: string }>) => {
     const text = (ov || input).trim(); if (!text || store.streaming) return
     if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
-    const ca = [...attachments, ...(extraFiles || [])]
+    const ca = [...attachments, ...(extraFiles || [])].map((a: any) => ({
+      ...a, path: a.server_path || a.path || undefined,
+    }))
     attachments.forEach((a: any) => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
     setAttachments([])
     store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
@@ -357,12 +359,15 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { ms
     return (
     <div className="flex justify-end"><div className="max-w-[70%]">
       {imageAtts.length > 0 && <div className="flex gap-1.5 mb-1.5 justify-end flex-wrap">
-        {imageAtts.map((a: any) => <div key={a.file_id} className="rounded-xl overflow-hidden" style={{ maxWidth: 200, border: '1px solid var(--border)' }}>
-          {a.thumbnail ? <img src={a.thumbnail} alt={a.filename} className="w-full max-h-[200px] object-cover" />
-            : <div className="w-[120px] h-[80px] flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-              </div>}
-        </div>)}</div>}
+        {imageAtts.map((a: any) => {
+          const imgUrl = a.path ? `/api/v1/files/download/${a.path}` : a.thumbnail
+          return <div key={a.file_id} className="rounded-xl overflow-hidden" style={{ maxWidth: 200, border: '1px solid var(--border)' }}>
+            {imgUrl ? <img src={imgUrl} alt={a.filename} className="w-full max-h-[200px] object-cover" />
+              : <div className="w-[120px] h-[80px] flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>}
+          </div>
+        })}</div>}
       {otherAtts.length > 0 && <div className="flex gap-1 mb-1 justify-end">{otherAtts.map((a: any) =>
         <span key={a.file_id} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>📎 {a.filename}</span>)}</div>}
       <div className="bg-[var(--accent)] text-white px-4 py-2.5 rounded-xl text-sm whitespace-pre-wrap">{msg.content}</div>
