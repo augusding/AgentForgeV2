@@ -84,8 +84,10 @@ async def handle_knowledge_delete(request: web.Request) -> web.Response:
 
         if kb:
             try:
-                kb.delete_document(doc_id, org_id=o_id, user_id=_user_id(request))
-                deleted_db = True
+                deleted_count = kb.delete_document(doc_id, org_id=o_id, user_id=_user_id(request))
+                deleted_db = deleted_count > 0
+                if not deleted_db:
+                    logger.warning("ChromaDB 删除 0 条: doc_id=%s org_id=%s user_id=%s", doc_id, o_id, _user_id(request))
             except Exception as e:
                 logger.warning("ChromaDB 删除失败: %s", e)
 

@@ -158,25 +158,37 @@ class KnowledgeBase:
 
         query_vector = self._embedding.encode_single(query)
 
-        kwargs: dict[str, Any] = {
+        base_kwargs: dict[str, Any] = {
             "query_embeddings": [query_vector],
             "n_results": top_k,
         }
-        where_clause: dict[str, Any] = {}
+        # 构建逐级降级的 where 策略
+        where_strategies: list[dict[str, Any] | None] = []
+        full_where: dict[str, Any] = {}
         if user_id:
-            where_clause["user_id"] = user_id
+            full_where["user_id"] = user_id
         if org_id:
-            where_clause["org_id"] = org_id
+            full_where["org_id"] = org_id
         if filter_metadata:
-            where_clause.update(filter_metadata)
-        if where_clause:
-            kwargs["where"] = where_clause
+            full_where.update(filter_metadata)
+        if full_where:
+            where_strategies.append(full_where)
+        if user_id and (org_id or filter_metadata):
+            where_strategies.append({"user_id": user_id})
+        where_strategies.append(None)
 
-        try:
-            results = self._collection.query(**kwargs)
-        except Exception as e:
-            logger.error("知识库检索失败: %s", e)
-            return []
+        results = None
+        for where in where_strategies:
+            try:
+                kwargs = {**base_kwargs}
+                if where:
+                    kwargs["where"] = where
+                results = self._collection.query(**kwargs)
+                if results and results.get("documents") and results["documents"][0]:
+                    break
+            except Exception as e:
+                logger.warning("知识库检索降级: %s (where=%s)", e, where)
+                continue
 
         # 解析结果
         output = []
@@ -199,51 +211,64 @@ class KnowledgeBase:
         return output
 
     def delete_document(self, doc_id: str, org_id: str = "", user_id: str = "") -> int:
-        """删除文档的所有分块。返回删除数。"""
+        """删除文档的所有分块。返回删除数。逐级降级查找确保能删到。"""
         if not self._collection:
             return 0
-        try:
-            where: dict[str, Any] = {"doc_id": doc_id}
+        strategies = []
+        full_where: dict[str, Any] = {"doc_id": doc_id}
+        if user_id:
+            full_where["user_id"] = user_id
+        if org_id:
+            full_where["org_id"] = org_id
+        strategies.append(full_where)
+        if org_id:
+            no_org: dict[str, Any] = {"doc_id": doc_id}
             if user_id:
-                where["user_id"] = user_id
-            if org_id:
-                where["org_id"] = org_id
-            result = self._collection.get(where=where, include=[])
-            ids = result.get("ids", [])
-            if not ids and org_id:
-                result = self._collection.get(where={"doc_id": doc_id}, include=[])
+                no_org["user_id"] = user_id
+            strategies.append(no_org)
+        strategies.append({"doc_id": doc_id})
+
+        for i, where in enumerate(strategies):
+            try:
+                result = self._collection.get(where=where, include=[])
                 ids = result.get("ids", [])
-            if ids:
-                self._collection.delete(ids=ids)
-                logger.info("文档已删除: %s (%d chunks)", doc_id, len(ids))
-            return len(ids)
-        except Exception as e:
-            logger.error("删除文档失败: %s", e)
-            return 0
+                if ids:
+                    self._collection.delete(ids=ids)
+                    logger.info("文档已删除: %s (%d chunks, 策略%d)", doc_id, len(ids), i + 1)
+                    return len(ids)
+            except Exception as e:
+                logger.warning("删除策略%d失败: %s (where=%s)", i + 1, e, where)
+                continue
+        logger.warning("文档删除: 所有策略均未找到 doc_id=%s", doc_id)
+        return 0
 
     def clear_all(self, org_id: str = "", user_id: str = "") -> int:
-        """清空知识库。返回删除的 chunk 数。"""
+        """清空知识库。返回删除的 chunk 数。逐级降级查找。"""
         if not self._collection:
             return 0
-        try:
-            where: dict[str, Any] = {}
-            if user_id:
-                where["user_id"] = user_id
-            if org_id:
-                where["org_id"] = org_id
-            if where:
-                result = self._collection.get(where=where, include=[])
-            else:
-                result = self._collection.get(include=[])
-            ids = result.get("ids", [])
-            if ids:
-                for i in range(0, len(ids), 500):
-                    self._collection.delete(ids=ids[i:i + 500])
-                logger.info("知识库已清空: %d chunks", len(ids))
-            return len(ids)
-        except Exception as e:
-            logger.error("清空知识库失败: %s", e)
-            return 0
+        strategies: list[dict[str, Any] | None] = []
+        if user_id and org_id:
+            strategies.append({"user_id": user_id, "org_id": org_id})
+        if user_id:
+            strategies.append({"user_id": user_id})
+        strategies.append(None)
+
+        for where in strategies:
+            try:
+                if where:
+                    result = self._collection.get(where=where, include=[])
+                else:
+                    result = self._collection.get(include=[])
+                ids = result.get("ids", [])
+                if ids:
+                    for i in range(0, len(ids), 500):
+                        self._collection.delete(ids=ids[i:i + 500])
+                    logger.info("知识库已清空: %d chunks (where=%s)", len(ids), where)
+                    return len(ids)
+            except Exception as e:
+                logger.warning("清空策略失败: %s (where=%s)", e, where)
+                continue
+        return 0
 
     def list_doc_ids_by_source(self, source_type: str, org_id: str = "", user_id: str = "") -> set[str]:
         """获取 ChromaDB 中指定 source_type 的所有 doc_id（对账用）。"""
