@@ -30,16 +30,31 @@ def _json(data: dict, status: int = 200) -> web.Response:
 
 
 def _make_cors_middleware():
-    """CORS 中间件。"""
+    """CORS 中间件 — 从环境变量读取允许的域名。"""
+    raw = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:8080,http://localhost:3000,http://localhost:3001")
+    allowed = {o.strip().rstrip("/") for o in raw.split(",") if o.strip()}
+
     @web.middleware
     async def cors(request, handler):
+        origin = request.headers.get("Origin", "")
+        if allowed and origin:
+            matched = origin.rstrip("/") in allowed
+        else:
+            matched = not allowed
+
         if request.method == "OPTIONS":
             resp = web.Response(status=204)
         else:
             resp = await handler(request)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
+
+        if matched and origin:
+            resp.headers["Access-Control-Allow-Origin"] = origin
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+        elif not allowed:
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Trace-Id"
         resp.headers["Access-Control-Max-Age"] = "3600"
         return resp
     return cors
@@ -66,8 +81,11 @@ def create_app(engine: ForgeEngine) -> web.Application:
     jwt_secret = load_jwt_secret()
     api_key = os.environ.get("AGENTFORGE_API_KEY", "")
 
+    from api.middleware.rate_limit import make_rate_limit_middleware
+
     app = web.Application(middlewares=[
         _make_cors_middleware(),
+        make_rate_limit_middleware(),
         make_auth_middleware(jwt_secret, api_key),
         _make_error_middleware(),
     ])
