@@ -92,7 +92,11 @@ class ProactiveEngine:
         # 规则 3: 工作流最近 24h 失败（只查自己创建的）
         if self._wfs:
             try:
-                for wf in (await self._wfs.list_workflows(user_id=uid))[:10]:
+                try:
+                    _wf_list = await self._wfs.list_workflows(user_id=uid)
+                except TypeError:
+                    _wf_list = await self._wfs.list_workflows()
+                for wf in _wf_list[:10]:
                     try:
                         execs = await self._wfs.get_executions(wf["id"], limit=1)
                         if execs and execs[0].get("status") == "failed":

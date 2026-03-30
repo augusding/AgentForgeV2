@@ -87,9 +87,10 @@ async def handle_upload(request: web.Request) -> web.Response:
         chunks = engine.knowledge_base.add_document(
             doc_id=final_doc_id,
             content=extracted,
-            metadata={"source": "upload", "filename": file_field.filename},
+            metadata={"source": "upload", "source_type": "upload", "filename": file_field.filename},
             is_markdown=file_path.suffix.lower() == ".md",
             org_id=o_id,
+            user_id=u_id,
         )
         result["knowledge"] = {"doc_id": final_doc_id, "chunks": chunks}
 
