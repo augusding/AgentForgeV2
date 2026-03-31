@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Copy, Download, Check, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Copy, Download, Check, Loader2 } from 'lucide-react'
 import client from '../api/client'
 import Markdown from './Markdown'
 import toast from 'react-hot-toast'
@@ -84,23 +84,58 @@ function TableView({ data }: { data: any }) {
 }
 
 function SlidesView({ data }: { data: any }) {
-  const [i, setI] = useState(0); const slides = data?.slides || []
+  const [idx, setIdx] = useState(0)
+  const slides: any[] = data?.slides || []
+  const total = data?.total || slides.length
+  const slideW = data?.width || 960
+  const slideH = data?.height || 540
   if (data?.error) return <div className="p-6 text-sm" style={{ color: '#ef4444' }}>预览失败: {data.error}</div>
-  if (!slides.length && data?.fallback_text) return <pre className="px-6 py-4 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)', fontFamily: 'inherit', margin: 0 }}>{data.fallback_text}</pre>
   if (!slides.length) return <div className="p-6 text-sm" style={{ color: 'var(--text-muted)' }}>空演示文稿</div>
-  const s = slides[i]
+  const s = slides[idx]
   return (<div className="flex flex-col h-full">
-    <div className="flex-1 flex items-center justify-center p-6">
-      <div className="w-full max-w-[500px] rounded-xl p-6" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', aspectRatio: '16/10' }}>
-        <div className="text-base font-bold mb-4" style={{ color: 'var(--text)' }}>{s.title}</div>
-        <div className="space-y-2">{s.content.map((l: string, j: number) => <div key={j} className="text-sm flex items-start gap-2" style={{ color: 'var(--text-muted)' }}>
-          <span style={{ color: 'var(--accent)' }}>•</span><span>{l}</span></div>)}</div>
+    <div className="flex-1 flex items-center justify-center p-4 overflow-auto" style={{ background: '#2c2c2c' }}>
+      <div style={{ width: '100%', maxWidth: 720, aspectRatio: `${slideW} / ${slideH}`,
+        background: s.background || '#fff', position: 'relative', overflow: 'hidden',
+        borderRadius: 4, boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+        {(s.shapes || []).map((shape: any, si: number) => {
+          const st: React.CSSProperties = { position: 'absolute',
+            left: `${(shape.left / slideW) * 100}%`, top: `${(shape.top / slideH) * 100}%`,
+            width: `${(shape.width / slideW) * 100}%`, height: `${(shape.height / slideH) * 100}%`,
+            overflow: 'hidden', padding: '2%', boxSizing: 'border-box' }
+          if (shape.type === 'text') return (
+            <div key={si} style={st}>{(shape.paragraphs || []).map((p: any, pi: number) => {
+              if (p.type === 'empty') return <div key={pi} style={{ height: '0.5em' }} />
+              const sz = Math.max(8, Math.round((p.fontSize || 18) * (720 / slideW)))
+              return <div key={pi} style={{ fontSize: sz, fontWeight: p.bold ? 700 : 400,
+                color: p.color || (shape.isTitle ? '#1a1a2e' : '#333'),
+                textAlign: p.align || (shape.isTitle ? 'center' : 'left'),
+                paddingLeft: p.level ? p.level * 20 : 0, lineHeight: 1.4, marginBottom: 2 }}>
+                {p.level ? '• ' : ''}{p.text}</div>
+            })}</div>)
+          if (shape.type === 'table') return (
+            <div key={si} style={{ ...st, overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}><tbody>
+                {(shape.rows || []).map((row: any[], ri: number) => <tr key={ri}>
+                  {row.map((c: string, ci: number) => <td key={ci} style={{ border: '1px solid #ccc',
+                    padding: '2px 4px', background: ri === 0 ? '#e8e8e8' : '#fff',
+                    fontWeight: ri === 0 ? 600 : 400, color: '#333' }}>{c}</td>)}
+                </tr>)}</tbody></table></div>)
+          if (shape.type === 'image' && shape.src) return (
+            <div key={si} style={st}><img src={shape.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /></div>)
+          return null
+        })}
       </div>
     </div>
-    <div className="flex items-center justify-center gap-4 px-4 py-3 border-t shrink-0" style={{ borderColor: 'var(--border)' }}>
-      <button onClick={() => setI(Math.max(0, i - 1))} disabled={i === 0} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] disabled:opacity-30" style={{ color: 'var(--text-muted)' }}><ChevronLeft size={16} /></button>
-      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{i + 1} / {slides.length}</span>
-      <button onClick={() => setI(Math.min(slides.length - 1, i + 1))} disabled={i >= slides.length - 1} className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] disabled:opacity-30" style={{ color: 'var(--text-muted)' }}><ChevronRight size={16} /></button>
+    {slides.length > 1 && <div className="flex gap-1.5 px-4 py-2 overflow-x-auto" style={{ background: 'var(--bg)' }}>
+      {slides.map((t: any, ti: number) => <button key={ti} onClick={() => setIdx(ti)} className="shrink-0"
+        style={{ width: 56, height: 32, background: t.background || '#fff', borderRadius: 3,
+          border: ti === idx ? '2px solid var(--accent)' : '1px solid var(--border)', opacity: ti === idx ? 1 : 0.6 }}>
+        <span style={{ fontSize: 6, color: '#666', display: 'block', textAlign: 'center', marginTop: 4 }}>{ti + 1}</span>
+      </button>)}</div>}
+    <div className="flex items-center justify-center gap-4 px-4 py-2 border-t shrink-0" style={{ borderColor: 'var(--border)' }}>
+      <button onClick={() => setIdx(Math.max(0, idx - 1))} disabled={idx === 0} className="px-3 py-1 rounded text-xs disabled:opacity-30 hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>◀</button>
+      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{idx + 1} / {total}</span>
+      <button onClick={() => setIdx(Math.min(slides.length - 1, idx + 1))} disabled={idx >= slides.length - 1} className="px-3 py-1 rounded text-xs disabled:opacity-30 hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>▶</button>
     </div>
   </div>)
 }

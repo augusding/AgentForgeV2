@@ -288,24 +288,92 @@ def _preview_csv(fp):
 
 
 def _preview_pptx(fp):
-    """PPT → 幻灯片列表。直接读 ZIP 内 XML，绕过 python-pptx rId bug。"""
-    import zipfile, re
+    """PPT → 富格式幻灯片数据（含位置、字体、颜色）"""
     try:
+        from pptx import Presentation
+        from pptx.enum.text import PP_ALIGN
+        prs = Presentation(str(fp))
+        slide_w = prs.slide_width.pt if prs.slide_width else 960
+        slide_h = prs.slide_height.pt if prs.slide_height else 540
         slides = []
-        with zipfile.ZipFile(str(fp)) as z:
-            slide_files = sorted(
-                [n for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
-                key=lambda n: int(m.group(1)) if (m := re.search(r'slide(\d+)', n)) else 0,
-            )
-            for idx, sf in enumerate(slide_files[:30], 1):
-                xml = z.read(sf).decode("utf-8", errors="replace")
-                texts = [t.strip() for t in re.findall(r'<a:t>([^<]+)</a:t>', xml) if t.strip()]
-                title = texts[0] if texts else f"幻灯片 {idx}"
-                content = texts[1:] if len(texts) > 1 else []
-                slides.append({"number": idx, "title": title, "content": content})
-        return {"slides": slides, "total": len(slides)}
+        for i, slide in enumerate(prs.slides[:20], 1):
+            bg_color = "#ffffff"
+            try:
+                bg = slide.background
+                if bg and bg.fill and bg.fill.fore_color and bg.fill.fore_color.rgb:
+                    bg_color = f"#{bg.fill.fore_color.rgb}"
+            except Exception:
+                pass
+            shapes = []
+            for shape in slide.shapes:
+                s = {"left": round(shape.left.pt, 1) if shape.left else 0,
+                     "top": round(shape.top.pt, 1) if shape.top else 0,
+                     "width": round(shape.width.pt, 1) if shape.width else 200,
+                     "height": round(shape.height.pt, 1) if shape.height else 50}
+                if shape.has_text_frame:
+                    paragraphs = []
+                    for para in shape.text_frame.paragraphs:
+                        text = para.text.strip()
+                        if not text:
+                            paragraphs.append({"text": "", "type": "empty"})
+                            continue
+                        p_data = {"text": text, "type": "text"}
+                        font_size = 18
+                        if para.runs:
+                            run = para.runs[0]
+                            if run.font.size: font_size = round(run.font.size.pt)
+                            if run.font.bold: p_data["bold"] = True
+                            try:
+                                if run.font.color and run.font.color.rgb:
+                                    p_data["color"] = f"#{run.font.color.rgb}"
+                            except Exception:
+                                pass
+                        p_data["fontSize"] = font_size
+                        if para.alignment:
+                            align_map = {PP_ALIGN.LEFT: "left", PP_ALIGN.CENTER: "center", PP_ALIGN.RIGHT: "right"}
+                            p_data["align"] = align_map.get(para.alignment, "left")
+                        if para.level and para.level > 0:
+                            p_data["level"] = para.level
+                        paragraphs.append(p_data)
+                    s["type"] = "text"
+                    s["paragraphs"] = paragraphs
+                    if shape == slide.shapes.title:
+                        s["isTitle"] = True
+                elif shape.has_table:
+                    rows = []
+                    for row in shape.table.rows:
+                        rows.append([cell.text.strip() for cell in row.cells])
+                    s["type"] = "table"
+                    s["rows"] = rows
+                else:
+                    continue
+                shapes.append(s)
+            slides.append({"number": i, "background": bg_color, "shapes": shapes,
+                           "width": round(slide_w, 1), "height": round(slide_h, 1)})
+        return {"slides": slides, "total": len(prs.slides),
+                "width": round(slide_w, 1), "height": round(slide_h, 1)}
     except Exception as e:
-        return {"error": str(e)}
+        # 降级：ZIP XML 解析
+        import zipfile, re
+        try:
+            slides = []
+            with zipfile.ZipFile(str(fp)) as z:
+                slide_files = sorted(
+                    [n for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+                    key=lambda n: int(m.group(1)) if (m := re.search(r'slide(\d+)', n)) else 0)
+                for idx, sf in enumerate(slide_files[:30], 1):
+                    xml = z.read(sf).decode("utf-8", errors="replace")
+                    texts = [t.strip() for t in re.findall(r'<a:t>([^<]+)</a:t>', xml) if t.strip()]
+                    title = texts[0] if texts else f"幻灯片 {idx}"
+                    shapes = [{"type": "text", "left": 40, "top": 40, "width": 880, "height": 60,
+                               "isTitle": True, "paragraphs": [{"text": title, "type": "text", "fontSize": 28, "bold": True}]}]
+                    if len(texts) > 1:
+                        paras = [{"text": t, "type": "text", "fontSize": 16, "level": 1} for t in texts[1:]]
+                        shapes.append({"type": "text", "left": 60, "top": 120, "width": 840, "height": 380, "paragraphs": paras})
+                    slides.append({"number": idx, "background": "#ffffff", "shapes": shapes, "width": 960, "height": 540})
+            return {"slides": slides, "total": len(slides), "width": 960, "height": 540}
+        except Exception as e2:
+            return {"error": str(e2)}
 
 
 async def handle_serve(request: web.Request) -> web.Response:
