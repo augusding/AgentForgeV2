@@ -127,27 +127,27 @@ export default function Chat() {
             ? { ...a, file_id: r.file_id, processing: false, server_path: r.path || '' }
             : a))
         } else if (_AUD.includes(ext)) {
-          // Step 1: 上传（快速）
-          toast.loading('上传语音...', { id: 'aud' })
-          const r = await uploadChatFile(f)
-          toast.dismiss('aud')
-          // Step 2: STT（异步，120s 超时）
-          toast.loading('识别语音中，请稍候...', { id: 'stt' })
-          try {
-            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' }, { timeout: 120000 })
-            toast.dismiss('stt')
-            if (sr.success && sr.text && !sr.text.startsWith('[')) {
-              setInput(prev => (prev ? prev + '\n' : '') + sr.text)
-              toast.success(`语音识别完成 (${sr.text.length} 字)`)
-            } else {
-              toast.error(sr.text || sr.error || '语音识别失败')
-              setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename || f.name, type: 'audio' }])
-            }
-          } catch (e: any) {
-            toast.dismiss('stt')
-            toast.error(e.message?.includes('timeout') ? '语音识别超时，文件可能太大' : '语音识别失败')
-            setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename || f.name, type: 'audio' }])
+          // Claude 风格：立即显示音频卡片，后台异步 STT
+          const tempId = `tmp_${Date.now()}`
+          setAttachments(p => [...p, { file_id: tempId, filename: f.name, type: 'audio' as any, processing: true }])
+          let ur: any
+          try { ur = await uploadChatFile(f) } catch {
+            toast.error(`${f.name} 上传失败`)
+            setAttachments(p => p.filter(a => a.file_id !== tempId)); continue
           }
+          setAttachments(p => p.map(a => a.file_id === tempId ? { ...a, file_id: ur.file_id, filename: ur.filename || f.name, processing: false } : a))
+          // 后台异步 STT（不阻塞 UI）
+          const fid = ur.file_id
+          ;(async () => {
+            try {
+              const sr: any = await client.post('/media/process', { file_id: fid, mode: 'stt' }, { timeout: 120000 })
+              if (sr.success && sr.text && !sr.text.startsWith('[')) {
+                setInput(prev => (prev ? prev + '\n' : '') + sr.text)
+                toast.success(`语音识别完成 (${sr.text.length} 字)`, { duration: 3000 })
+                setAttachments(p => p.filter(a => a.file_id !== fid))
+              }
+            } catch { /* 静默：音频卡片保留，用户可直接发送 */ }
+          })()
         } else {
           const r = await uploadChatFile(f)
           setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'file' }])

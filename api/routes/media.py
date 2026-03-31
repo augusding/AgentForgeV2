@@ -7,7 +7,17 @@ GET  /api/v1/media/capabilities  查询可用能力
 
 import json
 import logging
+import os
 from pathlib import Path
+
+# 确保 .env 被加载
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
 
 from aiohttp import web
 
@@ -94,7 +104,10 @@ async def handle_process(request: web.Request) -> web.Response:
 async def handle_capabilities(request: web.Request) -> web.Response:
     """GET /api/v1/media/capabilities"""
     from core.media_processor import get_capabilities
-    return _json(get_capabilities())
+    caps = get_capabilities()
+    dk = os.environ.get("DASHSCOPE_API_KEY", "")
+    caps["_debug_key"] = f"{dk[:8]}..." if dk else "NOT SET"
+    return _json(caps)
 
 
 def register(app: web.Application):

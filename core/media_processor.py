@@ -13,6 +13,15 @@ import os
 from pathlib import Path
 from typing import Any
 
+# 确保 .env 被加载（不依赖 forge.py 的加载时机）
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
