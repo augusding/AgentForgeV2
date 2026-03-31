@@ -177,25 +177,33 @@ async def handle_upload(request: web.Request) -> web.Response:
 
 
 async def handle_list_files(request: web.Request) -> web.Response:
-    """GET /api/v1/files — 列出已上传的文件"""
+    """GET /api/v1/files?exts=xlsx,csv&source=all — 列出可用文件"""
     engine = request.app["engine"]
     user = request.get("user") or {}
     u_id = user.get("sub", "anonymous") if isinstance(user, dict) else "anonymous"
     o_id = user.get("org_id", "_default") if isinstance(user, dict) else "_default"
-    upload_dir = engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id
-    if not upload_dir.exists():
-        return _json({"files": []})
-
+    ext_filter = request.query.get("exts", "").strip()
+    allowed_exts = {("." + e.strip().lstrip(".")).lower() for e in ext_filter.split(",") if e.strip()} if ext_filter else set()
+    source = request.query.get("source", "all")
+    scan_dirs = []
+    if source in ("all", "uploads"):
+        d = engine.root_dir / "data" / "uploads" / (o_id or "_default") / u_id
+        if d.exists(): scan_dirs.append(("uploads", d))
+    if source in ("all", "outputs"):
+        d = engine.root_dir / "data" / "outputs"
+        if d.exists(): scan_dirs.append(("outputs", d))
     files = []
-    for f in sorted(upload_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        if f.is_file():
-            files.append({
-                "file_id": f.stem,
-                "filename": f.name,
-                "size": f.stat().st_size,
-                "modified": f.stat().st_mtime,
-            })
-    return _json({"files": files[:100]})
+    for src_label, scan_dir in scan_dirs:
+        for f in scan_dir.rglob("*"):
+            if not f.is_file(): continue
+            if allowed_exts and f.suffix.lower() not in allowed_exts: continue
+            try: rel = str(f.relative_to(engine.root_dir)).replace("\\", "/")
+            except ValueError: rel = str(f)
+            files.append({"file_id": f.stem, "filename": f.name, "path": rel,
+                "size": f.stat().st_size, "modified": f.stat().st_mtime,
+                "source": src_label, "ext": f.suffix.lower().lstrip(".")})
+    files.sort(key=lambda x: x["modified"], reverse=True)
+    return _json({"files": files[:200]})
 
 
 async def handle_download(request: web.Request) -> web.Response:

@@ -17,8 +17,17 @@ async def _excel_executor(node: WorkflowNode, variables: dict, ctx: dict) -> Nod
     except ImportError: return NodeResult(node_id=node.id, status="failed", error="需要安装 openpyxl")
 
     action = node.config.get("action", "read")
+    source_type = node.config.get("source_type", "file")
     raw = node.config.get("path", "")
-    if not raw: return NodeResult(node_id=node.id, status="failed", error="path 不能为空")
+    if source_type == "upstream":
+        uv = node.config.get("upstream_var", "")
+        if uv:
+            parts = uv.split(".", 1)
+            if len(parts) == 2:
+                no = ctx.get(parts[0], {})
+                if isinstance(no, dict): raw = no.get(parts[1], no.get("path", ""))
+            if not raw: raw = str(variables.get(uv, ""))
+    if not raw: return NodeResult(node_id=node.id, status="failed", error="文件路径为空，请选择文件或配置上游引用")
     path = (_ROOT / raw).resolve()
     if not str(path).startswith(str(_ROOT)):
         return NodeResult(node_id=node.id, status="failed", error="路径越界")
@@ -78,7 +87,10 @@ def register_excel(registry: NodeRegistry) -> None:
         parameters=[
             {"name": "action", "type": "options", "displayName": "操作", "default": "read",
              "options": [{"name": "读取", "value": "read"}, {"name": "创建", "value": "create"}, {"name": "追加", "value": "append"}]},
+            {"name": "source_type", "type": "options", "displayName": "文件来源", "default": "file",
+             "options": [{"name": "选择文件", "value": "file"}, {"name": "上游引用", "value": "upstream"}, {"name": "手动输入", "value": "manual"}]},
             {"name": "path", "type": "string", "displayName": "文件路径", "default": ""},
+            {"name": "upstream_var", "type": "string", "displayName": "上游变量", "default": ""},
             {"name": "sheet", "type": "string", "displayName": "工作表", "default": ""},
             {"name": "data", "type": "json", "displayName": "数据", "default": "[]"},
         ], executor=_excel_executor))

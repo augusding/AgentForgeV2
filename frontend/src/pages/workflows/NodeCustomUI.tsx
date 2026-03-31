@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import client from '../../api/client'
 import toast from 'react-hot-toast'
 
 interface CProps { config: Record<string, any>; onChange: (c: Record<string, any>) => void; inputData?: any }
@@ -325,19 +326,120 @@ function SetUI({ config: c, onChange, inputData }: CProps) {
 
 /* ── Excel ── */
 function ExcelUI({ config: c, onChange }: CProps) {
-  const s = (k: string, v: any) => onChange({ ...c, [k]: v }); const a = c.action || 'read'
+  const s = (k: string, v: any) => onChange({ ...c, [k]: v })
+  const action = c.action || 'read'; const sourceType = c.source_type || 'file'
+  const [files, setFiles] = useState<any[]>([]); const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState(''); const [preview, setPreview] = useState<any>(null)
+  const [dragOver, setDragOver] = useState(false); const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (sourceType === 'file' && action !== 'create') {
+      setLoading(true)
+      client.get('/files?exts=xlsx,xls,csv').then((r: any) => setFiles(r.files || [])).catch(() => setFiles([])).finally(() => setLoading(false))
+    }
+  }, [sourceType, action])
+
+  useEffect(() => {
+    if (c.path && action !== 'create') {
+      client.get(`/files/preview/${c.path}`).then((r: any) => setPreview(r)).catch(() => setPreview(null))
+    } else { setPreview(null) }
+  }, [c.path, action])
+
+  const filtered = files.filter(f => !search || f.filename.toLowerCase().includes(search.toLowerCase()))
+  const fmtSize = (b: number) => b > 1048576 ? `${(b/1048576).toFixed(1)}MB` : `${Math.round(b/1024)}KB`
+  const fmtTime = (ts: number) => { const d = (Date.now() - ts * 1000) / 1000; return d < 3600 ? `${Math.floor(d/60)}m` : d < 86400 ? `${Math.floor(d/3600)}h` : `${Math.floor(d/86400)}d` }
+
+  const handleUpload = async (file: File) => {
+    const form = new FormData(); form.append('file', file); form.append('target', 'chat')
+    try {
+      const r: any = await client.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      if (r.file_id) { s('path', (r.path || '').replace(/\\/g, '/')); toast.success(`${file.name} 上传成功`)
+        client.get('/files?exts=xlsx,xls,csv').then((res: any) => setFiles(res.files || [])) }
+    } catch { toast.error('上传失败') }
+  }
+
   return <div className="space-y-4">
+    {/* 操作类型 */}
     <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>操作</label>
       <div className="grid grid-cols-3 gap-2">{[{ v: 'read', l: '📖 读取' }, { v: 'create', l: '📝 创建' }, { v: 'append', l: '➕ 追加' }].map(o =>
-        <button key={o.v} onClick={() => s('action', o.v)} className={`py-2.5 rounded-lg text-center text-xs font-medium ${a === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
-          style={{ background: a === o.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)', color: a === o.v ? 'var(--accent)' : 'var(--text)' }}>{o.l}</button>)}</div></div>
-    <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>文件路径</label>
-      <input value={c.path || ''} onChange={e => s('path', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder={a === 'create' ? 'data/outputs/report.xlsx' : 'data/input.xlsx'} /></div>
+        <button key={o.v} onClick={() => s('action', o.v)} className={`py-2.5 rounded-lg text-center text-xs font-medium ${action === o.v ? 'ring-2 ring-[var(--accent)]' : ''}`}
+          style={{ background: action === o.v ? 'var(--accent)15' : 'var(--bg-surface)', border: '1px solid var(--border)', color: action === o.v ? 'var(--accent)' : 'var(--text)' }}>{o.l}</button>)}</div></div>
+
+    {/* 读取/追加 → 文件选择器 */}
+    {action !== 'create' && <>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>文件来源</label>
+        <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          {[{ v: 'file', l: '选择文件' }, { v: 'upstream', l: '上游引用' }, { v: 'manual', l: '上传/输入' }].map(t =>
+            <button key={t.v} onClick={() => s('source_type', t.v)} className="flex-1 py-2 text-[11px] font-medium"
+              style={{ background: sourceType === t.v ? 'var(--accent)' : 'transparent', color: sourceType === t.v ? '#fff' : 'var(--text-muted)' }}>{t.l}</button>)}</div></div>
+
+      {sourceType === 'file' && <div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索文件..." className="w-full px-3 py-2 rounded-lg text-xs outline-none mb-2" style={st} />
+        <div className="max-h-[160px] overflow-y-auto rounded-lg" style={{ border: '1px solid var(--border)' }}>
+          {loading ? <div className="p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>加载中...</div>
+           : !filtered.length ? <div className="p-4 text-center text-xs" style={{ color: 'var(--text-muted)' }}>暂无文件</div>
+           : filtered.map(f => <div key={f.path} onClick={() => s('path', f.path)}
+              className="flex items-center gap-2 px-3 py-2 cursor-pointer text-xs"
+              style={{ background: c.path === f.path ? 'var(--accent)10' : 'transparent', borderBottom: '0.5px solid var(--border)',
+                borderLeft: c.path === f.path ? '3px solid var(--accent)' : '3px solid transparent' }}>
+              <span style={{ color: f.ext === 'csv' ? '#22c55e' : '#217346', fontSize: 14 }}>{f.ext === 'csv' ? '📊' : '📗'}</span>
+              <div className="flex-1 min-w-0">
+                <div className="truncate font-medium" style={{ color: c.path === f.path ? 'var(--accent)' : 'var(--text)' }}>{f.filename}</div>
+                <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{f.source === 'outputs' ? 'AI生成' : '上传'} · {fmtSize(f.size)} · {fmtTime(f.modified)}</div>
+              </div></div>)}</div></div>}
+
+      {sourceType === 'upstream' && <div>
+        <label className={lbl} style={{ color: 'var(--text-muted)' }}>上游变量</label>
+        <input value={c.upstream_var || ''} onChange={e => s('upstream_var', e.target.value)}
+          className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder="node_id.output_key" />
+        <div className="mt-2 p-2.5 rounded-lg text-[10px]" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+          运行时从上游节点的输出中获取文件路径</div></div>}
+
+      {sourceType === 'manual' && <div className="space-y-3">
+        <div className="rounded-lg p-4 text-center cursor-pointer" onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)} onClick={() => fileInputRef.current?.click()}
+          onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f && /\.(xlsx?|csv)$/i.test(f.name)) handleUpload(f); else toast.error('请上传 xlsx 或 csv') }}
+          style={{ border: `1.5px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`, background: dragOver ? 'var(--accent)08' : 'transparent' }}>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>拖放 .xlsx/.csv 或点击选择</div>
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+            onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0])} /></div>
+        <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>或手动输入路径</label>
+          <input value={c.path || ''} onChange={e => s('path', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder="data/uploads/.../file.xlsx" /></div>
+      </div>}
+
+      {/* 已选文件预览 */}
+      {c.path && preview?.type === 'table' && preview.data?.sheets?.[0] && <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 px-3 py-2" style={{ background: 'var(--accent)08', borderBottom: '0.5px solid var(--border)' }}>
+          <span style={{ fontSize: 14 }}>📗</span>
+          <div className="flex-1 text-xs font-medium truncate" style={{ color: 'var(--accent)' }}>{c.path.split('/').pop()}</div>
+          <button onClick={() => { s('path', ''); setPreview(null) }} className="text-[10px] px-2 py-0.5 rounded" style={{ color: 'var(--text-muted)', background: 'var(--bg-surface)' }}>清除</button>
+        </div>
+        <div className="max-h-[120px] overflow-auto">
+          <table className="w-full text-[10px]" style={{ borderCollapse: 'collapse' }}><thead><tr>
+            {(preview.data.sheets[0].rows?.[0]||[]).map((h: string, i: number) =>
+              <th key={i} className="px-2 py-1.5 text-left font-medium sticky top-0" style={{ background: 'var(--bg-surface)', borderBottom: '0.5px solid var(--border)', color: 'var(--text-muted)' }}>{h}</th>)}
+          </tr></thead><tbody>
+            {preview.data.sheets[0].rows?.slice(1, 6).map((row: string[], ri: number) =>
+              <tr key={ri}>{row.map((c2: string, ci: number) =>
+                <td key={ci} className="px-2 py-1" style={{ borderBottom: '0.5px solid var(--border)', color: 'var(--text)' }}>{c2}</td>)}</tr>)}
+          </tbody></table></div>
+        <div className="flex gap-2 px-2 py-1.5" style={{ borderTop: '0.5px solid var(--border)', background: 'var(--bg-surface)' }}>
+          <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{preview.data.sheets[0].total_rows || preview.data.sheets[0].rows?.length} rows</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{preview.data.sheets[0].rows?.[0]?.length} cols</span></div>
+      </div>}
+    </>}
+
+    {/* 创建模式 */}
+    {action === 'create' && <>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>输出路径</label>
+        <input value={c.path || ''} onChange={e => s('path', e.target.value)} className="w-full px-3 py-2.5 rounded-lg text-xs outline-none font-mono" style={st} placeholder="data/outputs/report.xlsx" /></div>
+      <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>数据（留空用上游）</label>
+        <textarea value={c.data || ''} onChange={e => s('data', e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 60 }}
+          placeholder={'[{"姓名": "张三", "得分": 85}]'} /></div>
+    </>}
+
     <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>工作表</label>
       <input value={c.sheet || ''} onChange={e => s('sheet', e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={st} placeholder="Sheet1（留空默认）" /></div>
-    {a !== 'read' && <div><label className={lbl} style={{ color: 'var(--text-muted)' }}>数据（留空用上游）</label>
-      <textarea value={c.data || ''} onChange={e => s('data', e.target.value)} rows={4} className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none resize-y" style={{ ...st, minHeight: 60 }}
-        placeholder={'[{"姓名": "张三", "得分": 85}]'} /></div>}
   </div>
 }
 
