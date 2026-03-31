@@ -108,8 +108,11 @@ async def handle_chat(request: web.Request) -> web.Response:
     body = await request.json()
 
     content = body.get("content", "").strip()
-    if not content:
+    file_ids = body.get("file_ids", [])
+    if not content and not file_ids:
         return _json({"error": "content 不能为空"}, status=400)
+    if not content and file_ids:
+        content = "请查看我上传的文件。"
 
     attachments = await _resolve_attachments(engine, request, body)
     position_id = await _resolve_position_id(engine, body, request)
@@ -134,10 +137,13 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
     body = await request.json()
 
     content = body.get("content", "").strip()
-    if not content:
+    file_ids = body.get("file_ids", [])
+    if not content and not file_ids:
         resp = web.StreamResponse(status=400)
         await resp.prepare(request)
         return resp
+    if not content and file_ids:
+        content = "请查看我上传的文件。"
 
     position_id = await _resolve_position_id(engine, body, request)
 

@@ -306,8 +306,36 @@ def _preview_pptx(fp):
         return {"error": str(e)}
 
 
+async def handle_serve(request: web.Request) -> web.Response:
+    """GET /api/v1/files/serve/{path:.*} — 内联展示文件（不触发下载）"""
+    engine = request.app["engine"]
+    raw_path = request.match_info["path"]
+    from pathlib import Path
+    candidates = [engine.root_dir / raw_path,
+                  engine.root_dir / "data" / "uploads" / Path(raw_path).name,
+                  engine.root_dir / "data" / "outputs" / Path(raw_path).name]
+    file_path = None
+    for c in candidates:
+        try:
+            resolved = c.resolve()
+            if resolved.is_file() and str(resolved).startswith(str(engine.root_dir.resolve())):
+                file_path = resolved; break
+        except Exception:
+            continue
+    if not file_path:
+        return web.json_response({"error": f"文件不存在: {raw_path}"}, status=404)
+    ct_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+              ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+              ".pdf": "application/pdf"}
+    ct = ct_map.get(file_path.suffix.lower(), "application/octet-stream")
+    return web.FileResponse(path=file_path, headers={
+        "Content-Disposition": f'inline; filename="{file_path.name}"',
+        "Content-Type": ct, "Cache-Control": "private, max-age=3600"})
+
+
 def register(app: web.Application) -> None:
     app.router.add_post("/api/v1/files/upload", handle_upload)
     app.router.add_get("/api/v1/files", handle_list_files)
     app.router.add_get("/api/v1/files/preview/{path:.*}", handle_preview)
     app.router.add_get("/api/v1/files/download/{path:.*}", handle_download)
+    app.router.add_get("/api/v1/files/serve/{path:.*}", handle_serve)

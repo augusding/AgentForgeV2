@@ -14,6 +14,7 @@ import SlashCommandMenu, { type SlashCommand, type SlashMenuHandle } from '../co
 import Toolbox, { type ToolDef } from '../components/Toolbox'
 import ToolPanel from '../components/ToolPanel'
 import VoiceInputButton from '../components/VoiceInputButton'
+import ImageLightbox from '../components/ImageLightbox'
 import toast from 'react-hot-toast'
 
 export default function Chat() {
@@ -31,6 +32,7 @@ export default function Chat() {
   const [personality, setPersonality] = useState('')
   const [showSlash, setShowSlash] = useState(false); const [slashQ, setSlashQ] = useState('')
   const [previewFile, setPreviewFile] = useState<{ path: string; filename: string; format?: string; size?: number } | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; filename: string } | null>(null)
   const [activeTool, setActiveTool] = useState<ToolDef | null>(null)
   const [toolboxOpen, setToolboxOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null); const taRef = useRef<HTMLTextAreaElement>(null); const fileRef = useRef<HTMLInputElement>(null)
@@ -142,14 +144,16 @@ export default function Chat() {
   }
 
   const send = async (ov?: string, extraFiles?: Array<{ file_id: string; filename: string }>) => {
-    const text = (ov || input).trim(); if (!text || store.streaming) return
-    if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
+    const text = (ov || input).trim()
     const ca = [...attachments, ...(extraFiles || [])].map((a: any) => ({
       ...a, path: a.server_path || a.path || undefined,
     }))
+    if ((!text && !ca.length) || store.streaming) return
+    if (!ov) setInput(''); isFirstMsg.current = !store.currentSessionId
     attachments.forEach((a: any) => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
     setAttachments([])
-    store.addUserMessage(text, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
+    const displayText = text || ca.map((a: any) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.filename || '') ? `[图片] ${a.filename}` : `[文件] ${a.filename}`).join('\n')
+    store.addUserMessage(displayText, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
     lastEventTime.current = Date.now()
     if (idleTimer.current) clearInterval(idleTimer.current)
     idleTimer.current = setInterval(() => {
@@ -257,7 +261,7 @@ export default function Chat() {
               </div>}
             </div>)}
 
-          {store.messages.map((msg, i) => <MsgRow key={i} msg={msg} idx={i} isLast={i === store.messages.length - 1} streaming={store.streaming} onRegen={regen} pos={posInfo} onFileClick={setPreviewFile} />)}
+          {store.messages.map((msg, i) => <MsgRow key={i} msg={msg} idx={i} isLast={i === store.messages.length - 1} streaming={store.streaming} onRegen={regen} pos={posInfo} onFileClick={setPreviewFile} onImageClick={(src: string, fn: string) => setLightboxImage({ src, filename: fn })} />)}
           {store.streaming && store.messages.length > 0 && store.messages[store.messages.length - 1]?.thinking && (
             <div className="flex items-center gap-2 px-4 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>
               <div className="flex gap-0.5">
@@ -279,7 +283,7 @@ export default function Chat() {
                 <div key={a.file_id} className="relative group" style={{ width: 64, height: 64 }}>
                   <img src={a.thumbnail} alt={a.filename} className="w-full h-full object-cover rounded-lg cursor-pointer"
                     style={{ border: '1px solid var(--border)' }}
-                    onClick={() => a.thumbnail && window.open(a.thumbnail, '_blank')} />
+                    onClick={() => a.thumbnail && setLightboxImage({ src: a.thumbnail, filename: a.filename })} />
                   {a.processing && <div className="absolute inset-0 rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /></div>}
                   {!a.processing && a.vision_text && <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'var(--accent)' }}>
@@ -289,9 +293,13 @@ export default function Chat() {
                     style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}><X size={10} style={{ color: 'var(--text-muted)' }} /></button>
                 </div>
               ) : (
-                <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs"
+                <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs group hover:shadow-sm transition-shadow"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                  <Paperclip size={10} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontSize: 12 }}>{
+                    /\.pdf$/i.test(a.filename) ? '📕' : /\.docx?$/i.test(a.filename) ? '📄' :
+                    /\.xlsx?$/i.test(a.filename) ? '📗' : /\.pptx?$/i.test(a.filename) ? '📙' :
+                    /\.csv$/i.test(a.filename) ? '📊' : /\.md$/i.test(a.filename) ? '📝' : '📎'
+                  }</span>
                   <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
                   <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
                 </div>
@@ -320,7 +328,7 @@ export default function Chat() {
                 onChange={e => { const v = e.target.value; setInput(v); adjustH()
                   if (v === '/' || (v.startsWith('/') && v.length <= 20 && !v.includes(' '))) { setSlashQ(v.slice(1)); setShowSlash(true) } else setShowSlash(false) }}
                 onKeyDown={e => { if (showSlash && slashRef.current?.handleKey(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="输入消息，/ 快捷命令，Shift+Enter 换行" disabled={store.streaming} rows={1}
+                placeholder={attachments.length > 0 ? `已选择 ${attachments.length} 个文件，可直接发送或输入补充说明...` : '输入消息，/ 快捷命令，Shift+Enter 换行'} disabled={store.streaming} rows={1}
                 className="w-full px-4 pt-3 pb-2 text-sm outline-none resize-none bg-transparent" style={{ color: 'var(--text)', maxHeight: 200 }} />
               <div className="flex items-center gap-1 px-3 pb-2 pt-0.5">
                 <input ref={fileRef} type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json,.xlsx,.pptx,.png,.jpg,.jpeg,.gif,.webp,.mp3,.wav,.m4a,.ogg,.webm,.flac" onChange={e => { handleUpload(e.target.files); e.target.value = '' }} />
@@ -347,12 +355,13 @@ export default function Chat() {
       </div>
       {/* Right preview panel */}
       {previewFile && <div className="w-[45%] shrink-0 h-full"><FilePreviewPanel file={previewFile} onClose={() => setPreviewFile(null)} /></div>}
+      {lightboxImage && <ImageLightbox src={lightboxImage.src} filename={lightboxImage.filename} onClose={() => setLightboxImage(null)} />}
     </div>
   )
 }
 
 /* ── MsgRow (#6 #7 #8 #9) ── */
-function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { msg: any; idx: number; isLast: boolean; streaming: boolean; onRegen: () => void; pos?: any; onFileClick?: (f: any) => void }) {
+function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick, onImageClick }: { msg: any; idx: number; isLast: boolean; streaming: boolean; onRegen: () => void; pos?: any; onFileClick?: (f: any) => void; onImageClick?: (src: string, filename: string) => void }) {
   const msgId = msg.id || `msg-${idx}`; const clr = pos?.color || 'var(--accent)'
 
   if (msg.role === 'user') {
@@ -362,10 +371,10 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { ms
     <div className="flex justify-end"><div className="max-w-[70%]">
       {imageAtts.length > 0 && <div className="flex gap-1.5 mb-1.5 justify-end flex-wrap">
         {imageAtts.map((a: any) => {
-          const imgUrl = a.path ? `/api/v1/files/download/${a.path}` : a.thumbnail
+          const imgUrl = a.path ? `/api/v1/files/serve/${a.path}` : a.thumbnail
           return <div key={a.file_id} className="rounded-xl overflow-hidden" style={{ maxWidth: 200, border: '1px solid var(--border)' }}>
             {imgUrl ? <img src={imgUrl} alt={a.filename} className="w-full max-h-[200px] object-cover cursor-pointer"
-                onClick={() => window.open(imgUrl, '_blank')} />
+                onClick={() => onImageClick?.(imgUrl || '', a.filename)} />
               : <div className="w-[120px] h-[80px] flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                 </div>}
