@@ -459,7 +459,8 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick, onImag
               <div className="flex items-center gap-2 text-xs py-1" style={{ color: 'var(--text-muted)' }}>
                 <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>思考中...</span></div>
             )}
-            {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
+            {/* 文件/数据卡片 — 仅在流式结束后渲染 */}
+            {(!streaming || !isLast) && msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
               const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} onFileClick={onFileClick} /> : null
             })}
             {msg.suggestions?.map((sg: any, i: number) => (
