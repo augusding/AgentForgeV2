@@ -48,6 +48,7 @@ export default function FilePreviewPanel({ file, onClose }: Props) {
         {loading ? <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" size={24} style={{ color: 'var(--accent)' }} /></div>
          : data?.type === 'table' ? <TableView data={data.data} />
          : data?.type === 'slides' ? <SlidesView data={data.data} />
+         : data?.type === 'html' ? <HtmlView content={data.content || ''} />
          : data?.type === 'image' ? <ImageView url={data.data?.url} name={file.filename} />
          : data?.type === 'markdown' ? <div className="px-6 py-4"><Markdown content={data.content || ''} /></div>
          : data?.type === 'richtext' ? <RichView content={data.content || ''} />
@@ -113,6 +114,38 @@ function ImageView({ url, name }: { url: string; name: string }) {
   return <div className="flex items-center justify-center h-full p-6">
     {src ? <img src={src} alt={name} className="max-w-full max-h-full object-contain rounded-lg" /> : <Loader2 className="animate-spin" size={24} style={{ color: 'var(--accent)' }} />}
   </div>
+}
+
+function HtmlView({ content }: { content: string }) {
+  const [mode, setMode] = useState<'preview' | 'code'>('preview')
+  const [cp, setCp] = useState(false)
+  const wrapped = content.includes('<html') || content.includes('<!DOCTYPE')
+    ? content
+    : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;padding:16px;font-family:-apple-system,sans-serif}</style></head><body>${content}</body></html>`
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          <button onClick={() => setMode('preview')} className="px-2.5 py-1 text-[11px]"
+            style={{ background: mode === 'preview' ? 'var(--accent)' : 'transparent', color: mode === 'preview' ? '#fff' : 'var(--text-muted)' }}>预览</button>
+          <button onClick={() => setMode('code')} className="px-2.5 py-1 text-[11px]"
+            style={{ background: mode === 'code' ? 'var(--accent)' : 'transparent', color: mode === 'code' ? '#fff' : 'var(--text-muted)', borderLeft: '1px solid var(--border)' }}>源码</button>
+        </div>
+        <div className="flex-1" />
+        <button onClick={async () => { await navigator.clipboard.writeText(content); setCp(true); toast.success('已复制'); setTimeout(() => setCp(false), 2000) }}
+          className="p-1.5 rounded-md hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}>
+          {cp ? <Check size={14} style={{ color: '#22c55e' }} /> : <Copy size={14} />}
+        </button>
+        <button onClick={() => { const b = new Blob([wrapped], { type: 'text/html' }); const u = URL.createObjectURL(b); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 5000) }}
+          className="p-1.5 rounded-md hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }} title="新标签打开">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+      {mode === 'preview'
+        ? <iframe srcDoc={wrapped} sandbox="allow-scripts allow-same-origin" className="flex-1 w-full border-0" style={{ background: '#fff', minHeight: 300 }} title="HTML 预览" />
+        : <pre className="flex-1 overflow-auto px-4 py-3 text-xs leading-relaxed" style={{ color: 'var(--text)', background: 'var(--bg)', fontFamily: 'monospace', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</pre>}
+    </div>
+  )
 }
 
 function RichView({ content }: { content: string }) {

@@ -245,6 +245,8 @@ async def handle_preview(request: web.Request) -> web.Response:
         return _json({**base, "type": "image", "data": {"url": f"/api/v1/files/download/{raw}"}})
     if suffix == ".md":
         return _json({**base, "type": "markdown", "content": fp.read_text(encoding="utf-8", errors="replace")[:10000]})
+    if suffix in (".html", ".htm", ".svg"):
+        return _json({**base, "type": "html", "content": fp.read_text(encoding="utf-8", errors="replace")[:50000]})
 
     from core.file_parser import extract_text
     text = await extract_text(str(fp))
