@@ -277,7 +277,9 @@ export default function Chat() {
             {attachments.length > 0 && <div className="flex gap-2 mb-2 px-3 flex-wrap">
               {attachments.map(a => a.type === 'image' && a.thumbnail ? (
                 <div key={a.file_id} className="relative group" style={{ width: 64, height: 64 }}>
-                  <img src={a.thumbnail} alt={a.filename} className="w-full h-full object-cover rounded-lg" style={{ border: '1px solid var(--border)' }} />
+                  <img src={a.thumbnail} alt={a.filename} className="w-full h-full object-cover rounded-lg cursor-pointer"
+                    style={{ border: '1px solid var(--border)' }}
+                    onClick={() => a.thumbnail && window.open(a.thumbnail, '_blank')} />
                   {a.processing && <div className="absolute inset-0 rounded-lg flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /></div>}
                   {!a.processing && a.vision_text && <div className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: 'var(--accent)' }}>
@@ -362,7 +364,8 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick }: { ms
         {imageAtts.map((a: any) => {
           const imgUrl = a.path ? `/api/v1/files/download/${a.path}` : a.thumbnail
           return <div key={a.file_id} className="rounded-xl overflow-hidden" style={{ maxWidth: 200, border: '1px solid var(--border)' }}>
-            {imgUrl ? <img src={imgUrl} alt={a.filename} className="w-full max-h-[200px] object-cover" />
+            {imgUrl ? <img src={imgUrl} alt={a.filename} className="w-full max-h-[200px] object-cover cursor-pointer"
+                onClick={() => window.open(imgUrl, '_blank')} />
               : <div className="w-[120px] h-[80px] flex items-center justify-center" style={{ background: 'var(--bg-surface)' }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                 </div>}

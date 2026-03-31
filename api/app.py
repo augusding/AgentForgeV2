@@ -156,5 +156,9 @@ def create_app(engine: ForgeEngine) -> web.Application:
     app["gateway"] = gateway
     app.router.add_get("/ws", gateway.handle_ws)
 
+    # 确保输出目录存在
+    from pathlib import Path as _P
+    (_P(engine.root_dir) / "data" / "outputs").mkdir(parents=True, exist_ok=True)
+
     logger.info("API 路由注册完成")
     return app

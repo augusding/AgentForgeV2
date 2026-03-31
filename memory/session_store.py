@@ -38,6 +38,11 @@ class SessionStore(BaseStore):
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
             )
         """)
+        # 迁移：添加 attachments 列
+        try:
+            await db.execute("ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT '[]'")
+        except Exception:
+            pass
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, org_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)")
 
@@ -87,17 +92,20 @@ class SessionStore(BaseStore):
 
     async def add_message(self, session_id: str, role: str, content: str,
                           tool_calls: list[dict] | None = None, tool_results: list[dict] | None = None,
-                          tokens_used: int = 0, model: str = "") -> str:
+                          tokens_used: int = 0, model: str = "",
+                          attachments: list[dict] | None = None) -> str:
         await self.ensure_tables()
         msg_id = uuid4().hex[:12]
         async with self._db() as db:
             await db.execute(
                 "INSERT INTO messages (id, session_id, role, content, tool_calls, tool_results, "
-                "tokens_used, model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tokens_used, model, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (msg_id, session_id, role, content,
                  json.dumps(tool_calls or [], ensure_ascii=False),
                  json.dumps(tool_results or [], ensure_ascii=False),
-                 tokens_used, model, time.time()))
+                 tokens_used, model,
+                 json.dumps(attachments or [], ensure_ascii=False),
+                 time.time()))
             await db.execute("UPDATE sessions SET updated_at = ? WHERE id = ?", (time.time(), session_id))
             await db.commit()
         return msg_id
@@ -118,6 +126,7 @@ class SessionStore(BaseStore):
         for msg in messages:
             msg["tool_calls"] = json.loads(msg.get("tool_calls", "[]"))
             msg["tool_results"] = json.loads(msg.get("tool_results", "[]"))
+            msg["attachments"] = json.loads(msg.get("attachments", "[]"))
         return messages
 
     async def get_history_as_llm_messages(self, session_id: str, limit: int = 20) -> list[dict]:

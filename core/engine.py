@@ -189,7 +189,8 @@ class ForgeEngine:
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
-        await self._session_store.add_message(session_id, "user", msg.content)
+        _save_atts = [{k: a.get(k, "") for k in ("file_id", "filename", "type", "path")} for a in (msg.attachments or [])] or None
+        await self._session_store.add_message(session_id, "user", msg.content, attachments=_save_atts)
         history = await self._session_store.get_history_as_llm_messages(session_id, limit=20)
         if history and history[-1].get("role") == "user":
             history = history[:-1]
@@ -265,11 +266,11 @@ class ForgeEngine:
         if lc:
             lc.info("pipeline", "position_resolved", f"岗位: {position.display_name}",
                     user_id=msg.user_id)
-
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
-        await self._session_store.add_message(session_id, "user", msg.content)
+        _save_atts = [{k: a.get(k, "") for k in ("file_id", "filename", "type", "path")} for a in (msg.attachments or [])] or None
+        await self._session_store.add_message(session_id, "user", msg.content, attachments=_save_atts)
         if lc:
             lc.info("pipeline", "session_ready", f"会话: {session_id}",
                     user_id=msg.user_id, session_id=session_id)
