@@ -9,7 +9,7 @@ from aiohttp import web
 
 logger = logging.getLogger(__name__)
 
-_MAX_FILE_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "20")) * 1024 * 1024
+_MAX_FILE_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "100")) * 1024 * 1024
 
 _ALLOWED_EXTENSIONS = {
     ".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".json",

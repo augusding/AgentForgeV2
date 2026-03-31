@@ -116,7 +116,7 @@ export default function Knowledge() {
         onClick={() => document.getElementById('file-input')?.click()}>
         <Upload size={24} className="mx-auto mb-2" style={{ color: 'var(--text-muted)' }} />
         <p className="text-sm mb-1">{uploading ? '处理中，请稍候...' : '拖拽文件到此处，或点击选择'}</p>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>支持 PDF, DOCX, TXT, MD, CSV, JSON（最大 20MB）</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>支持 PDF, DOCX, TXT, MD, CSV, JSON（最大 100MB）</p>
         <input id="file-input" type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv,.json" onChange={e => handleUpload(e.target.files)} />
       </div>
 
