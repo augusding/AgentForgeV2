@@ -14,6 +14,8 @@ interface Message {
   tool_calls?: ToolCall[]; attachments?: Attachment[]; suggestions?: SuggestionData[]
   model?: string; tokens_used?: number; duration_ms?: number
   thinking?: string; created_at?: number
+  phase?: 'connecting' | 'thinking' | 'generating' | 'tool_running' | 'tool_done' | 'continuing' | 'done' | 'error'
+  phaseDetail?: string; errorContent?: string
 }
 
 interface Session { id: string; title: string; position_id: string; updated_at: number }
@@ -31,6 +33,8 @@ interface ChatState {
   addSuggestion: (sg: SuggestionData) => void
   finishAssistant: (meta?: { model?: string; tokens_used?: number; duration_ms?: number }) => void
   setThinking: (text: string) => void
+  setPhase: (phase: Message['phase'], detail?: string) => void
+  setError: (content: string) => void
   setStreaming: (v: boolean) => void; setAbortController: (c: AbortController | null) => void
   regenerate: () => string | null
   toggleFeedback: (messageId: string, rating: 'up' | 'down') => Promise<void>
@@ -123,6 +127,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThinking: (text) => set((s) => {
     const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
     if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, thinking: text }
+    return { messages: msgs }
+  }),
+  setPhase: (phase, detail) => set((s) => {
+    const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
+    if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, phase, phaseDetail: detail || '', thinking: detail || '' }
+    return { messages: msgs }
+  }),
+  setError: (content) => set((s) => {
+    const msgs = [...s.messages]; const last = msgs[msgs.length - 1]
+    if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, phase: 'error', errorContent: content, thinking: '' }
     return { messages: msgs }
   }),
   setStreaming: (v) => set({ streaming: v }),

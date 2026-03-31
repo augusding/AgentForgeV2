@@ -143,7 +143,8 @@ export default function Chat() {
     attachments.forEach((a: any) => { if (a.thumbnail) URL.revokeObjectURL(a.thumbnail) })
     setAttachments([])
     const displayText = text || ca.map((a: any) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.filename || '') ? `[图片] ${a.filename}` : `[文件] ${a.filename}`).join('\n')
-    store.addUserMessage(displayText, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true); store.setThinking('正在思考...')
+    store.addUserMessage(displayText, ca.length ? ca : undefined); store.startAssistant(); store.setStreaming(true)
+    store.setPhase('connecting', `${posInfo?.display_name || 'AI'} 连接中...`)
     lastEventTime.current = Date.now()
     if (idleTimer.current) clearInterval(idleTimer.current)
     idleTimer.current = setInterval(() => {
@@ -166,21 +167,30 @@ export default function Chat() {
         for (const l of lines) { if (l.startsWith('event: ')) { evt = l.slice(7).trim(); continue }
           if (!l.startsWith('data: ')) continue
           try { const d = JSON.parse(l.slice(6)); lastEventTime.current = Date.now()
-            if (evt === 'thinking') { store.setThinking(d.content || ((d.agent_name || '') + ' 正在思考...')) }
-            else if (evt === 'delta') { store.setThinking(''); store.appendDelta(d.content || '') }
+            if (evt === 'thinking') {
+              const c = d.content || ''; const an = d.agent_name || posInfo?.display_name || 'AI'
+              if (/正在执行|正在处理|正在搜索|正在生成|正在转换|正在计算/.test(c)) store.setPhase('tool_running', c)
+              else if (c === '继续生成中...') store.setPhase('continuing', '整理结果中...')
+              else store.setPhase('thinking', c || `${an} 正在思考...`)
+            }
+            else if (evt === 'delta') {
+              const last = useChatStore.getState().messages; const lm = last[last.length - 1]
+              if (lm?.phase === 'thinking' || lm?.phase === 'connecting') store.setPhase('generating')
+              store.setThinking(''); store.appendDelta(d.content || '')
+            }
             else if (evt === 'tool_start') {
               const tl: Record<string, string> = { document_converter: '🔄 转换文档', web_search: '🌐 搜索中', search_knowledge: '📚 搜索知识库',
                 manage_priority: '✅ 管理待办', manage_schedule: '📅 查看日程', calculator: '🔢 计算中', excel_processor: '📗 处理 Excel',
                 word_processor: '📄 生成文档', datetime: '🕐 获取时间', code_executor: '💻 执行代码', email_sender: '✉️ 发送邮件' }
               store.addToolCall({ type: 'tool_start', name: d.tool || '', input: d.input })
-              store.setThinking(tl[d.tool] || `🔧 ${d.tool}...`)
+              store.setPhase('tool_running', tl[d.tool] || `🔧 ${d.tool}...`)
             }
-            else if (evt === 'tool_result') { store.addToolCall({ type: 'tool_result', name: d.tool || '', result: d.result }); store.setThinking('继续生成中...') }
+            else if (evt === 'tool_result') { store.addToolCall({ type: 'tool_result', name: d.tool || '', result: d.result }); store.setPhase('tool_done', `✅ ${d.tool || ''} 完成`) }
             else if (evt === 'suggestion') { store.addSuggestion({ item_type: d.item_type, title: d.title, confidence: d.confidence, fields: d.fields || {} }) }
-            else if (evt === 'done') { store.setThinking(''); store.finishAssistant({ model: d.model, tokens_used: d.tokens_used, duration_ms: d.duration_ms }); if (d.session_id) { store.setSessionId(d.session_id); if (isFirstMsg.current) setTimeout(() => store.generateTitle(), 500) } }
-            else if (evt === 'error') { store.setThinking(''); store.appendDelta(`\n\n⚠️ ${d.content || '未知错误'}`) }
+            else if (evt === 'done') { store.setPhase('done'); store.setThinking(''); store.finishAssistant({ model: d.model, tokens_used: d.tokens_used, duration_ms: d.duration_ms }); if (d.session_id) { store.setSessionId(d.session_id); if (isFirstMsg.current) setTimeout(() => store.generateTitle(), 500) } }
+            else if (evt === 'error') { store.setError(d.content || '未知错误') }
           } catch {}; evt = '' } }
-    } catch (e: any) { if (e.name !== 'AbortError') { store.appendDelta('\n\n⚠️ 请求出错，请重试。'); toast.error('对话请求失败') } }
+    } catch (e: any) { if (e.name !== 'AbortError') { store.setError(e.message || '请求出错，请重试'); toast.error('对话请求失败') } }
     finally { store.setThinking(''); store.setStreaming(false); store.setAbortController(null); if (idleTimer.current) { clearInterval(idleTimer.current); idleTimer.current = null } }
   }
 
@@ -416,13 +426,39 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick, onImag
           {msg.model && <span>· {msg.model}</span>}</div>
         <div className="rounded-xl text-sm" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <div className="px-4 py-2.5">
-            {msg.thinking && !msg.content && <div className="flex items-center gap-2 text-xs py-1" style={{ color: 'var(--text-muted)' }}>
-              <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>{msg.thinking}</span></div>}
+            {/* Phase indicator (no content yet) */}
+            {!msg.content && !msg.tool_calls?.length && (msg.phase || msg.thinking) && (
+              <div className="flex items-center gap-2 text-xs py-1" style={{ color: msg.phase === 'tool_running' ? '#EF9F27' : msg.phase === 'tool_done' ? '#22c55e' : 'var(--text-muted)' }}>
+                {msg.phase === 'tool_done'
+                  ? <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="none" stroke="#22c55e" strokeWidth="1.5"/><path d="M4 7l2 2 4-4" fill="none" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  : <div className="w-3 h-3 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: msg.phase === 'tool_running' ? '#EF9F27' : 'var(--accent)' }} />}
+                <span>{msg.phaseDetail || msg.thinking || '思考中...'}</span></div>
+            )}
             {msg.tool_calls?.length > 0 && <ToolCalls tools={msg.tool_calls} />}
             {msg.content && <Collapsible><Markdown content={msg.content} /></Collapsible>}
-            {msg.thinking && msg.content && <div className="flex items-center gap-2 text-xs py-2 mt-1 border-t" style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-              <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>{msg.thinking}</span></div>}
-            {!msg.content && !msg.thinking && !(msg.tool_calls?.length) && <span style={{ color: 'var(--text-muted)' }}>思考中...</span>}
+            {/* Trailing phase (after content) */}
+            {msg.content && (msg.phase === 'tool_running' || msg.phase === 'continuing' || msg.phase === 'thinking') && (
+              <div className="flex items-center gap-2 text-xs py-2 mt-1 border-t" style={{ color: msg.phase === 'tool_running' ? '#EF9F27' : 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                <div className="w-3 h-3 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--border)', borderTopColor: msg.phase === 'tool_running' ? '#EF9F27' : 'var(--accent)' }} />
+                <span>{msg.phaseDetail || msg.thinking}</span></div>
+            )}
+            {/* Error card */}
+            {msg.phase === 'error' && msg.errorContent && (
+              <div className="rounded-lg p-3 mt-1" style={{ background: '#ef444408', border: '1px solid #ef444420' }}>
+                <div className="flex items-start gap-2">
+                  <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0 mt-0.5"><circle cx="8" cy="8" r="7" fill="none" stroke="#ef4444" strokeWidth="1.5"/><path d="M8 5v3M8 10v1" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium" style={{ color: '#ef4444' }}>出错了</div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{msg.errorContent}</div>
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={onRegen} className="text-xs px-3 py-1 rounded-lg font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>重试</button>
+                      <button onClick={() => navigator.clipboard.writeText(msg.errorContent || '')} className="text-xs px-3 py-1 rounded-lg" style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}>复制错误</button>
+                    </div></div></div></div>
+            )}
+            {!msg.content && !msg.thinking && !msg.phase && !(msg.tool_calls?.length) && (
+              <div className="flex items-center gap-2 text-xs py-1" style={{ color: 'var(--text-muted)' }}>
+                <div className="w-3 h-3 border-2 border-t-[var(--accent)] border-[var(--border)] rounded-full animate-spin" /><span>思考中...</span></div>
+            )}
             {msg.tool_calls?.filter((tc: any) => tc.type === 'tool_result' && tc.result).map((tc: any, i: number) => {
               const card = parseCard(tc.name, tc.result); return card ? <ActionCard key={i} card={card} onFileClick={onFileClick} /> : null
             })}
