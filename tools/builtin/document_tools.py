@@ -30,8 +30,13 @@ def _safe_path(raw: str) -> Path:
 # ── Excel 处理 ────────────────────────────────────────────
 
 def _auto_path(raw: str, title: str, ext: str) -> str:
-    """path 为空时自动生成到 data/outputs/。"""
+    """path 为空时自动生成到 data/outputs/。强制使用正确的扩展名。"""
     if raw:
+        # 强制扩展名匹配工具类型（防止 LLM 给 word_processor 传 .xlsx 路径）
+        from pathlib import PurePosixPath
+        p = PurePosixPath(raw.replace("\\", "/"))
+        if p.suffix.lower() != f".{ext}":
+            raw = str(p.with_suffix(f".{ext}"))
         return raw
     import uuid
     safe = "".join(c for c in str(title or "文档") if c.isalnum() or c in "-_ ")[:30].strip() or "文档"
@@ -61,15 +66,32 @@ async def _excel_handler(args: dict) -> str:
 
     try:
         if action == "create":
-            data_str = args.get("data", "")
-            if not data_str:
+            data_input = args.get("data", "")
+            if not data_input:
                 return json.dumps({"error": "create 需要 data 参数"}, ensure_ascii=False)
-            rows = json.loads(data_str)
+            if isinstance(data_input, str):
+                try:
+                    rows = json.loads(data_input)
+                except json.JSONDecodeError as e:
+                    return json.dumps({"error": f"data 不是有效的 JSON: {e}"}, ensure_ascii=False)
+            elif isinstance(data_input, list):
+                rows = data_input
+            else:
+                return json.dumps({"error": f"data 类型不支持: {type(data_input).__name__}"}, ensure_ascii=False)
+            if not isinstance(rows, list) or not rows:
+                return json.dumps({"error": "data 必须是非空的二维数组"}, ensure_ascii=False)
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = args.get("sheet_name", "Sheet1")
-            for row in rows:
-                ws.append(row if isinstance(row, list) else [row])
+            for i, row in enumerate(rows):
+                if isinstance(row, list):
+                    ws.append([str(c) if c is not None and not isinstance(c, (str, int, float, bool)) else c for c in row])
+                elif isinstance(row, dict):
+                    if i == 0:
+                        ws.append(list(row.keys()))
+                    ws.append([row.get(k, "") for k in list(rows[0].keys()) if isinstance(rows[0], dict)])
+                else:
+                    ws.append([str(row)])
             path.parent.mkdir(parents=True, exist_ok=True)
             wb.save(str(path))
             return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "rows": len(rows)}, ensure_ascii=False)
