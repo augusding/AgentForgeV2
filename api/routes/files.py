@@ -92,6 +92,8 @@ async def handle_upload(request: web.Request) -> web.Response:
             target = (await field.read()).decode("utf-8", errors="replace")
         elif field.name == "doc_id":
             doc_id = (await field.read()).decode("utf-8", errors="replace")
+        else:
+            await field.read()  # 消费未知 field，释放 reader 句柄
 
     if not file_field or not file_path or not file_path.exists():
         return _json({"error": "未收到文件"}, status=400)
@@ -116,8 +118,15 @@ async def handle_upload(request: web.Request) -> web.Response:
                 pass
             return _json({"error": f"存储空间已满（已用 {current_size // 1024 // 1024}MB / {max_storage // 1024 // 1024}MB）"}, status=413)
 
-    from core.file_parser import extract_text
-    extracted = await extract_text(str(file_path))
+    # 音频/视频文件跳过 extract_text（由 STT 专门处理）
+    from pathlib import Path as _FP
+    _MEDIA_EXTS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac", ".aac", ".mp4", ".avi", ".mov"}
+    _file_ext = _FP(str(file_path)).suffix.lower()
+    if _file_ext in _MEDIA_EXTS:
+        extracted = ""
+    else:
+        from core.file_parser import extract_text
+        extracted = await extract_text(str(file_path))
 
     try:
         rel_path = str(file_path.relative_to(engine.root_dir)).replace("\\", "/")
@@ -153,10 +162,18 @@ async def handle_upload(request: web.Request) -> web.Response:
         result["knowledge"] = {"doc_id": final_doc_id, "chunks": chunks}
 
     if target == "chat":
-        from core.media_processor import is_audio, transcribe_audio
-        from pathlib import Path as _P
-        if is_audio(_P(str(file_path))):
-            stt_text = await transcribe_audio(_P(str(file_path)))
+        if _file_ext in _MEDIA_EXTS:
+            import asyncio as _aio
+            await _aio.sleep(0.1)  # Windows 文件句柄释放缓冲
+            from core.media_processor import transcribe_audio
+            try:
+                stt_text = await transcribe_audio(_FP(str(file_path)))
+            except PermissionError:
+                await _aio.sleep(0.5)
+                try:
+                    stt_text = await transcribe_audio(_FP(str(file_path)))
+                except Exception as e2:
+                    stt_text = f"[语音识别失败: {e2}]"
             result["extracted_text"] = stt_text
             result["media_type"] = "audio"
         else:

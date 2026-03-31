@@ -163,8 +163,9 @@ async def _dashscope_stt(path: Path, api_key: str) -> str:
             api_key=api_key,
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
-        with open(path, "rb") as f:
-            result = await client.audio.transcriptions.create(model="whisper-1", file=f)
+        file_bytes = path.read_bytes()
+        result = await client.audio.transcriptions.create(
+            model="whisper-1", file=(path.name, file_bytes, "audio/mpeg"))
         return result.text.strip()
     except Exception as e:
         logger.warning("dashscope whisper API 失败: %s", e)
