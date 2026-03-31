@@ -166,94 +166,72 @@ async def transcribe_audio(path: Path) -> str:
 
 
 async def transcribe_audio_bytes(file_bytes: bytes, filename: str, ext: str) -> str:
-    """从内存 bytes 直接做语音转文字 — 完全不碰磁盘文件，避免 Windows 文件锁。"""
+    """从内存 bytes 直接做语音转文字。"""
     if not file_bytes or len(file_bytes) < 1000:
         return "[音频文件太小]"
     api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-    if api_key:
-        # 策略 1: Whisper 文件上传（支持大文件，120s 超时）
+    if not api_key:
+        return "[语音识别不可用] 请配置 DASHSCOPE_API_KEY"
+    # Whisper / SenseVoice（openai SDK）
+    for model in ["whisper-large-v3", "whisper-1", "sensevoice-v1"]:
         try:
-            import httpx
-            mime_map = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
-                        ".ogg": "audio/ogg", ".webm": "audio/webm", ".flac": "audio/flac", ".aac": "audio/aac"}
-            mime = mime_map.get(ext, "audio/mpeg")
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as hc:
-                for model in ("whisper-large-v3", "whisper-1"):
-                    try:
-                        resp = await hc.post(
-                            "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/transcriptions",
-                            headers={"Authorization": f"Bearer {api_key}"},
-                            files={"file": (filename, file_bytes, mime)},
-                            data={"model": model, "language": os.environ.get("WHISPER_LANGUAGE", "zh")})
-                        if resp.status_code == 200:
-                            text = resp.json().get("text", "").strip()
-                            if text:
-                                logger.info("Whisper bytes (%s): %s → %d 字", model, filename, len(text))
-                                return text
-                    except Exception as e:
-                        logger.warning("Whisper bytes %s 失败: %s", model, e)
+            text = await asyncio.wait_for(
+                _whisper_openai_sdk(file_bytes, filename, api_key, model), timeout=120)
+            if text:
+                logger.info("bytes STT(%s): %s → %d 字", model, filename, len(text))
+                return text
+        except asyncio.TimeoutError:
+            logger.warning("bytes STT(%s) 超时", model)
         except Exception as e:
-            logger.warning("Whisper bytes STT 失败: %s", e)
-        # 策略 2: Qwen-Omni（仅 <10MB）
-        if len(file_bytes) < 10 * 1024 * 1024:
-            try:
-                import openai, httpx as _hx
-                fmt_map = {"mp3": "mp3", "wav": "wav", "m4a": "m4a", "ogg": "ogg",
-                           "webm": "webm", "flac": "flac", "aac": "aac"}
-                audio_fmt = fmt_map.get(ext.lstrip("."), "mp3")
-                audio_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                client = openai.AsyncOpenAI(api_key=api_key,
-                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    timeout=_hx.Timeout(90.0, connect=10.0))
-                omni_model = os.environ.get("OMNI_MODEL", "qwen3-omni-flash")
-                async def _do():
-                    resp = await client.chat.completions.create(
-                        model=omni_model,
-                        messages=[{"role": "user", "content": [
-                            {"type": "input_audio", "input_audio": {"data": audio_b64, "format": audio_fmt}},
-                            {"type": "text", "text": "请将这段音频内容完整转录为文字"},
-                        ]}], max_tokens=4000, temperature=0.3,
-                        stream=True, modalities=["text"], stream_options={"include_usage": True})
-                    parts = []
-                    async for chunk in resp:
-                        if chunk.choices:
-                            delta = chunk.choices[0].delta
-                            if hasattr(delta, "content") and delta.content:
-                                parts.append(delta.content)
-                    return "".join(parts).strip()
-                text = await asyncio.wait_for(_do(), timeout=60)
-                if text:
-                    logger.info("Qwen-Omni bytes: %s → %d 字", filename, len(text))
-                    return text
-            except (asyncio.TimeoutError, Exception) as e:
-                logger.warning("Qwen-Omni bytes 失败: %s", e)
-    return "[语音识别不可用] 请配置 DASHSCOPE_API_KEY"
+            logger.warning("bytes STT(%s) 失败: %s", model, e)
+    # Qwen-Omni（仅 <10MB）
+    if len(file_bytes) < 10 * 1024 * 1024:
+        try:
+            import openai, httpx
+            audio_b64 = base64.b64encode(file_bytes).decode("utf-8")
+            fmt_map = {"mp3": "mp3", "wav": "wav", "m4a": "m4a", "ogg": "ogg",
+                       "webm": "webm", "flac": "flac", "aac": "aac"}
+            audio_fmt = fmt_map.get(ext.lstrip("."), "mp3")
+            client = openai.AsyncOpenAI(api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                timeout=httpx.Timeout(90.0, connect=10.0))
+            omni_model = os.environ.get("OMNI_MODEL", "qwen3-omni-flash")
+            async def _do():
+                resp = await client.chat.completions.create(
+                    model=omni_model,
+                    messages=[{"role": "user", "content": [
+                        {"type": "input_audio", "input_audio": {"data": audio_b64, "format": audio_fmt}},
+                        {"type": "text", "text": "请将这段音频内容完整转录为文字"},
+                    ]}], max_tokens=4000, temperature=0.3,
+                    stream=True, modalities=["text"], stream_options={"include_usage": True})
+                parts = []
+                async for chunk in resp:
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, "content") and delta.content:
+                            parts.append(delta.content)
+                return "".join(parts).strip()
+            text = await asyncio.wait_for(_do(), timeout=60)
+            if text: return text
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning("Qwen-Omni bytes 失败: %s", e)
+    return "[语音识别失败] 所有引擎均未成功"
 
 
-async def _dashscope_whisper_file(path: Path, api_key: str) -> str:
-    """DashScope Whisper — httpx 文件上传，支持大文件，120s 超时。"""
-    import httpx
-    file_bytes = path.read_bytes()
-    mime_map = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4",
-                ".ogg": "audio/ogg", ".webm": "audio/webm", ".flac": "audio/flac", ".aac": "audio/aac"}
-    mime = mime_map.get(path.suffix.lower(), "audio/mpeg")
-    logger.info("DashScope Whisper 开始: file=%s, size=%d bytes", path.name, len(file_bytes))
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
-        for model in ("whisper-large-v3", "whisper-1"):
-            try:
-                resp = await client.post(
-                    "https://dashscope.aliyuncs.com/compatible-mode/v1/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    files={"file": (path.name, file_bytes, mime)},
-                    data={"model": model, "language": os.environ.get("WHISPER_LANGUAGE", "zh")})
-                if resp.status_code == 200:
-                    text = resp.json().get("text", "").strip()
-                    if text:
-                        logger.info("DashScope Whisper (%s) 完成: %d 字", model, len(text))
-                        return text
-            except Exception as e:
-                logger.warning("Whisper %s 失败: %s", model, e)
-    return ""
+async def _whisper_openai_sdk(file_bytes: bytes, filename: str, api_key: str, model: str) -> str:
+    """用 openai SDK 调 DashScope Whisper/SenseVoice — 文件上传方式。"""
+    import openai, httpx
+    logger.info("Whisper SDK: model=%s, size=%dKB", model, len(file_bytes) // 1024)
+    client = openai.AsyncOpenAI(api_key=api_key,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        timeout=httpx.Timeout(120.0, connect=15.0))
+    try:
+        result = await client.audio.transcriptions.create(
+            model=model, file=(filename, file_bytes),
+            language=os.environ.get("WHISPER_LANGUAGE", "zh"))
+        return result.text.strip() if result.text else ""
+    finally:
+        await client.close()
 
 
 def get_media_capabilities() -> dict:
@@ -382,39 +360,37 @@ async def _qwen_omni_stt(path: Path, prompt: str = "请将这段音频内容完�
 
 
 async def stt_transcribe(path: Path, prompt: str = "请将这段音频内容完整转录为文字") -> dict:
-    """音频转文字。优先 Whisper 文件上传（大文件稳定）→ Qwen-Omni（小文件智能）。"""
+    """音频转文字。Whisper SDK → SenseVoice → Qwen-Omni（仅 <10MB）。"""
     api_key = os.environ.get("DASHSCOPE_API_KEY", "")
-    if api_key:
-        file_size = path.stat().st_size if path.is_file() else 0
-        # 策略 1: DashScope Whisper 文件上传（支持大文件，120s 超时）
+    if not api_key:
+        return {"text": "", "source": "none", "success": False,
+                "error": "请配置 DASHSCOPE_API_KEY 以启用语音识别"}
+    if not path.is_file():
+        return {"text": "", "source": "none", "success": False, "error": f"文件不存在: {path}"}
+    file_size = path.stat().st_size
+    logger.info("STT 开始: file=%s, size=%dKB", path.name, file_size // 1024)
+    try: file_bytes = path.read_bytes()
+    except PermissionError:
+        await asyncio.sleep(0.5); file_bytes = path.read_bytes()
+    # Whisper / SenseVoice（openai SDK 文件上传）
+    for model in ["whisper-large-v3", "whisper-1", "sensevoice-v1"]:
         try:
-            text = await asyncio.wait_for(_dashscope_whisper_file(path, api_key), timeout=120)
+            text = await asyncio.wait_for(_whisper_openai_sdk(file_bytes, path.name, api_key, model), timeout=120)
             if text:
-                return {"text": text, "source": "dashscope-whisper", "success": True}
+                logger.info("STT(%s) 成功: %d 字", model, len(text))
+                return {"text": text, "source": model, "success": True}
         except asyncio.TimeoutError:
-            logger.warning("DashScope Whisper 超时(120s)")
+            logger.warning("STT(%s) 超时(120s)", model)
         except Exception as e:
-            logger.warning("DashScope Whisper 失败: %s", e)
-        # 策略 2: Qwen-Omni（仅 <10MB，base64 编码后不超限）
-        if file_size < 10 * 1024 * 1024:
-            try:
-                result = await asyncio.wait_for(_qwen_omni_stt(path, prompt), timeout=60)
-                if result.get("success"):
-                    return result
-            except asyncio.TimeoutError:
-                logger.warning("Qwen-Omni STT 超时(60s)")
-            except Exception as e:
-                logger.warning("Qwen-Omni STT 异常: %s", e)
-    # faster-whisper 入口保留但断开，如需启用取消下面注释：
-    # model = _get_whisper()
-    # if model:
-    #     try:
-    #         loop = asyncio.get_event_loop()
-    #         text = await asyncio.wait_for(
-    #             loop.run_in_executor(None, _whisper_transcribe_sync, model, str(path)), timeout=300)
-    #         return {"text": text, "source": "faster-whisper", "success": True}
-    #     except Exception as e:
-    #         logger.warning("本地 STT 失败: %s", e)
+            logger.warning("STT(%s) 失败: %s", model, e)
+    # Qwen-Omni（仅小文件）
+    if file_size < 10 * 1024 * 1024:
+        try:
+            result = await asyncio.wait_for(_qwen_omni_stt(path, prompt), timeout=60)
+            if result.get("success"):
+                return result
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning("Qwen-Omni STT 失败: %s", e)
     return {"text": "", "source": "none", "success": False,
             "error": "请配置 DASHSCOPE_API_KEY 以启用语音识别"}
 

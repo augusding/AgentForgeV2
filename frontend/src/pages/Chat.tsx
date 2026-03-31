@@ -127,6 +127,12 @@ export default function Chat() {
             ? { ...a, file_id: r.file_id, processing: false, server_path: r.path || '' }
             : a))
         } else if (_AUD.includes(ext)) {
+          // 音频大小限制
+          const MAX_AUDIO_MB = 15
+          if (f.size > MAX_AUDIO_MB * 1024 * 1024) {
+            toast.error(`音频文件不能超过 ${MAX_AUDIO_MB}MB（当前 ${(f.size / 1024 / 1024).toFixed(1)}MB），请压缩后重试`, { duration: 5000 })
+            continue
+          }
           // Claude 风格：立即显示音频卡片，后台异步 STT
           const tempId = `tmp_${Date.now()}`
           setAttachments(p => [...p, { file_id: tempId, filename: f.name, type: 'audio' as any, processing: true }])
