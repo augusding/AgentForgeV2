@@ -14,7 +14,9 @@ _MAX_FILE_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "100")) * 1024 * 1024
 _ALLOWED_EXTENSIONS = {
     ".pdf", ".docx", ".doc", ".txt", ".md", ".csv", ".json",
     ".xlsx", ".xls", ".pptx", ".ppt",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".zip",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".zip",
+    ".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac", ".aac",
+    ".html", ".htm",
 }
 _MAX_FILENAME_LENGTH = 255
 _MAGIC_SIGNATURES: dict[str, list[bytes]] = {
