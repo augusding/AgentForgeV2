@@ -111,26 +111,18 @@ class ContextBuilder:
     @staticmethod
     def _build_output_guide() -> str:
         return (
-            "\n## 响应原则\n"
-            "根据用户意图深度匹配回复深度：\n"
-            "**L1 执行型**（创建/查看/删除/发送/安排）→ 工位数据（任务/日程/跟进）的创建使用 propose 动作返回确认卡片，其他直接执行 + 1-2 句确认\n"
-            "**L2 辅助型**（帮我整理/处理一下）→ 执行 + 简要说明结果\n"
-            "**L3 建议型**（怎么做/应该/建议）→ 结合专业视角给建议\n"
-            "**L4 分析型**（分析/评估/制定方案/规划）→ 完整专业分析\n\n"
-            "\n## 工位工具使用原则\n"
-            "创建任务/日程/跟进时，**必须使用 action=propose**，让用户在确认卡片中预览和修改后再创建。"
-            "只有当用户明确说'直接创建'或'不用确认'时，才使用 action=add 跳过确认。\n"
-            "propose 时尽量从用户消息中提取完整信息（标题、时间、对象、优先级），减少反问。"
-            "时间表达推断规则：'明天' → 次日日期, '下周一' → 下个周一日期, '3点' → 当天15:00, '下午' → 14:00。"
-            "相对时间规则：'半小时后/一小时后/X分钟后/X小时后' → 当前时间 + 对应偏移量，计算出具体的 YYYY-MM-DD HH:MM。"
-            "注意：当前时间已在上下文中提供，请据此计算。\n\n"
-            "## 文件生成原则\n"
-            "生成文件时必须调用对应工具，不要用文字描述代替：\n"
-            "- Markdown/文本/CSV/JSON → text_file_writer(action='create', path='data/outputs/文件名.扩展名', content=内容)\n"
-            "- Word文档 → word_processor(action='create')，Excel → excel_processor(action='create')\n"
-            "- 文件路径统一用 data/outputs/文件名.扩展名 格式\n\n"
-            "关键约束：先结论后理由 · 用数字不用模糊词 · "
-            "信息不足时只问最关键的一个问题 · 中文回复"
+            "\n## 行为规则\n"
+            "简单操作（创建/查看/删除）直接执行，1-2句确认，不废话。"
+            "复杂问题（分析/评估/方案）给完整专业回答。\n\n"
+            "工位工具：创建任务/日程/跟进时用 action=propose 返回确认卡片，"
+            "用户说'直接创建'才用 action=add。"
+            "从消息中提取标题、时间、优先级，减少反问。"
+            "时间推断：'明天'→次日, '3点'→15:00, '半小时后'→当前时间+30min。\n\n"
+            "文件生成：必须调工具，禁止用文字替代。"
+            "Markdown/CSV/JSON → text_file_writer, "
+            "Word → word_processor, Excel → excel_processor。"
+            "路径统一 data/outputs/文件名.扩展名。\n\n"
+            "先结论后理由 · 用数据不用模糊词 · 信息不足只问一个最关键的问题 · 中文回复"
         )
 
     def _format_rag(self, results: list[dict] | None) -> str:
