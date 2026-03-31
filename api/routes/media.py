@@ -72,7 +72,19 @@ async def handle_process(request: web.Request) -> web.Response:
     elif mode == "stt":
         if not is_audio(fp):
             return _json({"error": "语音转录仅支持音频文件"}, 400)
-        result = await stt_transcribe(fp)
+        # 先读 bytes 避免 Windows 文件锁
+        try:
+            file_bytes = fp.read_bytes()
+        except PermissionError:
+            import asyncio
+            await asyncio.sleep(0.5)
+            file_bytes = fp.read_bytes()
+        from core.media_processor import transcribe_audio_bytes
+        text = await transcribe_audio_bytes(file_bytes=file_bytes, filename=fp.name, ext=fp.suffix.lower())
+        if text and not text.startswith("["):
+            result = {"text": text, "source": "bytes", "success": True}
+        else:
+            result = {"text": text, "source": "none", "success": False, "error": text}
     else:
         return _json({"error": "未知模式"}, 400)
 

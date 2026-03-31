@@ -22,6 +22,13 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+# 最早加载 .env（在任何其他模块之前）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT_DIR / ".env", override=True)
+except ImportError:
+    pass
+
 
 def main():
     import typer
