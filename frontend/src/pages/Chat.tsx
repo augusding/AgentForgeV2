@@ -306,7 +306,27 @@ export default function Chat() {
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}><X size={10} style={{ color: 'var(--text-muted)' }} /></button>
                 </div>
+              ) : _AUD.includes((a.filename || '').toLowerCase().slice((a.filename || '').lastIndexOf('.'))) ? (
+                /* Claude 风格音频卡片 */
+                <div key={a.file_id} className="relative group rounded-xl overflow-hidden"
+                  style={{ width: 180, border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+                  <div className="px-3 py-2.5">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>{a.filename}</div>
+                    <div className="mt-2 flex items-end gap-0.5 h-4 flex-1">
+                      {[3,6,4,8,5,7,3,6,8,4,5,7,3,6,4,8,5,7,3,5].map((h,i) => (
+                        <div key={i} className="rounded-full" style={{ width: 2, height: h, background: 'var(--text-muted)', opacity: 0.4 }} />
+                      ))}
+                    </div>
+                    <div className="mt-1.5"><span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>
+                      {(a.filename || '').split('.').pop()?.toUpperCase()}</span></div>
+                  </div>
+                  <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}><X size={10} style={{ color: 'var(--text-muted)' }} /></button>
+                </div>
               ) : (
+                /* 普通文件标签 */
                 <div key={a.file_id} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg text-xs group hover:shadow-sm transition-shadow"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                   <span style={{ fontSize: 12 }}>{
@@ -315,7 +335,9 @@ export default function Chat() {
                     /\.csv$/i.test(a.filename) ? '📊' : /\.md$/i.test(a.filename) ? '📝' : '📎'
                   }</span>
                   <span className="max-w-[120px] truncate" style={{ color: 'var(--text)' }}>{a.filename}</span>
-                  <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))} className="p-0.5 rounded hover:bg-[var(--bg-hover)]" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
+                  <button onClick={() => setAttachments(p => p.filter(x => x.file_id !== a.file_id))}
+                    className="p-0.5 rounded hover:bg-[var(--bg-hover)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
                 </div>
               ))}</div>}
             {activeTool && (
@@ -379,8 +401,10 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick, onImag
   const msgId = msg.id || `msg-${idx}`; const clr = pos?.color || 'var(--accent)'
 
   if (msg.role === 'user') {
-    const imageAtts = (msg.attachments || []).filter((a: any) => a.type === 'image')
-    const otherAtts = (msg.attachments || []).filter((a: any) => a.type !== 'image')
+    const imageAtts = (msg.attachments || []).filter((a: any) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(a.filename || ''))
+    const audioAtts = (msg.attachments || []).filter((a: any) => /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(a.filename || ''))
+    const otherAtts = (msg.attachments || []).filter((a: any) =>
+      !(/\.(png|jpe?g|gif|webp|bmp)$/i.test(a.filename || '')) && !(/\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(a.filename || '')))
     return (
     <div className="flex justify-end"><div className="max-w-[70%]">
       {imageAtts.length > 0 && <div className="flex gap-1.5 mb-1.5 justify-end flex-wrap">
@@ -394,6 +418,19 @@ function MsgRow({ msg, idx, isLast, streaming, onRegen, pos, onFileClick, onImag
                 </div>}
           </div>
         })}</div>}
+      {audioAtts.length > 0 && <div className="flex gap-1.5 mb-1.5 justify-end flex-wrap">
+        {audioAtts.map((a: any) => <div key={a.file_id} className="rounded-xl overflow-hidden"
+          style={{ width: 180, border: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+          <div className="px-3 py-2.5">
+            <div className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>{a.filename}</div>
+            <div className="mt-2 flex items-end gap-0.5 h-4">
+              {[3,6,4,8,5,7,3,6,8,4,5,7,3,6,4,8,5,7,3,5].map((h,i) => (
+                <div key={i} className="rounded-full" style={{ width: 2, height: h, background: 'var(--text-muted)', opacity: 0.4 }} />))}
+            </div>
+            <div className="mt-1.5"><span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+              style={{ background: 'var(--bg)', color: 'var(--text-muted)' }}>{(a.filename||'').split('.').pop()?.toUpperCase()}</span></div>
+          </div>
+        </div>)}</div>}
       {otherAtts.length > 0 && <div className="flex gap-1 mb-1 justify-end">{otherAtts.map((a: any) =>
         <span key={a.file_id} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>📎 {a.filename}</span>)}</div>}
       <div className="bg-[var(--accent)] text-white px-4 py-2.5 rounded-xl text-sm whitespace-pre-wrap">{msg.content}</div>
