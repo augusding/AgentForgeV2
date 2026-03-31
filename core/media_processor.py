@@ -156,6 +156,57 @@ async def transcribe_audio(path: Path) -> str:
     return result["text"] if result["success"] else f"[{result.get('error', '语音识别失败')}]"
 
 
+async def transcribe_audio_bytes(file_bytes: bytes, filename: str, ext: str) -> str:
+    """从内存 bytes 直接做语音转文字 — 完全不碰磁盘文件，避免 Windows 文件锁。"""
+    if not file_bytes or len(file_bytes) < 1000:
+        return "[音频文件太小]"
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if api_key:
+        # Qwen-Omni：base64 编码发送（不需要文件）
+        try:
+            fmt_map = {"mp3": "mp3", "wav": "wav", "m4a": "m4a", "ogg": "ogg",
+                       "webm": "webm", "flac": "flac", "aac": "aac"}
+            audio_fmt = fmt_map.get(ext.lstrip("."), "mp3")
+            audio_b64 = base64.b64encode(file_bytes).decode("utf-8")
+            import openai
+            client = openai.AsyncOpenAI(api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+            model = os.environ.get("OMNI_MODEL", "qwen3-omni-flash")
+            resp = await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": [
+                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": audio_fmt}},
+                    {"type": "text", "text": "请将这段音频内容完整转录为文字"},
+                ]}],
+                max_tokens=4000, temperature=0.3,
+                stream=True, modalities=["text"],
+                stream_options={"include_usage": True})
+            parts = []
+            async for chunk in resp:
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, "content") and delta.content:
+                        parts.append(delta.content)
+            text = "".join(parts).strip()
+            if text:
+                logger.info("Qwen-Omni bytes STT: %s → %d 字", filename, len(text))
+                return text
+        except Exception as e:
+            logger.warning("Qwen-Omni bytes STT 失败: %s", e)
+        # 降级：dashscope whisper（需要文件对象）
+        try:
+            import openai as _oai
+            client = _oai.AsyncOpenAI(api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+            result = await client.audio.transcriptions.create(
+                model="whisper-1", file=(filename, file_bytes, "audio/mpeg"))
+            if result.text.strip():
+                return result.text.strip()
+        except Exception as e:
+            logger.warning("dashscope whisper bytes STT 失败: %s", e)
+    return "[语音识别不可用] 请配置 DASHSCOPE_API_KEY"
+
+
 async def _dashscope_stt(path: Path, api_key: str) -> str:
     try:
         import openai
