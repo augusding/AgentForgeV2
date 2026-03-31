@@ -124,6 +124,11 @@ class ContextBuilder:
             "时间表达推断规则：'明天' → 次日日期, '下周一' → 下个周一日期, '3点' → 当天15:00, '下午' → 14:00。"
             "相对时间规则：'半小时后/一小时后/X分钟后/X小时后' → 当前时间 + 对应偏移量，计算出具体的 YYYY-MM-DD HH:MM。"
             "注意：当前时间已在上下文中提供，请据此计算。\n\n"
+            "## 文件生成原则\n"
+            "生成文件时必须调用对应工具，不要用文字描述代替：\n"
+            "- Markdown/文本/CSV/JSON → text_file_writer(action='create', path='data/outputs/文件名.扩展名', content=内容)\n"
+            "- Word文档 → word_processor(action='create')，Excel → excel_processor(action='create')\n"
+            "- 文件路径统一用 data/outputs/文件名.扩展名 格式\n\n"
             "关键约束：先结论后理由 · 用数字不用模糊词 · "
             "信息不足时只问最关键的一个问题 · 中文回复"
         )

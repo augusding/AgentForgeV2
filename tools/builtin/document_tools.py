@@ -94,7 +94,7 @@ async def _excel_handler(args: dict) -> str:
                     ws.append([str(row)])
             path.parent.mkdir(parents=True, exist_ok=True)
             wb.save(str(path))
-            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "rows": len(rows)}, ensure_ascii=False)
+            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "format": "xlsx", "rows": len(rows)}, ensure_ascii=False)
 
         elif action == "read":
             if not path.is_file():
@@ -190,7 +190,7 @@ async def _word_handler(args: dict) -> str:
                     doc.add_paragraph(line)
             path.parent.mkdir(parents=True, exist_ok=True)
             doc.save(str(path))
-            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "preview": content[:500]}, ensure_ascii=False)
+            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name, "size": path.stat().st_size, "format": "docx"}, ensure_ascii=False)
 
         elif action == "read":
             if not path.is_file():
@@ -375,6 +375,60 @@ pdf_processor = ToolDefinition(
 )
 
 
+# ── 通用文本文件写入 ─────────────────────────────────────
+
+async def _text_file_handler(args: dict) -> str:
+    """通用文本文件写入 — 支持 md/txt/csv/json/html 等。"""
+    action = args.get("action", "create")
+    raw_path = args.get("path", "")
+    content = args.get("content", "")
+    if not raw_path:
+        return json.dumps({"error": "缺少 path 参数"}, ensure_ascii=False)
+    try:
+        path = _safe_path(raw_path)
+    except PermissionError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    try:
+        if action == "create":
+            if not content:
+                return json.dumps({"error": "create 需要 content 参数"}, ensure_ascii=False)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            fmt = path.suffix.lstrip(".").lower() or "txt"
+            return json.dumps({"status": "created", "path": _rel_path(path), "filename": path.name,
+                "size": path.stat().st_size, "format": fmt}, ensure_ascii=False)
+        elif action == "read":
+            if not path.is_file():
+                return json.dumps({"error": f"文件不存在: {raw_path}"}, ensure_ascii=False)
+            text = path.read_text(encoding="utf-8", errors="replace")
+            return json.dumps({"content": text[:8000], "size": path.stat().st_size,
+                "truncated": len(text) > 8000}, ensure_ascii=False)
+        return json.dumps({"error": f"未知操作: {action}"}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"error": f"文件操作失败: {e}"}, ensure_ascii=False)
+
+
+text_file_writer = ToolDefinition(
+    name="text_file_writer",
+    description=(
+        "通用文本文件写入工具。支持创建/读取 .md、.txt、.csv、.json、.html 等纯文本文件。"
+        "当用户需要生成 Markdown 文档、文本文件、配置文件、CSV 数据等时使用此工具。"
+        "文件保存在 data/outputs/ 目录，用户可通过文件卡片直接下载。"
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "action": {"type": "string", "enum": ["create", "read"], "description": "操作类型"},
+            "path": {"type": "string", "description": "文件路径，如 data/outputs/readme.md"},
+            "content": {"type": "string", "description": "要写入的文本内容（create 时必填）"},
+        },
+        "required": ["action", "path"],
+    },
+    handler=_text_file_handler,
+    category="document",
+)
+
+
 from tools.builtin.converter_tools import document_converter
 
-ALL_DOCUMENT_TOOLS = [excel_processor, word_processor, pdf_processor, document_converter]
+ALL_DOCUMENT_TOOLS = [excel_processor, word_processor, pdf_processor, text_file_writer, document_converter]

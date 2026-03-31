@@ -37,8 +37,8 @@ export function parseCard(toolName: string, resultStr: string): CardData | null 
     const data = typeof resultStr === 'string' ? JSON.parse(resultStr) : resultStr
     if (!data || typeof data !== 'object') return null
     // 文件操作结果
-    if ((data.status === 'converted' || (data.status === 'created' && data.path)) &&
-        ['document_converter', 'word_processor', 'excel_processor', 'pdf_processor', 'ppt_processor'].includes(toolName))
+    if ((data.status === 'converted' || data.status === 'created' || data.status === 'updated')
+        && data.path && (data.filename || data.format))
       return { type: 'file', data, toolName }
     // propose 确认卡片（优先匹配）
     if (data.action === 'propose' && data.proposed) {
@@ -246,7 +246,7 @@ function DataCard({ data, tool }: { data: any; tool: string }) {
 
 /* ── 文件卡片（点击打开侧栏预览） ── */
 function FileCard2({ data, onFileClick }: { data: any; onFileClick?: (f: any) => void }) {
-  const name = data.filename || '文件'; const path = data.path || ''; const size = data.size || 0
+  const path = data.path || ''; const name = data.filename || path.split('/').pop() || '文件'; const size = data.size || 0
   const fmt = (data.format || path.split('.').pop() || '').toUpperCase()
   const FI: Record<string, { icon: string; color: string }> = {
     DOCX: { icon: '📄', color: '#2b579a' }, PDF: { icon: '📕', color: '#d32f2f' },
