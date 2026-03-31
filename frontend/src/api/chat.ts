@@ -22,7 +22,8 @@ export async function uploadChatFile(file: File) {
   form.append('target', 'chat')
   return client.post('/files/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-  }) as Promise<{ file_id: string; filename: string; size: number; extracted_text?: string }>
+    timeout: 120000,
+  }) as Promise<{ file_id: string; filename: string; size: number; extracted_text?: string; needs_processing?: boolean; media_type?: string }>
 }
 
 export async function getQuickCommands(positionId?: string) {

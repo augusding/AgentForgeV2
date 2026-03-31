@@ -166,15 +166,10 @@ async def handle_upload(request: web.Request) -> web.Response:
 
     if target == "chat":
         if _file_ext in _MEDIA_EXTS:
-            from core.media_processor import transcribe_audio_bytes
-            try:
-                stt_text = await transcribe_audio_bytes(
-                    file_bytes=bytes(_file_bytes), filename=file_field.filename or "audio.m4a", ext=_file_ext)
-            except Exception as e:
-                logger.warning("STT 失败: %s", e)
-                stt_text = f"[语音识别失败: {e}]"
-            result["extracted_text"] = stt_text
+            # 音频：只标记类型，STT 由前端单独调 /media/process（避免上传超时）
+            result["extracted_text"] = ""
             result["media_type"] = "audio"
+            result["needs_processing"] = True
         else:
             result["extracted_text"] = extracted[:3000]
 

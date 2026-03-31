@@ -127,13 +127,27 @@ export default function Chat() {
             ? { ...a, file_id: r.file_id, processing: false, server_path: r.path || '' }
             : a))
         } else if (_AUD.includes(ext)) {
+          // Step 1: 上传（快速）
+          toast.loading('上传语音...', { id: 'aud' })
           const r = await uploadChatFile(f)
-          toast('识别语音中...')
+          toast.dismiss('aud')
+          // Step 2: STT（异步，120s 超时）
+          toast.loading('识别语音中，请稍候...', { id: 'stt' })
           try {
-            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' }, { timeout: 300000 })
-            if (sr.success && sr.text) { setInput(prev => (prev ? prev + '\n' : '') + `[语音转录 — ${r.filename}]\n${sr.text}`); toast.success('语音识别完成') }
-            else { toast.error(sr.error || '语音识别失败'); setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'audio' }]) }
-          } catch { setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'audio' }]) }
+            const sr: any = await client.post('/media/process', { file_id: r.file_id, mode: 'stt' }, { timeout: 120000 })
+            toast.dismiss('stt')
+            if (sr.success && sr.text && !sr.text.startsWith('[')) {
+              setInput(prev => (prev ? prev + '\n' : '') + sr.text)
+              toast.success(`语音识别完成 (${sr.text.length} 字)`)
+            } else {
+              toast.error(sr.text || sr.error || '语音识别失败')
+              setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename || f.name, type: 'audio' }])
+            }
+          } catch (e: any) {
+            toast.dismiss('stt')
+            toast.error(e.message?.includes('timeout') ? '语音识别超时，文件可能太大' : '语音识别失败')
+            setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename || f.name, type: 'audio' }])
+          }
         } else {
           const r = await uploadChatFile(f)
           setAttachments(p => [...p, { file_id: r.file_id, filename: r.filename, type: 'file' }])
