@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, Cpu, Briefcase, BarChart3, Brain, Server, FileText, TrendingUp, Puzzle } from 'lucide-react'
+import { User, Cpu, Briefcase, BarChart3, Brain, Server, FileText, TrendingUp, Puzzle, Search } from 'lucide-react'
 import { useAuthStore } from '../stores/useAuthStore'
 import ProfileTab from './settings/ProfileTab'
 import LLMTab from './settings/LLMTab'
@@ -8,9 +8,10 @@ import UsageTab from './settings/UsageTab'
 import MemoryTab from './settings/MemoryTab'
 import SystemTab from './settings/SystemTab'
 import LogsTab from './settings/LogsTab'
+import TracesTab from './settings/TracesTab'
 import EvolutionTab from './settings/EvolutionTab'
 
-type TabId = 'profile' | 'llm' | 'positions' | 'usage' | 'memory' | 'system' | 'logs' | 'evolution' | 'skills'
+type TabId = 'profile' | 'llm' | 'positions' | 'usage' | 'memory' | 'system' | 'logs' | 'traces' | 'evolution' | 'skills'
 
 interface TabDef { id: TabId; label: string; icon: any; desc: string; adminOnly?: boolean }
 
@@ -24,12 +25,13 @@ const TABS: TabDef[] = [
   { id: 'llm', label: 'LLM 配置', icon: Cpu, desc: 'AI 模型管理', adminOnly: true },
   { id: 'system', label: '系统信息', icon: Server, desc: '版本与状态', adminOnly: true },
   { id: 'logs', label: '系统日志', icon: FileText, desc: '运行日志', adminOnly: true },
+  { id: 'traces', label: '请求追踪', icon: Search, desc: '全链路追踪', adminOnly: true },
 ]
 
 const COMPS: Record<TabId, React.FC<{ isAdmin?: boolean }>> = {
   profile: ProfileTab, llm: LLMTab, positions: PositionsTab,
   usage: UsageTab, memory: MemoryTab, system: SystemTab, logs: LogsTab,
-  evolution: EvolutionTab, skills: SkillsPlaceholder,
+  traces: TracesTab, evolution: EvolutionTab, skills: SkillsPlaceholder,
 }
 
 function SkillsPlaceholder() {
