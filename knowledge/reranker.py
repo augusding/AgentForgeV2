@@ -1,5 +1,6 @@
 """AgentForgeV2 — LLM 检索结果重排序（向量检索 top-5 → LLM 打分 → top-3）"""
 from __future__ import annotations
+import asyncio
 import logging
 import time
 
@@ -17,10 +18,19 @@ async def rerank(query: str, chunks: list[dict], llm_client, top_k: int = 3) -> 
               f"无相关片段返回「无」。只返回编号。\n\n{chunks_text}\n\n相关片段编号：")
     t0 = time.time()
     try:
-        resp = await llm_client.chat(
-            system="你是文档相关性评估器。只返回编号或「无」。",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0, max_tokens=50)
+        try:
+            resp = await asyncio.wait_for(
+                llm_client.chat(
+                    system="你是文档相关性评估器。只返回编号或「无」。",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0, max_tokens=50,
+                    model_override="qwen-plus",
+                ),
+                timeout=10,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Reranker 超时（>10s），跳过重排")
+            return chunks[:top_k]
         content = resp.content.strip()
         logger.info("Reranker %.0fms: q=%s → %s", (time.time()-t0)*1000, query[:30], content)
         if "无" in content: return []
