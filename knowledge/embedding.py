@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
 _API_MODEL = "text-embedding-v3"
 _HASH_DIM = 1024
-_BATCH_SIZE = 25
+_BATCH_SIZE = 10
 
 
 class EmbeddingProvider:
