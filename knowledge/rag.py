@@ -144,7 +144,7 @@ class KnowledgeBase:
     def search(
         self,
         query: str,
-        top_k: int = 3,
+        top_k: int = 5,
         org_id: str = "",
         user_id: str = "",
         filter_metadata: dict | None = None,

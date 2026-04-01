@@ -1,84 +1,87 @@
 """
 AgentForge V2 — Embedding 生成
 
-支持两种模式：
-1. 本地模型 (sentence-transformers, bge-base-zh)
-2. API 调用 (OpenAI-compatible embedding API)
-
-默认尝试本地模型，失败则 fallback 到简单的 TF-IDF。
+使用 DashScope text-embedding-v3 API 生成向量。
+降级策��：API 不可用时 fallback 到 hash（仅保持接口不崩溃）。
 """
-
 from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+import os
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
-_EMBED_DIM = 768  # bge-base-zh 默认维度
+_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+_API_MODEL = "text-embedding-v3"
+_HASH_DIM = 1024
+_BATCH_SIZE = 25
 
 
 class EmbeddingProvider:
-    """
-    Embedding 生成器。
-
-    用法:
-        provider = EmbeddingProvider()
-        vectors = provider.encode(["文本1", "文本2"])
-    """
-
-    def __init__(self, model_name: str = "BAAI/bge-base-zh-v1.5"):
-        self._model_name = model_name
-        self._model = None
-        self._mode = "none"
-        self._init_model()
-
-    def _init_model(self) -> None:
-        """尝试加载本地模型。"""
+    def __init__(self):
+        # 确保 .env 已加载
         try:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self._model_name)
-            self._mode = "local"
-            logger.info("Embedding 模型加载成功: %s (local)", self._model_name)
+            from dotenv import load_dotenv
+            load_dotenv()
         except ImportError:
-            logger.warning("sentence-transformers 未安装，使用 hash 降级模式")
-            self._mode = "hash"
-        except Exception as e:
-            logger.warning("模型加载失败 (%s)，使用 hash 降级模式", e)
-            self._mode = "hash"
+            pass
+
+        self._api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+        self._mode = "hash"
+        self._dim = _HASH_DIM
+
+        if self._api_key:
+            try:
+                test = self._api_call(["测试"])
+                if test and len(test) == 1 and len(test[0]) > 0:
+                    self._mode = "api"
+                    self._dim = len(test[0])
+                    logger.info("Embedding 初始化成功: DashScope API (%s), dim=%d", _API_MODEL, self._dim)
+                else:
+                    logger.warning("DashScope Embedding API 返回异常，降级为 hash")
+            except Exception as e:
+                logger.warning("DashScope Embedding API 验证失败: %s，降级为 hash", e)
+        else:
+            logger.warning("DASHSCOPE_API_KEY 未配置，Embedding 使用 hash 模式（RAG 无法正常工作）")
 
     def encode(self, texts: list[str]) -> list[list[float]]:
-        """生成 embedding 向量。"""
-        if self._mode == "local" and self._model:
-            vectors = self._model.encode(texts, normalize_embeddings=True)
-            return vectors.tolist()
-        else:
-            return [self._hash_embed(t) for t in texts]
+        if self._mode == "api":
+            return self._api_encode_batched(texts)
+        return [self._hash_embed(t) for t in texts]
 
     def encode_single(self, text: str) -> list[float]:
-        """生成单条 embedding。"""
         return self.encode([text])[0]
 
+    def _api_encode_batched(self, texts: list[str]) -> list[list[float]]:
+        all_vectors: list[list[float]] = []
+        for i in range(0, len(texts), _BATCH_SIZE):
+            batch = texts[i:i + _BATCH_SIZE]
+            try:
+                all_vectors.extend(self._api_call(batch))
+            except Exception as e:
+                logger.error("Embedding API 批次 %d 失败: %s，用 hash 填充", i // _BATCH_SIZE, e)
+                all_vectors.extend([self._hash_embed(t) for t in batch])
+        return all_vectors
+
+    def _api_call(self, texts: list[str]) -> list[list[float]]:
+        resp = httpx.post(_API_URL, json={"model": _API_MODEL, "input": texts, "encoding_format": "float"},
+            headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        embeddings = sorted(data["data"], key=lambda x: x["index"])
+        return [e["embedding"] for e in embeddings]
+
     @staticmethod
-    def _hash_embed(text: str, dim: int = _EMBED_DIM) -> list[float]:
-        """
-        降级模式：基于 hash 的伪 embedding。
-        不能做语义搜索，但可以保持接口一致。
-        """
+    def _hash_embed(text: str, dim: int = _HASH_DIM) -> list[float]:
         h = hashlib.sha256(text.encode("utf-8")).digest()
-        # 扩展到目标维度
-        result = []
-        for i in range(dim):
-            byte_val = h[i % len(h)]
-            result.append((byte_val / 255.0) * 2 - 1)  # 归一化到 [-1, 1]
-        return result
+        return [(h[i % len(h)] / 255.0) * 2 - 1 for i in range(dim)]
 
     @property
     def dimension(self) -> int:
-        if self._mode == "local" and self._model:
-            return self._model.get_sentence_embedding_dimension()
-        return _EMBED_DIM
+        return self._dim
 
     @property
     def mode(self) -> str:

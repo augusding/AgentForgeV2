@@ -131,10 +131,16 @@ class ContextBuilder:
         parts = []
         for i, r in enumerate(results[:5], 1):
             score = r.get("score", 0)
-            if score and score < 0.5:
+            if score and score < 0.65:
                 continue
-            parts.append(f"[{i}] {r.get('title', f'文档{i}')}\n{r.get('content', '')[:500]}")
-        return "\n\n".join(parts)
+            meta = r.get("metadata", {})
+            source = meta.get("doc_id", f"文档{i}")
+            section = meta.get("section", "")
+            label = f"{source} > {section}" if section else source
+            parts.append(f"[来源{i}: {label}] (相关度: {score:.0%})\n{r.get('content', '')[:500]}")
+        if not parts:
+            return ""
+        return "以下是从知识库检索到的参���资��，回��时请标注引用来源编号：\n\n" + "\n\n".join(parts)
 
     def _format_attachments(self, attachments: list[dict] | None) -> str:
         if not attachments:

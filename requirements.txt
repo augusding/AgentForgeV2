@@ -1,6 +1,7 @@
 aiohttp>=3.9
 aiosqlite>=0.19
 anthropic>=0.40
+httpx>=0.24
 openai>=1.50
 pyyaml>=6.0
 python-dotenv>=1.0
