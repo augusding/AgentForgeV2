@@ -107,6 +107,7 @@ class AgentRuntime:
         self._log_collector = g.get("log")
         self._request_tracer = g.get("request_tracer")
         self._request_id = g.get("request_id", "")
+        self._metrics = g.get("metrics")
 
     async def execute(self, mission: Mission, context: ContextResult) -> MissionResult:
         """执行任务：LLM 调用 → 工具循环 → 续问 → 返回结果。"""
@@ -321,7 +322,7 @@ class AgentRuntime:
     async def _execute_single_tool(self, tc: dict) -> dict:
         """执行单个工具调用（带护栏 + 指标）。"""
         name = tc.get("name", ""); args = tc.get("arguments", {}); start = time.time(); guard_action = "passed"
-        _m = (self._guardrails or {}).get("metrics")
+        _m = self._metrics
         if self._tools and self._user_context:
             td = self._tools.get(name)
             if td and td.category == "workstation":
