@@ -32,6 +32,7 @@ class LogEntry:
     data: dict = field(default_factory=dict)
     user_id: str = ""
     session_id: str = ""
+    request_id: str = ""
     duration: float | None = None
 
 
@@ -55,6 +56,7 @@ class LogCollector:
         data: dict | None = None,
         user_id: str = "",
         session_id: str = "",
+        request_id: str = "",
         duration: float | None = None,
     ) -> None:
         entry = LogEntry(
@@ -66,6 +68,7 @@ class LogCollector:
             data=data or {},
             user_id=user_id,
             session_id=session_id,
+            request_id=request_id,
             duration=duration,
         )
         self._buf.append(entry)
@@ -178,6 +181,8 @@ class LogCollector:
             await db.execute(
                 "CREATE INDEX IF NOT EXISTS idx_syslog_cat ON system_logs(category, timestamp DESC)"
             )
+            try: await db.execute("ALTER TABLE system_logs ADD COLUMN request_id TEXT DEFAULT ''")
+            except Exception: pass
             await db.commit()
 
     # ── 内部 ────────────────────────────────────────────────
@@ -187,13 +192,13 @@ class LogCollector:
             async with aiosqlite.connect(self._db_path) as db:
                 await db.execute(
                     "INSERT INTO system_logs "
-                    "(timestamp, level, category, event, message, data, user_id, session_id, duration) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "(timestamp, level, category, event, message, data, user_id, session_id, request_id, duration) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         entry.timestamp, entry.level, entry.category,
                         entry.event, entry.message,
                         json.dumps(entry.data, ensure_ascii=False, default=str),
-                        entry.user_id, entry.session_id, entry.duration,
+                        entry.user_id, entry.session_id, entry.request_id, entry.duration,
                     ),
                 )
                 await db.commit()

@@ -172,6 +172,7 @@ class AgentRuntime:
         messages = list(context.messages)
         full_content = ""
         model_used = ""
+        total_in_tok = 0; total_out_tok = 0; llm_calls = 0; tier_used = 1
         tracker = _ErrorTracker()
 
         # tool_hint → tool_choice（只在工具箱/斜杠命令指定时才强制）
@@ -208,6 +209,10 @@ class AgentRuntime:
                     stop_reason = chunk.get("stop_reason", "")
                     if chunk.get("model"):
                         model_used = chunk["model"]
+                    total_in_tok += chunk.get("input_tokens", 0)
+                    total_out_tok += chunk.get("output_tokens", 0)
+                    llm_calls += 1
+                    tier_used = chunk.get("tier", tier_used)
 
             full_content = round_content
 
@@ -241,7 +246,10 @@ class AgentRuntime:
             if needs_rethink:
                 messages.append({"role": "user", "content": tracker.get_message()})
 
-        yield {"type": "done", "mission_id": mission.id, "tokens_used": 0, "model": model_used}
+        yield {"type": "done", "mission_id": mission.id, "model": model_used,
+               "tokens_used": total_in_tok + total_out_tok,
+               "input_tokens": total_in_tok, "output_tokens": total_out_tok,
+               "llm_calls": llm_calls, "tier": tier_used}
 
     # ── 工具循环 ──────────────────────────────────────────
 

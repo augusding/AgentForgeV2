@@ -106,6 +106,9 @@ class _AnthropicAdapter:
             if tool_choice:
                 kwargs["tool_choice"] = tool_choice
 
+        has_tool = False
+        stop_reason = "end_turn"
+        in_tok = 0; out_tok = 0
         async with self.client.messages.stream(**kwargs) as stream:
             async for event in stream:
                 if hasattr(event, "type"):
@@ -116,9 +119,24 @@ class _AnthropicAdapter:
                             yield {"type": "tool_input", "text": event.delta.partial_json}
                     elif event.type == "content_block_start":
                         if hasattr(event.content_block, "name"):
+                            has_tool = True
                             yield {"type": "tool_start", "name": event.content_block.name, "id": event.content_block.id}
                     elif event.type == "message_delta":
-                        yield {"type": "message_delta", "stop_reason": getattr(event.delta, "stop_reason", "")}
+                        stop_reason = getattr(event.delta, "stop_reason", "") or stop_reason
+                        u = getattr(event, "usage", None)
+                        if u: out_tok = getattr(u, "output_tokens", 0) or out_tok
+                    elif event.type == "message_start" and hasattr(event, "message"):
+                        u = getattr(event.message, "usage", None)
+                        if u: in_tok = getattr(u, "input_tokens", 0) or 0
+            try:
+                fm = stream.get_final_message()
+                if fm and hasattr(fm, "usage") and fm.usage:
+                    in_tok = fm.usage.input_tokens or in_tok
+                    out_tok = fm.usage.output_tokens or out_tok
+            except Exception:
+                pass
+        yield {"type": "message_done", "stop_reason": "tool_use" if has_tool else stop_reason,
+               "model": model, "input_tokens": in_tok, "output_tokens": out_tok}
 
 
 class _OpenAICompatAdapter:
@@ -192,11 +210,22 @@ class _OpenAICompatAdapter:
                 kwargs["tool_choice"] = tool_choice
 
         stream = await self.client.chat.completions.create(**kwargs)
-        tool_acc: dict[int, dict] = {}  # index → {id, name, arg_parts}
+        tool_acc: dict[int, dict] = {}
         finish = ""
+        model_used = model
+        input_tokens = 0
+        output_tokens = 0
         async for chunk in stream:
             if not chunk.choices:
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    input_tokens = getattr(chunk.usage, 'prompt_tokens', 0) or 0
+                    output_tokens = getattr(chunk.usage, 'completion_tokens', 0) or 0
                 continue
+            if hasattr(chunk, 'model') and chunk.model:
+                model_used = chunk.model
+            if hasattr(chunk, 'usage') and chunk.usage:
+                input_tokens = getattr(chunk.usage, 'prompt_tokens', 0) or input_tokens
+                output_tokens = getattr(chunk.usage, 'completion_tokens', 0) or output_tokens
             delta = chunk.choices[0].delta
             finish = chunk.choices[0].finish_reason or finish
             if delta.content:
@@ -222,7 +251,8 @@ class _OpenAICompatAdapter:
             except _json.JSONDecodeError:
                 args = {"raw": raw}
             yield {"type": "tool_call", "id": ta["id"], "name": ta["name"], "arguments": args}
-        yield {"type": "message_done", "stop_reason": "tool_use" if tool_acc else (finish or "end_turn")}
+        yield {"type": "message_done", "stop_reason": "tool_use" if tool_acc else (finish or "end_turn"),
+               "model": model_used, "input_tokens": input_tokens, "output_tokens": output_tokens}
 
     @staticmethod
     def _convert_tools(tools: list[dict]) -> list[dict]:
@@ -359,7 +389,7 @@ class LLMClient:
         tool_choice: str | dict | None = None,
     ) -> AsyncIterator[dict]:
         """流式调用，自动选择第一个可用 Tier。"""
-        for tier in self._tiers:
+        for tier_idx, tier in enumerate(self._tiers):
             if self._is_cooled_down(tier["key"]):
                 continue
             adapter = self._adapters.get(tier["provider"])
@@ -371,6 +401,11 @@ class LLMClient:
                     tools=tools, temperature=temperature, max_tokens=max_tokens,
                     tool_choice=tool_choice,
                 ):
+                    if chunk.get("type") == "message_done":
+                        chunk["tier"] = tier_idx + 1
+                        chunk["provider"] = tier.get("provider", "")
+                        if not chunk.get("model"):
+                            chunk["model"] = tier["model"]
                     yield chunk
                 return
             except Exception as e:

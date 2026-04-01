@@ -44,7 +44,7 @@ def main():
     ):
         """启动 API 服务。"""
         from core.engine import ForgeEngine
-        import logging
+        import logging, logging.handlers
         log_format = "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
         log_dir = ROOT_DIR / "data" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,9 @@ def main():
             level=logging.INFO, format=log_format,
             handlers=[
                 logging.StreamHandler(),
-                logging.FileHandler(str(log_dir / "forge.log"), encoding="utf-8"),
+                logging.handlers.RotatingFileHandler(
+                    str(log_dir / "forge.log"), encoding="utf-8",
+                    maxBytes=10 * 1024 * 1024, backupCount=5),
             ],
         )
 

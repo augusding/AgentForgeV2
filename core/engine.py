@@ -88,11 +88,8 @@ class ForgeEngine:
         self._tool_registry = ToolRegistry()
         register_all(self._tool_registry)
         logger.info("工具注册完成: %d 个", self._tool_registry.count)
-
-        # 上下文构建器
         from core.pipeline.context_builder import ContextBuilder
         self._context_builder = ContextBuilder()
-
         # 知识库
         from knowledge.rag import KnowledgeBase
         kb_cfg = self.config.knowledge
@@ -113,8 +110,6 @@ class ForgeEngine:
         if self._knowledge_base:
             self._sync_manager = SyncManager(self._connector_store, self._knowledge_base)
             logger.info("ConnectorStore + SyncManager 初始化完成")
-
-        # 动态工具注册
         if self._knowledge_base:
             from tools.builtin.search_knowledge import create_search_knowledge_tool, create_knowledge_list_tool
             self._tool_registry.register(create_search_knowledge_tool(self._knowledge_base))
@@ -123,11 +118,8 @@ class ForgeEngine:
             from tools.builtin.workstation_tools import create_workstation_tools
             for t in create_workstation_tools(self._work_item_store):
                 self._tool_registry.register(t)
-
-        # 加载 Profiles
         for name in self._loader.list_profiles():
             self._bundles[name] = self._loader.load_profile(name)
-
         # 触发器 + 调度器
         from scheduler.scheduler import Scheduler
         from workflow.trigger import TriggerManager
@@ -148,8 +140,6 @@ class ForgeEngine:
         from tools.builtin.workflow_tools import create_workflow_tools
         for t in create_workflow_tools(self._wf_store, self._trigger_manager):
             self._tool_registry.register(t)
-
-        # 安全护栏
         from core.guardrails import PreToolGuard, ExecutionGuard, AuditLogger, SystemGuard
         self._pre_tool_guard = PreToolGuard()
         self._exec_guard = ExecutionGuard()
@@ -162,20 +152,14 @@ class ForgeEngine:
             max_input_length=gr_cfg.get("max_input_length", 50000),
         )
 
-        # 结构化日志收集器
         from observability.log_collector import LogCollector
-        self._log_collector = LogCollector(
-            max_entries=2000,
-            db_path=str(self.root_dir / "data" / "memories.db"),
-        )
+        self._log_collector = LogCollector(max_entries=2000, db_path=str(self.root_dir / "data" / "memories.db"))
         await self._log_collector.ensure_table()
         self._log_collector.info("system", "engine_init", "ForgeEngine 初始化完成")
-
         self._initialized = True
         logger.info("ForgeEngine 初始化完成")
 
     # ── 消息处理 ──────────────────────────────────────────
-
     async def handle_message(self, msg: UnifiedMessage) -> dict:
         """完整管线：解析岗位 → 会话管理 → 构建上下文 → 执行 → 存储。"""
         if self._system_guard:
@@ -324,6 +308,7 @@ class ForgeEngine:
         full_content = ""
         collected_tools: list[dict] = []
         collected_tool_calls: list[dict] = []
+        _tokens = 0; _in_tok = 0; _out_tok = 0; _model_used = ""; _llm_calls = 0
         async for chunk in runtime.execute_stream(mission, context):
             ct = chunk.get("type", "")
             if ct == "text":
@@ -335,6 +320,11 @@ class ForgeEngine:
                 collected_tool_calls.append({"type": "tool_result", "name": chunk.get("name", ""), "result": chunk.get("result", "")[:3000]})
             if ct == "done":
                 chunk["session_id"] = session_id
+                _tokens = chunk.get("tokens_used", 0)
+                _in_tok = chunk.get("input_tokens", 0)
+                _out_tok = chunk.get("output_tokens", 0)
+                _model_used = chunk.get("model", "")
+                _llm_calls = chunk.get("llm_calls", 0)
             yield chunk
 
         # ── 后处理：自动文件生成（LLM 没调文件工具时系统兜底）──
@@ -379,6 +369,16 @@ class ForgeEngine:
         asyncio.ensure_future(self._post_process(msg.content, full_content, collected_tools, msg.user_id, msg.org_id, msg.position_id))
         if self._signal_store and msg.position_id and msg.user_id:
             asyncio.ensure_future(self._signal_store.increment_pending(msg.org_id, msg.position_id, msg.user_id))
+        # Token + Mission 记录
+        try:
+            if self._token_tracker and _tokens > 0:
+                await self._token_tracker.record(user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
+                    model=_model_used, provider="", input_tokens=_in_tok, output_tokens=_out_tok, cost_usd=0.0, mission_id=mission.id)
+            if self._mission_tracer:
+                await self._mission_tracer.complete(mission_id=mission.id, status="completed", content=full_content[:2000],
+                    tokens_used=_tokens, duration=time.time()-_t0, model_used=_model_used, steps=[{"name": t["name"]} for t in collected_tools])
+        except Exception:
+            pass
     # ── 内部辅助 ─────────────────────────────────────────
 
     def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
