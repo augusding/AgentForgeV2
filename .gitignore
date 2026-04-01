@@ -31,3 +31,7 @@ Thumbs.db
 
 # Pytest
 .pytest_cache/
+
+# 临时调试脚本
+debug_*.py
+reindex_*.py
