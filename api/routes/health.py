@@ -66,7 +66,26 @@ async def handle_metrics(request: web.Request) -> web.Response:
     return _json(data)
 
 
+async def handle_trace_list(request: web.Request) -> web.Response:
+    """GET /api/v1/traces"""
+    t = getattr(request.app["engine"], "_request_tracer", None)
+    if not t: return _json({"traces": []})
+    limit = int(request.query.get("limit", "20"))
+    return _json({"traces": t.list_recent(min(limit, 50))})
+
+
+async def handle_trace_detail(request: web.Request) -> web.Response:
+    """GET /api/v1/trace/{request_id}"""
+    t = getattr(request.app["engine"], "_request_tracer", None)
+    if not t: return _json({"error": "tracer not initialized"}, 503)
+    rid = request.match_info.get("request_id", "")
+    trace = t.get(rid)
+    return _json(trace) if trace else _json({"error": "not found"}, 404)
+
+
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/health", handle_health)
     app.router.add_get("/api/v1/stats", handle_stats)
     app.router.add_get("/api/v1/metrics", handle_metrics)
+    app.router.add_get("/api/v1/traces", handle_trace_list)
+    app.router.add_get("/api/v1/trace/{request_id}", handle_trace_detail)

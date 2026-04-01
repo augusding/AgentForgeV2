@@ -135,6 +135,8 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
     """POST /api/v1/chat/stream — SSE 流式对话"""
     engine = request.app["engine"]
     body = await request.json()
+    from uuid import uuid4 as _uuid4
+    _request_id = _uuid4().hex[:12]
 
     content = body.get("content", "").strip()
     file_ids = body.get("file_ids", [])
@@ -159,7 +161,8 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
         channel="api",
         attachments=attachments,
         metadata={"web_search": body.get("web_search", False),
-                  "tool_hint": (body.get("command_metadata") or {}).get("tool_hint", "")},
+                  "tool_hint": (body.get("command_metadata") or {}).get("tool_hint", ""),
+                  "request_id": _request_id},
     )
 
     resp = web.StreamResponse(headers={
@@ -234,6 +237,7 @@ async def handle_chat_stream(request: web.Request) -> web.StreamResponse:
             "model": model_used,
             "tokens_used": tokens_used,
             "duration_ms": duration_ms,
+            "request_id": _request_id,
         })
 
     except ConnectionResetError:

@@ -105,6 +105,8 @@ class AgentRuntime:
         self._exec_guard = g.get("execution")
         self._audit = g.get("audit")
         self._log_collector = g.get("log")
+        self._request_tracer = g.get("request_tracer")
+        self._request_id = g.get("request_id", "")
 
     async def execute(self, mission: Mission, context: ContextResult) -> MissionResult:
         """执行任务：LLM 调用 → 工具循环 → 续问 → 返回结果。"""
@@ -189,7 +191,7 @@ class AgentRuntime:
                     user_id=mission.user_id, session_id=mission.session_id or "")
 
         for loop in range(MAX_TOOL_LOOPS + 1):
-            round_content = ""
+            round_content = ""; _llm_t0 = time.time()
             round_tool_calls: list[dict] = []
             stop_reason = ""
 
@@ -211,8 +213,11 @@ class AgentRuntime:
                         model_used = chunk["model"]
                     total_in_tok += chunk.get("input_tokens", 0)
                     total_out_tok += chunk.get("output_tokens", 0)
-                    llm_calls += 1
-                    tier_used = chunk.get("tier", tier_used)
+                    llm_calls += 1; tier_used = chunk.get("tier", tier_used)
+                    if self._request_tracer and self._request_id:
+                        self._request_tracer.span(self._request_id, f"llm_call_{loop+1}",
+                            duration=time.time()-_llm_t0, model=chunk.get("model", ""),
+                            in_tok=chunk.get("input_tokens", 0), out_tok=chunk.get("output_tokens", 0))
 
             full_content = round_content
 
@@ -234,9 +239,13 @@ class AgentRuntime:
             tool_results = []
             for tc in round_tool_calls:
                 yield {"type": "tool_start", "name": tc["name"], "arguments": tc.get("arguments", {})}
+                _tt0 = time.time()
                 tr = await self._execute_single_tool(tc)
                 tool_results.append(tr)
                 yield {"type": "tool_result", "name": tr["name"], "result": tr["result"]}
+                if self._request_tracer and self._request_id:
+                    self._request_tracer.span(self._request_id, f"tool_{tc['name']}",
+                        duration=time.time()-_tt0, ok=not str(tr.get("result","")).startswith(("执行错误","未找到")))
             needs_rethink = tracker.record(tool_results)
 
             # 注入工具结果到 messages 供下一轮 LLM

@@ -25,10 +25,7 @@ def _estimate_cost(model: str, in_tok: int, out_tok: int) -> float:
             return (in_tok * ip + out_tok * op) / 1000
     return ((in_tok + out_tok) * 0.001) / 1000
 
-
 class ForgeEngine:
-    """核心编排引擎。"""
-
     def __init__(self, root_dir: str | Path | None = None):
         self.root_dir = Path(root_dir) if root_dir else Path(__file__).resolve().parent.parent
         self._loader = ConfigLoader(self.root_dir)
@@ -62,14 +59,13 @@ class ForgeEngine:
         self._initialized = False
 
     async def init(self) -> None:
-        """异步初始化所有组件。"""
-        if self._initialized:
-            return
-
+        if self._initialized: return
         self.config = self._loader.load_forge_config()
         logger.info("ForgeEngine 初始化: %s v%s", self.config.name, self.config.version)
         from observability.metrics import MetricsCollector
         self._metrics = MetricsCollector()
+        from observability.request_tracer import RequestTracer
+        self._request_tracer = RequestTracer()
         from core.llm import LLMClient
         self._llm = LLMClient(self.config, metrics=self._metrics)
         from memory.session_store import SessionStore
@@ -88,8 +84,6 @@ class ForgeEngine:
         for store in (self._session_store, self._signal_store, self._user_profile_store,
                       self._token_tracker, self._mission_tracer, self._work_item_store):
             await store.ensure_tables()
-
-        # 工具
         from tools.registry import ToolRegistry
         from tools.builtin.core_tools import register_all
         self._tool_registry = ToolRegistry()
@@ -108,8 +102,6 @@ class ForgeEngine:
         if kb_cfg.get("enabled", True):
             await self._knowledge_base.init()
             logger.info("知识库初始化完成: %s", self._knowledge_base.get_stats())
-
-        # 企业连接器体系
         from knowledge.connectors.store import ConnectorStore
         from knowledge.sync_manager import SyncManager
         self._connector_store = ConnectorStore(data_dir=str(self.root_dir / "data"))
@@ -163,12 +155,9 @@ class ForgeEngine:
         self._log_collector = LogCollector(max_entries=2000, db_path=str(self.root_dir / "data" / "memories.db"))
         await self._log_collector.ensure_table()
         self._log_collector.info("system", "engine_init", "ForgeEngine 初始化完成")
-        self._initialized = True
-        logger.info("ForgeEngine 初始化完成")
-
+        self._initialized = True; logger.info("ForgeEngine 初始化完成")
     # ── 消息处理 ──────────────────────────────────────────
     async def handle_message(self, msg: UnifiedMessage) -> dict:
-        """完整管线：解析岗位 → 会话管理 → 构建上下文 → 执行 → 存储。"""
         if self._system_guard:
             for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
                 if not chk.passed:
@@ -211,7 +200,8 @@ class ForgeEngine:
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
             "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
-            "audit": self._audit_logger, "log": self._log_collector})
+            "audit": self._audit_logger, "log": self._log_collector,
+            "metrics": self._metrics, "request_tracer": self._request_tracer, "request_id": locals().get("_rid", "")})
         result = await runtime.execute(mission, context)
 
         await self._record_observability(msg, result)
@@ -235,8 +225,11 @@ class ForgeEngine:
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
         self._metrics.inc("requests_total", position_id=msg.position_id)
-        lc = self._log_collector
-        _t0 = time.time()
+        lc = self._log_collector; _t0 = time.time()
+        _rid = msg.metadata.get("request_id", "")
+        _rt = self._request_tracer
+        if _rt and _rid:
+            _rt.start(_rid, {"user_id": msg.user_id, "position_id": msg.position_id, "content": msg.content[:100]})
         if lc:
             lc.info("pipeline", "request_start", f"收到消息: {msg.content[:80]}",
                     data={"position_id": msg.position_id, "has_attachments": bool(msg.attachments)},
@@ -280,7 +273,9 @@ class ForgeEngine:
                      "tool_hint": msg.metadata.get("tool_hint", "")},
             attachments=msg.attachments,
         )
+        _rag0 = time.time()
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
+        if _rt and _rid: _rt.span(_rid, "rag_search", duration=time.time()-_rag0, results=len(rag_results))
         if lc:
             lc.info("pipeline", "rag_done", f"RAG 检索: {len(rag_results)} 条",
                     data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
@@ -307,7 +302,8 @@ class ForgeEngine:
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
             "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
-            "audit": self._audit_logger, "log": self._log_collector})
+            "audit": self._audit_logger, "log": self._log_collector,
+            "metrics": self._metrics, "request_tracer": self._request_tracer, "request_id": locals().get("_rid", "")})
 
         if lc:
             lc.info("pipeline", "stream_start", "开始流式生成",
@@ -385,6 +381,8 @@ class ForgeEngine:
                     tokens_used=_tokens, duration=time.time()-_t0, model_used=_model_used, steps=[{"name": t["name"]} for t in collected_tools])
         except Exception:
             pass
+        if _rt and _rid:
+            _rt.end(_rid, status="completed", tokens=_tokens, model=_model_used, tools=[t["name"] for t in collected_tools])
     # ── 内部辅助 ─────────────────────────────────────────
     def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
         if self._knowledge_base:
@@ -437,6 +435,8 @@ class ForgeEngine:
     def token_tracker(self): return self._token_tracker
     @property
     def metrics(self): return getattr(self, '_metrics', None)
+    @property
+    def request_tracer(self): return getattr(self, '_request_tracer', None)
     @property
     def mission_tracer(self): return self._mission_tracer
     @property
