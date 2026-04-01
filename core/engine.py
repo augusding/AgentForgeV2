@@ -1,7 +1,5 @@
-"""AgentForge V2 — ForgeEngine: 核心编排引擎，只做编排不操作子系统内部状态。"""
-
+"""AgentForge V2 — ForgeEngine"""
 from __future__ import annotations
-
 import asyncio
 import logging
 import time
@@ -70,12 +68,10 @@ class ForgeEngine:
 
         self.config = self._loader.load_forge_config()
         logger.info("ForgeEngine 初始化: %s v%s", self.config.name, self.config.version)
-
-        # LLM 客户端
+        from observability.metrics import MetricsCollector
+        self._metrics = MetricsCollector()
         from core.llm import LLMClient
-        self._llm = LLMClient(self.config)
-
-        # 存储 + 可观测性 + 工作项
+        self._llm = LLMClient(self.config, metrics=self._metrics)
         from memory.session_store import SessionStore
         from memory.signal_store import SignalStore
         from observability.token_tracker import TokenTracker
@@ -238,6 +234,7 @@ class ForgeEngine:
         }
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
+        self._metrics.inc("requests_total", position_id=msg.position_id)
         lc = self._log_collector
         _t0 = time.time()
         if lc:
@@ -438,6 +435,8 @@ class ForgeEngine:
     def knowledge_base(self): return self._knowledge_base
     @property
     def token_tracker(self): return self._token_tracker
+    @property
+    def metrics(self): return getattr(self, '_metrics', None)
     @property
     def mission_tracer(self): return self._mission_tracer
     @property

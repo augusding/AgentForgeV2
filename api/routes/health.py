@@ -53,6 +53,20 @@ async def handle_stats(request: web.Request) -> web.Response:
     return _json(stats)
 
 
+async def handle_metrics(request: web.Request) -> web.Response:
+    """GET /api/v1/metrics — 实时运行指标"""
+    engine = request.app["engine"]
+    m = getattr(engine, "_metrics", None)
+    if not m:
+        return _json({"error": "metrics not initialized"}, 503)
+    data = m.snapshot()
+    if engine.token_tracker:
+        try: data["token_usage_today"] = await engine.token_tracker.get_daily_usage()
+        except Exception: pass
+    return _json(data)
+
+
 def register(app: web.Application) -> None:
     app.router.add_get("/api/v1/health", handle_health)
     app.router.add_get("/api/v1/stats", handle_stats)
+    app.router.add_get("/api/v1/metrics", handle_metrics)

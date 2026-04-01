@@ -295,8 +295,9 @@ class LLMClient:
         resp = await client.chat(system="你是助手", messages=[...])
     """
 
-    def __init__(self, config: ForgeConfig):
+    def __init__(self, config: ForgeConfig, metrics=None):
         self.config = config
+        self._metrics = metrics
         llm_cfg = config.llm
         self._tiers: list[dict] = []
         self._adapters: dict[str, Any] = {}
@@ -397,19 +398,30 @@ class LLMClient:
             if not adapter:
                 continue
             try:
+                _t0 = time.time(); _ttft = None
                 async for chunk in adapter.stream(
                     model=tier["model"], system=system, messages=messages,
                     tools=tools, temperature=temperature, max_tokens=max_tokens,
                     tool_choice=tool_choice,
                 ):
+                    if _ttft is None and chunk.get("type") == "text" and self._metrics:
+                        _ttft = time.time() - _t0
+                        self._metrics.observe("llm_ttft", _ttft, model=tier["model"])
                     if chunk.get("type") == "message_done":
                         chunk["tier"] = tier_idx + 1
                         chunk["provider"] = tier.get("provider", "")
                         if not chunk.get("model"):
                             chunk["model"] = tier["model"]
                     yield chunk
+                if self._metrics:
+                    self._metrics.inc("llm_calls", model=tier["model"], tier=f"tier{tier_idx+1}")
+                    self._metrics.observe("llm_latency", time.time() - _t0, model=tier["model"])
+                    if tier_idx > 0:
+                        self._metrics.inc("llm_fallback", to_model=tier["model"])
                 return
             except Exception as e:
+                if self._metrics:
+                    self._metrics.inc("llm_errors", model=tier["model"], error_type=type(e).__name__)
                 logger.warning("Stream tier %s 失败: %s", tier["key"], e)
                 self._set_cooldown(tier["key"])
 
