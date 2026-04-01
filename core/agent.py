@@ -310,8 +310,9 @@ class AgentRuntime:
         return content, total_tokens
 
     async def _execute_single_tool(self, tc: dict) -> dict:
-        """执行单个工具调用（带护栏）。"""
+        """执行单个工具调用（带护栏 + 指标）。"""
         name = tc.get("name", ""); args = tc.get("arguments", {}); start = time.time(); guard_action = "passed"
+        _m = (self._guardrails or {}).get("metrics")
         if self._tools and self._user_context:
             td = self._tools.get(name)
             if td and td.category == "workstation":
@@ -321,6 +322,7 @@ class AgentRuntime:
             if check.modified_args: args = check.modified_args
             if check.blocked:
                 self._log_audit(name, args, "blocked", "blocked", time.time() - start)
+                if _m: _m.inc("tool_calls", tool=name); _m.inc("tool_errors", tool=name, error_type="blocked")
                 return {"tool_call_id": tc.get("id", ""), "name": name, "result": f"操作被安全护栏拦截: {check.reason}"}
             if check.needs_confirmation: guard_action = "auto_confirmed"
         handler = self._tools.get_handler(name) if self._tools else None
@@ -331,6 +333,10 @@ class AgentRuntime:
         dur = time.time() - start
         status = "error" if str(result).startswith(("执行错误", "未找到工具", "操作被安全", "工具")) else "success"
         self._log_audit(name, args, status, guard_action, dur)
+        if _m:
+            _m.inc("tool_calls", tool=name)
+            _m.observe("tool_latency", dur, tool=name)
+            if status == "error": _m.inc("tool_errors", tool=name, error_type="execution")
         return {"tool_call_id": tc.get("id", ""), "name": name, "result": result}
 
     @staticmethod
