@@ -221,13 +221,37 @@ async def _stub_ok(request): return _json({"status": "ok"})
 
 
 async def handle_analytics_daily(request):
-    """GET /api/v1/analytics/daily"""
+    """GET /api/v1/analytics/daily — 今日汇总（真实数据）"""
     import datetime
-    return _json({
-        "date": datetime.date.today().isoformat(),
-        "total_sessions": 0, "total_tokens": 0, "total_messages": 0,
-        "by_capability": {},
-    })
+    engine = request.app["engine"]
+    result = {"date": datetime.date.today().isoformat(), "total_sessions": 0,
+              "total_messages": 0, "total_tokens": 0, "cost_usd": 0.0}
+    if engine.token_tracker:
+        try:
+            daily = await engine.token_tracker.get_daily_usage()
+            result["total_tokens"] = daily.get("total_tokens", 0)
+            result["cost_usd"] = daily.get("cost_usd", 0.0)
+        except Exception:
+            pass
+    if engine.session_store:
+        try:
+            now = datetime.datetime.now()
+            today_start = datetime.datetime(now.year, now.month, now.day).timestamp()
+            async with engine.session_store._db() as db:
+                cur = await db.execute(
+                    "SELECT COUNT(DISTINCT session_id), COUNT(*) FROM messages WHERE created_at >= ?",
+                    (today_start,))
+                row = await cur.fetchone()
+                if row:
+                    result["total_sessions"] = row[0] or 0
+                    result["total_messages"] = row[1] or 0
+        except Exception:
+            pass
+    m = getattr(engine, "_metrics", None)
+    if m:
+        result["requests_1h"] = m.get_counter("requests_total", 60)
+        result["errors_1h"] = m.get_counter("errors_total", 60)
+    return _json(result)
 
 
 async def handle_analytics_quality(request):
