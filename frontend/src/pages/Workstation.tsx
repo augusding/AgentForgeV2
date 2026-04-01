@@ -378,7 +378,10 @@ export default function Workstation() {
   const filteredSchedules = allSchedules.filter(s => rangeFilter(s.scheduled_time, scheduleRange))
   const allFollowups = (brief?.followups || []).filter(f => f.status !== 'done')
   const filteredFollowups = followupRange === 'week' ? allFollowups : allFollowups.filter(f => !f.due_date || rangeFilter(f.due_date, followupRange))
-  const overdue = allTasks.filter(t => ['active', 'todo', 'pending'].includes(t.status) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()))
+  const todayStart = new Date(new Date().toDateString())
+  const overdueT = allTasks.filter(t => ['active', 'todo', 'pending'].includes(t.status) && t.due_date && new Date(t.due_date) < todayStart)
+  const overdueF = allFollowups.filter(f => f.due_date && new Date(f.due_date) < todayStart)
+  const overdue = [...overdueT, ...overdueF]
 
   return (
     <div className="h-full overflow-auto">
