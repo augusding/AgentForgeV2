@@ -184,7 +184,7 @@ class ForgeEngine:
                 mission_id=mission.id, user_id=msg.user_id, org_id=msg.org_id,
                 position_id=msg.position_id, instruction=msg.content,
             )
-        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
+        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id, history=history)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         _up = ""
         if self._user_profile_store:
@@ -202,20 +202,10 @@ class ForgeEngine:
         await self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id)
         tc_list = [{"name": s.tool_calls[0]["name"]} for s in result.steps if s.tool_calls] if result.steps else []
         asyncio.ensure_future(self._post_process(msg.content, result.content, tc_list, msg.user_id, msg.org_id, msg.position_id))
-        await self._session_store.add_message(
-            session_id, "assistant", result.content,
-            tokens_used=result.tokens_used, model=result.model_used,
-        )
-
-        return {
-            "content": result.content,
-            "status": result.status,
-            "session_id": session_id,
-            "mission_id": result.mission_id,
-            "tokens_used": result.tokens_used,
-            "duration": result.duration,
-            "model": result.model_used,
-        }
+        await self._session_store.add_message(session_id, "assistant", result.content, tokens_used=result.tokens_used, model=result.model_used)
+        return {"content": result.content, "status": result.status, "session_id": session_id,
+                "mission_id": result.mission_id, "tokens_used": result.tokens_used,
+                "duration": result.duration, "model": result.model_used}
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
         self._metrics.inc("requests_total", position_id=msg.position_id)
@@ -259,12 +249,13 @@ class ForgeEngine:
             attachments=msg.attachments,
         )
         _rag0 = time.time()
-        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
+        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id, history=history)
         if _rt and _rid:
             _scores = [round(r.get("score", 0), 3) for r in rag_results] if rag_results else []
             _sources = [r.get("metadata", {}).get("doc_id", "?")[:20] for r in rag_results] if rag_results else []
             _rt.span(_rid, "rag_search", duration=time.time()-_rag0, results=len(rag_results),
-                scores=_scores, sources=_sources, injected=sum(1 for s in _scores if s >= 0.65))
+                scores=_scores, sources=_sources, injected=sum(1 for s in _scores if s >= 0.65),
+                rewritten=getattr(self, '_last_search_query', ''))
         if lc: lc.info("pipeline", "rag_done", f"RAG: {len(rag_results)} 条", data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         if msg.metadata.get("web_search"):
@@ -364,14 +355,24 @@ class ForgeEngine:
     _SKIP_RAG = [r'^(你好|hi|hello|嗨|早上好|晚上好)\b', r'^(谢谢|好的|继续|ok)\s*$',
         r'^(帮我算|计算|算一下)', r'(今天几号|现在几点)', r'^(帮我创建|帮我安排|帮我删除)',
         r'^(你是谁|你能做什么)', r'^(讲一个笑话)']
-    async def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
+    async def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "", history: list[dict] | None = None) -> list[dict]:
         q = query.strip()
         if len(q) < 4 or any(re.search(p, q, re.IGNORECASE) for p in self._SKIP_RAG):
             if self._metrics: self._metrics.inc("rag_skipped")
             return []
         if not self._knowledge_base: return []
         if self._metrics: self._metrics.inc("rag_searches")
-        results = self._knowledge_base.search(query=q, top_k=self.config.knowledge.get("retrieval_top_k", 5), org_id=org_id, user_id=user_id)
+        # Query 改写（模糊查询时触发）
+        search_query = q
+        from knowledge.query_rewriter import needs_rewrite
+        if needs_rewrite(q) and history:
+            try:
+                from knowledge.query_rewriter import rewrite_query
+                search_query = await rewrite_query(q, history, self._llm)
+                if self._metrics and search_query != q: self._metrics.inc("rag_query_rewritten")
+            except Exception as e: logger.warning("Query 改写异常: %s", e)
+        self._last_search_query = search_query
+        results = self._knowledge_base.search(query=search_query, top_k=self.config.knowledge.get("retrieval_top_k", 5), org_id=org_id, user_id=user_id)
         if self._metrics and results:
             self._metrics.observe("rag_top_score", max(r.get("score", 0) for r in results))
         if sum(1 for r in results if r.get("score", 0) >= 0.65) >= 2 and len(results) > 3:
