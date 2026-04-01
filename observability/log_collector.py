@@ -205,6 +205,20 @@ class LogCollector:
         except Exception as e:
             logger.debug("日志持久化失败: %s", e)
 
+    async def cleanup(self, retain_days: int = 30) -> int:
+        """清理超过 retain_days 天的日志。"""
+        if not self._db_path: return 0
+        cutoff = time.time() - retain_days * 86400
+        try:
+            async with aiosqlite.connect(self._db_path) as db:
+                cur = await db.execute("DELETE FROM system_logs WHERE timestamp < ?", (cutoff,))
+                await db.commit()
+                deleted = cur.rowcount
+                if deleted > 0: logger.info("日志清理: 删除 %d 条（>%d 天）", deleted, retain_days)
+                return deleted
+        except Exception as e:
+            logger.warning("日志清理失败: %s", e); return 0
+
 
 def _to_dict(e: LogEntry) -> dict:
     return {

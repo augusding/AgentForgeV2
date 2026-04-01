@@ -224,11 +224,24 @@ class AuditLogger:
 class SystemGuard:
     """系统级资源控制：Token 预算、请求频率、输入检查。"""
 
-    def __init__(self, max_tokens_per_session: int = 50000, max_requests_per_day: int = 200, max_input_length: int = 50000):
+    def __init__(self, max_tokens_per_session: int = 50000, max_requests_per_day: int = 200, max_input_length: int = 50000, token_tracker=None):
         self.max_tokens_per_session = max_tokens_per_session
         self.max_requests_per_day = max_requests_per_day
         self.max_input_length = max_input_length
         self._daily_counts: dict[str, list[float]] = {}
+        self._token_tracker = token_tracker
+
+    async def check_budget_async(self, user_id: str, session_tokens: int = 0) -> GuardResult:
+        """优先用 TokenTracker 真实数据检查预算。"""
+        if self._token_tracker:
+            try:
+                daily = await self._token_tracker.get_daily_usage(user_id=user_id)
+                if daily.get("total_tokens", 0) >= 500_000:
+                    return GuardResult(blocked=True, passed=False,
+                        reason=f"今日 Token 用量已达上限（{daily['total_tokens']:,} / 500,000）。")
+            except Exception:
+                pass
+        return self.check_budget(user_id, session_tokens)
 
     def check_budget(self, user_id: str, session_tokens: int = 0) -> GuardResult:
         if session_tokens > self.max_tokens_per_session:

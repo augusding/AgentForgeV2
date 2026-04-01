@@ -149,7 +149,7 @@ class ForgeEngine:
             max_tokens_per_session=gr_cfg.get("max_tokens_per_session", 50000),
             max_requests_per_day=gr_cfg.get("max_requests_per_day", 200),
             max_input_length=gr_cfg.get("max_input_length", 50000),
-        )
+            token_tracker=self._token_tracker)
 
         from observability.log_collector import LogCollector
         self._log_collector = LogCollector(max_entries=2000, db_path=str(self.root_dir / "data" / "memories.db"))
@@ -159,7 +159,7 @@ class ForgeEngine:
     # ── 消息处理 ──────────────────────────────────────────
     async def handle_message(self, msg: UnifiedMessage) -> dict:
         if self._system_guard:
-            for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
+            for chk in [self._system_guard.check_input(msg.content), await self._system_guard.check_budget_async(msg.user_id)]:
                 if not chk.passed:
                     return {"content": chk.reason, "status": "blocked"}
         position = self._resolve_position(msg)
@@ -235,13 +235,10 @@ class ForgeEngine:
                     data={"position_id": msg.position_id, "has_attachments": bool(msg.attachments)},
                     user_id=msg.user_id, session_id=msg.session_id or "")
         if self._system_guard:
-            for chk in (self._system_guard.check_input(msg.content), self._system_guard.check_budget(msg.user_id)):
+            for chk in [self._system_guard.check_input(msg.content), await self._system_guard.check_budget_async(msg.user_id)]:
                 if not chk.passed:
-                    if lc:
-                        lc.warn("guard", "request_blocked", chk.reason, user_id=msg.user_id)
-                    yield {"type": "text", "text": chk.reason}
-                    yield {"type": "done"}
-                    return
+                    if lc: lc.warn("guard", "request_blocked", chk.reason, user_id=msg.user_id)
+                    yield {"type": "text", "text": chk.reason}; yield {"type": "done"}; return
         position = self._resolve_position(msg)
         if not position:
             yield {"type": "text", "text": "未找到岗位配置。"}
@@ -484,6 +481,10 @@ class ForgeEngine:
                 from core.session_analyzer import run_daily_scan
                 await run_daily_scan(self)
             self._scheduler.add_job("daily_signal_scan", "信号兜底扫描", "5 3 * * *", _scan)
+        if self._log_collector:
+            async def _log_cleanup():
+                await self._log_collector.cleanup(retain_days=30)
+            self._scheduler.add_job("log_cleanup", "日志清理", "10 3 * * *", _log_cleanup)
         logger.info("API 服务已启动: http://%s:%d", host, api_port)
         try:
             await asyncio.Event().wait()
