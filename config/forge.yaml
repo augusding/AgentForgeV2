@@ -29,7 +29,7 @@ knowledge:
   enabled: true
   chunk_size: 350
   chunk_overlap: 150
-  retrieval_top_k: 3
+  retrieval_top_k: 5
 
 channels:
   api:

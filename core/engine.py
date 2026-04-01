@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import re
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -168,8 +169,7 @@ class ForgeEngine:
         _save_atts = [{k: a.get(k, "") for k in ("file_id", "filename", "type", "path")} for a in (msg.attachments or [])] or None
         await self._session_store.add_message(session_id, "user", msg.content, attachments=_save_atts)
         history = await self._session_store.get_history_as_llm_messages(session_id, limit=20)
-        if history and history[-1].get("role") == "user":
-            history = history[:-1]
+        if history and history[-1].get("role") == "user": history = history[:-1]
 
         mission = Mission(
             id=uuid4().hex[:12], instruction=msg.content,
@@ -184,7 +184,7 @@ class ForgeEngine:
                 mission_id=mission.id, user_id=msg.user_id, org_id=msg.org_id,
                 position_id=msg.position_id, instruction=msg.content,
             )
-        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
+        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         _up = ""
         if self._user_profile_store:
@@ -192,14 +192,12 @@ class ForgeEngine:
             except Exception: pass
         context = self._context_builder.build(position=position, mission=mission, history=history,
             rag_results=rag_results, daily_context=daily_summary, user_profile=_up)
-
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
             "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
             "audit": self._audit_logger, "log": self._log_collector,
             "metrics": self._metrics, "request_tracer": self._request_tracer, "request_id": locals().get("_rid", "")})
         result = await runtime.execute(mission, context)
-
         await self._record_observability(msg, result)
         await self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id)
         tc_list = [{"name": s.tool_calls[0]["name"]} for s in result.steps if s.tool_calls] if result.steps else []
@@ -226,10 +224,9 @@ class ForgeEngine:
         _rt = self._request_tracer
         if _rt and _rid:
             _rt.start(_rid, {"user_id": msg.user_id, "position_id": msg.position_id, "content": msg.content[:100]})
-        if lc:
-            lc.info("pipeline", "request_start", f"收到消息: {msg.content[:80]}",
-                    data={"position_id": msg.position_id, "has_attachments": bool(msg.attachments)},
-                    user_id=msg.user_id, session_id=msg.session_id or "")
+        if lc: lc.info("pipeline", "request_start", f"收到消息: {msg.content[:80]}",
+                data={"position_id": msg.position_id, "has_attachments": bool(msg.attachments)},
+                user_id=msg.user_id, session_id=msg.session_id or "")
         if self._system_guard:
             for chk in [self._system_guard.check_input(msg.content), await self._system_guard.check_budget_async(msg.user_id)]:
                 if not chk.passed:
@@ -240,21 +237,16 @@ class ForgeEngine:
             yield {"type": "text", "text": "未找到岗位配置。"}
             yield {"type": "done"}
             return
-        if lc:
-            lc.info("pipeline", "position_resolved", f"岗位: {position.display_name}",
-                    user_id=msg.user_id)
+        if lc: lc.info("pipeline", "position_resolved", f"岗位: {position.display_name}", user_id=msg.user_id)
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
         _save_atts = [{k: a.get(k, "") for k in ("file_id", "filename", "type", "path")} for a in (msg.attachments or [])] or None
         await self._session_store.add_message(session_id, "user", msg.content, attachments=_save_atts)
-        if lc:
-            lc.info("pipeline", "session_ready", f"会话: {session_id}",
-                    user_id=msg.user_id, session_id=session_id)
+        if lc: lc.info("pipeline", "session_ready", f"会话: {session_id}", user_id=msg.user_id, session_id=session_id)
 
         history = await self._session_store.get_history_as_llm_messages(session_id, limit=20)
-        if history and history[-1].get("role") == "user":
-            history = history[:-1]
+        if history and history[-1].get("role") == "user": history = history[:-1]
 
         mission = Mission(
             id=uuid4().hex[:12], instruction=msg.content,
@@ -267,15 +259,13 @@ class ForgeEngine:
             attachments=msg.attachments,
         )
         _rag0 = time.time()
-        rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
+        rag_results = await self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
         if _rt and _rid:
             _scores = [round(r.get("score", 0), 3) for r in rag_results] if rag_results else []
             _sources = [r.get("metadata", {}).get("doc_id", "?")[:20] for r in rag_results] if rag_results else []
             _rt.span(_rid, "rag_search", duration=time.time()-_rag0, results=len(rag_results),
                 scores=_scores, sources=_sources, injected=sum(1 for s in _scores if s >= 0.65))
-        if lc:
-            lc.info("pipeline", "rag_done", f"RAG 检索: {len(rag_results)} 条",
-                    data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
+        if lc: lc.info("pipeline", "rag_done", f"RAG: {len(rag_results)} 条", data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
         daily_summary = await self._get_daily_summary(msg.user_id, msg.org_id, msg.position_id)
         if msg.metadata.get("web_search"):
             daily_summary += "\n[联网搜索已开启] 优先使用 web_search 工具搜索最新信息来回答。"
@@ -291,20 +281,14 @@ class ForgeEngine:
             except Exception: pass
         context = self._context_builder.build(position=position, mission=mission, history=history,
             rag_results=rag_results, daily_context=daily_summary, user_profile=_up)
-        if lc:
-            lc.info("pipeline", "context_built", "上下文构建完成",
-                    data={"messages": len(context.messages)},
-                    user_id=msg.user_id, session_id=session_id)
-
+        if lc: lc.info("pipeline", "context_built", "上下文构建完成", data={"messages": len(context.messages)}, user_id=msg.user_id, session_id=session_id)
         from core.agent import AgentRuntime
         runtime = AgentRuntime(self._llm, self._tool_registry, guardrails={
             "pre_tool": self._pre_tool_guard, "execution": self._exec_guard,
             "audit": self._audit_logger, "log": self._log_collector,
             "metrics": self._metrics, "request_tracer": self._request_tracer, "request_id": locals().get("_rid", "")})
 
-        if lc:
-            lc.info("pipeline", "stream_start", "开始流式生成",
-                    user_id=msg.user_id, session_id=session_id)
+        if lc: lc.info("pipeline", "stream_start", "开始流式生成", user_id=msg.user_id, session_id=session_id)
         full_content = ""
         collected_tools: list[dict] = []
         collected_tool_calls: list[dict] = []
@@ -353,11 +337,7 @@ class ForgeEngine:
                 yield sg
         except Exception as e:
             logger.warning("意图检测异常: %s", e)
-        if lc:
-            lc.info("pipeline", "stream_done", f"流式完成, 长度={len(full_content)}",
-                    data={"tools": [t["name"] for t in collected_tools]},
-                    user_id=msg.user_id, session_id=session_id,
-                    duration=time.time() - _t0)
+        if lc: lc.info("pipeline", "stream_done", f"流式完成, len={len(full_content)}", data={"tools": [t["name"] for t in collected_tools]}, user_id=msg.user_id, session_id=session_id, duration=time.time()-_t0)
         if full_content or collected_tool_calls:
             await self._session_store.add_message(
                 session_id, "assistant", full_content,
@@ -381,10 +361,27 @@ class ForgeEngine:
         if _rt and _rid:
             _rt.end(_rid, status="completed", tokens=_tokens, model=_model_used, tools=[t["name"] for t in collected_tools])
     # ── 内部辅助 ─────────────────────────────────────────
-    def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
-        if self._knowledge_base:
-            return self._knowledge_base.search(query=query, top_k=self.config.knowledge.get("retrieval_top_k", 3), org_id=org_id, user_id=user_id)
-        return []
+    _SKIP_RAG = [r'^(你好|hi|hello|嗨|早上好|晚上好)\b', r'^(谢谢|好的|继续|ok)\s*$',
+        r'^(帮我算|计算|算一下)', r'(今天几号|现在几点)', r'^(帮我创建|帮我安排|帮我删除)',
+        r'^(你是谁|你能做什么)', r'^(讲一个笑话)']
+    async def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
+        q = query.strip()
+        if len(q) < 4 or any(re.search(p, q, re.IGNORECASE) for p in self._SKIP_RAG):
+            if self._metrics: self._metrics.inc("rag_skipped")
+            return []
+        if not self._knowledge_base: return []
+        if self._metrics: self._metrics.inc("rag_searches")
+        results = self._knowledge_base.search(query=q, top_k=self.config.knowledge.get("retrieval_top_k", 5), org_id=org_id, user_id=user_id)
+        if self._metrics and results:
+            self._metrics.observe("rag_top_score", max(r.get("score", 0) for r in results))
+        if sum(1 for r in results if r.get("score", 0) >= 0.65) >= 2 and len(results) > 3:
+            try:
+                from knowledge.reranker import rerank
+                rr = await rerank(q, results, self._llm, top_k=3)
+                if rr is not None: results = rr
+                if self._metrics: self._metrics.inc("rag_reranked")
+            except Exception as e: logger.warning("Reranker 失败: %s", e)
+        return results
     async def _record_observability(self, msg: UnifiedMessage, result: MissionResult) -> None:
         if self._token_tracker and result.tokens_used > 0:
             _rc = _estimate_cost(result.model_used, result.tokens_used // 2, result.tokens_used // 2)
@@ -478,12 +475,10 @@ class ForgeEngine:
             self._scheduler.add_job("purge_deleted_docs", "软删除清理", "0 3 * * *", _purge)
         if self._signal_store:
             async def _scan():
-                from core.session_analyzer import run_daily_scan
-                await run_daily_scan(self)
+                from core.session_analyzer import run_daily_scan; await run_daily_scan(self)
             self._scheduler.add_job("daily_signal_scan", "信号兜底扫描", "5 3 * * *", _scan)
         if self._log_collector:
-            async def _log_cleanup():
-                await self._log_collector.cleanup(retain_days=30)
+            async def _log_cleanup(): await self._log_collector.cleanup(retain_days=30)
             self._scheduler.add_job("log_cleanup", "日志清理", "10 3 * * *", _log_cleanup)
         logger.info("API 服务已启动: http://%s:%d", host, api_port)
         try:
