@@ -104,6 +104,12 @@ class MetricsCollector:
             "guardrail_blocks_1h": self.get_counter("guardrail_blocks", 60),
             "feedback_up_24h": fu, "feedback_down_24h": fd,
             "satisfaction_rate_24h": round(fu / max(fu + fd, 1), 4),
+            # RAG 级
+            "rag_searches_1h": self.get_counter("rag_searches", 60),
+            "rag_skipped_1h": self.get_counter("rag_skipped", 60),
+            "rag_reranked_1h": self.get_counter("rag_reranked", 60),
+            "rag_query_rewritten_1h": self.get_counter("rag_query_rewritten", 60),
+            "rag_top_score_1h": self.get_histogram("rag_top_score", 60),
             "collected_at": time.time(),
         }
 
