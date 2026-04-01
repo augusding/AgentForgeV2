@@ -134,8 +134,6 @@ class ForgeEngine:
         self._wf_engine = WFEngine(registry=wf_registry, store=self._wf_store)
         self._trigger_manager = TriggerManager(self._wf_store, self._wf_engine, self._scheduler, self._llm)
         await self._trigger_manager.load_triggers()
-
-        # 工作流工具注册
         from tools.builtin.workflow_tools import create_workflow_tools
         for t in create_workflow_tools(self._wf_store, self._trigger_manager):
             self._tool_registry.register(t)
@@ -150,7 +148,6 @@ class ForgeEngine:
             max_requests_per_day=gr_cfg.get("max_requests_per_day", 200),
             max_input_length=gr_cfg.get("max_input_length", 50000),
             token_tracker=self._token_tracker)
-
         from observability.log_collector import LogCollector
         self._log_collector = LogCollector(max_entries=2000, db_path=str(self.root_dir / "data" / "memories.db"))
         await self._log_collector.ensure_table()
@@ -165,7 +162,6 @@ class ForgeEngine:
         position = self._resolve_position(msg)
         if not position:
             return {"content": "未找到岗位配置，请先选择岗位。", "status": "error"}
-
         session_id = msg.session_id or await self._session_store.create_session(
             user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
         )
@@ -272,7 +268,11 @@ class ForgeEngine:
         )
         _rag0 = time.time()
         rag_results = self._search_rag(msg.content, position, org_id=msg.org_id, user_id=msg.user_id)
-        if _rt and _rid: _rt.span(_rid, "rag_search", duration=time.time()-_rag0, results=len(rag_results))
+        if _rt and _rid:
+            _scores = [round(r.get("score", 0), 3) for r in rag_results] if rag_results else []
+            _sources = [r.get("metadata", {}).get("doc_id", "?")[:20] for r in rag_results] if rag_results else []
+            _rt.span(_rid, "rag_search", duration=time.time()-_rag0, results=len(rag_results),
+                scores=_scores, sources=_sources, injected=sum(1 for s in _scores if s >= 0.65))
         if lc:
             lc.info("pipeline", "rag_done", f"RAG 检索: {len(rag_results)} 条",
                     data={"count": len(rag_results)}, user_id=msg.user_id, session_id=session_id)
