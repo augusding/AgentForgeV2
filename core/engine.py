@@ -17,6 +17,17 @@ from core.models import (
 
 logger = logging.getLogger(__name__)
 
+_PRICING = {  # (input_per_1k, output_per_1k) USD
+    "qwen": (0.0008, 0.002), "deepseek": (0.00014, 0.00028),
+    "claude": (0.003, 0.015), "gpt-4": (0.01, 0.03),
+}
+def _estimate_cost(model: str, in_tok: int, out_tok: int) -> float:
+    for k, (ip, op) in _PRICING.items():
+        if k in model.lower():
+            return (in_tok * ip + out_tok * op) / 1000
+    return ((in_tok + out_tok) * 0.001) / 1000
+
+
 class ForgeEngine:
     """核心编排引擎。"""
 
@@ -225,7 +236,6 @@ class ForgeEngine:
             "duration": result.duration,
             "model": result.model_used,
         }
-
     async def handle_message_stream(self, msg: UnifiedMessage) -> AsyncIterator[dict]:
         """流式处理消息。"""
         lc = self._log_collector
@@ -346,15 +356,13 @@ class ForgeEngine:
                         collected_tool_calls.append({"type": "tool_result", "name": tr["name"], "result": str(tr["result"])[:3000]})
                 except Exception as e:
                     logger.warning("自动文件创建失败: %s", e)
-
-        # ── 后处理：三层意图识别 → 建议卡片 ──
+        # 三层意图识别 → 建议卡片
         try:
             from core.intent_detector import run_detection
             async for sg in run_detection(msg, collected_tools, self._llm, self._signal_store):
                 yield sg
         except Exception as e:
             logger.warning("意图检测异常: %s", e)
-
         if lc:
             lc.info("pipeline", "stream_done", f"流式完成, 长度={len(full_content)}",
                     data={"tools": [t["name"] for t in collected_tools]},
@@ -372,43 +380,37 @@ class ForgeEngine:
         # Token + Mission 记录
         try:
             if self._token_tracker and _tokens > 0:
+                _cost = _estimate_cost(_model_used, _in_tok or _tokens // 2, _out_tok or _tokens // 2)
                 await self._token_tracker.record(user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
-                    model=_model_used, provider="", input_tokens=_in_tok, output_tokens=_out_tok, cost_usd=0.0, mission_id=mission.id)
+                    model=_model_used, provider="", input_tokens=_in_tok, output_tokens=_out_tok, cost_usd=_cost, mission_id=mission.id)
             if self._mission_tracer:
                 await self._mission_tracer.complete(mission_id=mission.id, status="completed", content=full_content[:2000],
                     tokens_used=_tokens, duration=time.time()-_t0, model_used=_model_used, steps=[{"name": t["name"]} for t in collected_tools])
         except Exception:
             pass
     # ── 内部辅助 ─────────────────────────────────────────
-
     def _search_rag(self, query: str, position: PositionConfig, org_id: str = "", user_id: str = "") -> list[dict]:
         if self._knowledge_base:
             return self._knowledge_base.search(query=query, top_k=self.config.knowledge.get("retrieval_top_k", 3), org_id=org_id, user_id=user_id)
         return []
-
     async def _record_observability(self, msg: UnifiedMessage, result: MissionResult) -> None:
         if self._token_tracker and result.tokens_used > 0:
+            _rc = _estimate_cost(result.model_used, result.tokens_used // 2, result.tokens_used // 2)
             await self._token_tracker.record(user_id=msg.user_id, org_id=msg.org_id, position_id=msg.position_id,
-                model=result.model_used, provider="", input_tokens=0, output_tokens=0, cost_usd=0.0, mission_id=result.mission_id)
+                model=result.model_used, provider="", input_tokens=result.tokens_used // 2, output_tokens=result.tokens_used // 2, cost_usd=_rc, mission_id=result.mission_id)
         if self._mission_tracer:
             await self._mission_tracer.complete(mission_id=result.mission_id, status=result.status,
                 content=result.content[:2000], tokens_used=result.tokens_used, duration=result.duration, model_used=result.model_used)
-
     async def _get_daily_summary(self, user_id: str, org_id: str, position_id: str) -> str:
         from core.daily_context import build_daily_summary
         return await build_daily_summary(self._work_item_store, self._wf_store, self._session_store, user_id, org_id, position_id)
-
     async def _collect_signals(self, content: str, user_id: str, org_id: str, position_id: str) -> None:
         from core.daily_context import collect_signals
         await collect_signals(self._signal_store, content, user_id, org_id, position_id)
-
     async def _post_process(self, user_input: str, ai_response: str, tool_calls: list[dict],
                             user_id: str, org_id: str, position_id: str) -> None:
         from core.daily_context import post_process_signals
         await post_process_signals(self._signal_store, user_input, tool_calls, user_id, org_id, position_id)
-
-    # ── 查询接口 ──────────────────────────────────────────
-
     def _resolve_position(self, msg: UnifiedMessage) -> PositionConfig | None:
         if not msg.position_id: return None
         for b in self._bundles.values():
@@ -418,11 +420,9 @@ class ForgeEngine:
         self._bundles.clear()
         for name in self._loader.list_profiles(): self._bundles[name] = self._loader.load_profile(name)
         return list(self._bundles.keys())
-
     def get_position(self, profile_name: str, position_id: str) -> PositionConfig | None:
         bundle = self._bundles.get(profile_name)
         return bundle.positions.get(position_id) if bundle else None
-
     def get_positions_list(self, profile_name: str = "") -> list[dict]:
         targets = [self._bundles[profile_name]] if profile_name in self._bundles else self._bundles.values()
         return [{"position_id": p.position_id, "display_name": p.display_name, "icon": p.icon,
