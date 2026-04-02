@@ -20,7 +20,7 @@ interface BriefData {
   followups: Array<{ id: string; title: string; target: string; status: string; due_date: string; description?: string }>
 }
 type TimeRange = 'today' | 'week' | 'month'
-type TaskItem = { id: string; title: string; priority: string; status: string; due_date: string; source: string; description?: string }
+type TaskItem = { id: string; title: string; priority: string; status: string; due_date: string; source: string; description?: string; updated_at?: number }
 
 const P_ICON: Record<string, string> = { P0: '🔴', P1: '🟡', P2: '🔵', P3: '⚪' }
 const CAT_ICON: Record<string, string> = { overdue: '🔴', due_today: '🟡', high_priority: '🟠', workflow_error: '⚡', prepare: '📋', plan: '💡' }
@@ -369,10 +369,26 @@ export default function Workstation() {
   const pos = home.position
   const allTasks: TaskItem[] = [...(brief?.priorities || []).map(t => ({ ...t, source: 'priority' })),
                                 ...(brief?.work_items || []).map(t => ({ ...t, source: 'work_item' }))]
-  const filteredTasks = taskRange === 'today' ? allTasks : allTasks.filter(t => !t.due_date || rangeFilter(t.due_date, taskRange))
-  const todoTasks = filteredTasks.filter(t => ['active', 'todo', 'pending'].includes(t.status))
-  const doingTasks = filteredTasks.filter(t => ['in_progress', 'doing'].includes(t.status))
-  const doneTasks = filteredTasks.filter(t => ['completed', 'done'].includes(t.status))
+  // 未完成任务：按 due_date 过滤（什么时候到期）
+  const incompleteTasks = allTasks.filter(t => !['completed', 'done'].includes(t.status))
+  const filteredIncomplete = taskRange === 'today'
+    ? incompleteTasks
+    : incompleteTasks.filter(t => !t.due_date || rangeFilter(t.due_date, taskRange))
+  const todoTasks = filteredIncomplete.filter(t => ['active', 'todo', 'pending'].includes(t.status))
+  const doingTasks = filteredIncomplete.filter(t => ['in_progress', 'doing'].includes(t.status))
+
+  // 已完成任务：按 updated_at 过滤（什么时候完成的）
+  const completedTasks = allTasks.filter(t => ['completed', 'done'].includes(t.status))
+  const doneTasks = completedTasks.filter(t => {
+    if (!t.updated_at) return taskRange === 'today'
+    const d = new Date(t.updated_at * 1000)
+    const now = new Date(); const today = new Date(now.toDateString())
+    if (taskRange === 'today') return d >= today
+    if (taskRange === 'week') { const end = new Date(today); end.setDate(end.getDate() + 7); return d >= today && d < end }
+    const end = new Date(today); end.setDate(end.getDate() + 30); return d >= today && d < end
+  })
+
+  const filteredTasks = [...filteredIncomplete, ...doneTasks]
 
   const allSchedules = brief?.schedules || []
   const filteredSchedules = allSchedules.filter(s => rangeFilter(s.scheduled_time, scheduleRange))
@@ -462,7 +478,7 @@ export default function Workstation() {
               onDrop={handleTaskDrop} onUpdate={handleTaskUpdate} onDelete={handleTaskDelete} onChat={toChat} />
             <DragTaskCol title="进行中" count={doingTasks.length} color="#3b82f6" tasks={doingTasks} colStatus="doing"
               onDrop={handleTaskDrop} onUpdate={handleTaskUpdate} onDelete={handleTaskDelete} onChat={toChat} border />
-            <DragTaskCol title="已完成" count={doneTasks.length} color="#22c55e" tasks={doneTasks.slice(0, 5)} colStatus="done"
+            <DragTaskCol title="已完成" count={doneTasks.length} color="#22c55e" tasks={[...doneTasks].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).slice(0, 5)} colStatus="done"
               onDrop={handleTaskDrop} onUpdate={handleTaskUpdate} onDelete={handleTaskDelete} onChat={toChat} border done />
           </div>
         </div>
