@@ -122,6 +122,9 @@ class ContextBuilder:
             "Markdown/CSV/JSON → text_file_writer, "
             "Word → word_processor, Excel → excel_processor。"
             "路径统一 data/outputs/文件名.扩展名。\n\n"
+            "主动引导：当对话中隐含可操作事项（如发版准备、会议安排、待跟进事项），"
+            "在回答末尾自然地问一句'需要我帮你创建一个任务/日程来跟踪吗？'，"
+            "由用户决定是否创建，不要自动创建。\n\n"
             "先结论后理由 · 用数据不用模糊词 · 信息不足只问一个最关键的问题 · 中文回复"
         )
 

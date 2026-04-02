@@ -302,6 +302,8 @@ class ForgeEngine:
                 _llm_calls = chunk.get("llm_calls", 0)
             yield chunk
 
+        # ★ 诊断：stream 后每一步计时
+        _p0 = time.time()
         # ── 后处理：自动文件生成（LLM 没调文件工具时系统兜底）──
         _file_tools = {"word_processor", "excel_processor", "ppt_processor", "document_converter"}
         already_created = any(t["name"] in _file_tools for t in collected_tools)
@@ -311,7 +313,8 @@ class ForgeEngine:
             if file_fmt:
                 logger.info("后处理：检测到文件意图 [%s]，自动创建", file_fmt)
                 try:
-                    tr = await auto_create_file(full_content, file_fmt, msg.content, self._tool_registry)
+                    tr = await asyncio.wait_for(
+                        auto_create_file(full_content, file_fmt, msg.content, self._tool_registry), timeout=15)
                     if tr:
                         yield {"type": "thinking", "content": "📄 正在生成文件..."}
                         yield {"type": "tool_start", "name": tr["name"], "arguments": {}}
@@ -319,21 +322,17 @@ class ForgeEngine:
                         collected_tools.append({"name": tr["name"]})
                         collected_tool_calls.append({"type": "tool_start", "name": tr["name"], "input": {}})
                         collected_tool_calls.append({"type": "tool_result", "name": tr["name"], "result": str(tr["result"])[:3000]})
+                except asyncio.TimeoutError:
+                    logger.warning("自动文件创建超时（>15s），跳过")
                 except Exception as e:
                     logger.warning("自动文件创建失败: %s", e)
-        # 三层意图识别 → 建议卡片
-        try:
-            from core.intent_detector import run_detection
-            async for sg in run_detection(msg, collected_tools, self._llm, self._signal_store):
-                yield sg
-        except Exception as e:
-            logger.warning("意图检测异常: %s", e)
+        _p1 = time.time(); logger.info("POST_TIMING auto_file: %.1fms", (_p1-_p0)*1000)
+        # 意图识别已移除 — 任务/日程/跟进由用户主动通过工具创建
+        _p2 = time.time()
         if lc: lc.info("pipeline", "stream_done", f"流式完成, len={len(full_content)}", data={"tools": [t["name"] for t in collected_tools]}, user_id=msg.user_id, session_id=session_id, duration=time.time()-_t0)
         if full_content or collected_tool_calls:
-            await self._session_store.add_message(
-                session_id, "assistant", full_content,
-                tool_calls=collected_tool_calls if collected_tool_calls else None,
-            )
+            await self._session_store.add_message(session_id, "assistant", full_content, tool_calls=collected_tool_calls if collected_tool_calls else None)
+        _p3 = time.time(); logger.info("POST_TIMING save_message: %.1fms", (_p3-_p2)*1000)
         asyncio.ensure_future(self._collect_signals(msg.content, msg.user_id, msg.org_id, msg.position_id))
         asyncio.ensure_future(self._post_process(msg.content, full_content, collected_tools, msg.user_id, msg.org_id, msg.position_id))
         if self._signal_store and msg.position_id and msg.user_id:
@@ -349,8 +348,10 @@ class ForgeEngine:
                     tokens_used=_tokens, duration=time.time()-_t0, model_used=_model_used, steps=[{"name": t["name"]} for t in collected_tools])
         except Exception:
             pass
+        _p4 = time.time(); logger.info("POST_TIMING token_mission: %.1fms", (_p4-_p3)*1000)
         if _rt and _rid:
             _rt.end(_rid, status="completed", tokens=_tokens, model=_model_used, tools=[t["name"] for t in collected_tools])
+        logger.info("POST_TIMING total: %.1fms", (_p4-_p0)*1000)
     # ── 内部辅助 ─────────────────────────────────────────
     _SKIP_RAG = [r'^(你好|hi|hello|嗨|早上好|晚上好)\b', r'^(谢谢|好的|继续|ok)\s*$',
         r'^(帮我算|计算|算一下)', r'(今天几号|现在几点)', r'^(帮我创建|帮我安排|帮我删除)',
