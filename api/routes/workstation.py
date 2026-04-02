@@ -159,7 +159,7 @@ async def handle_daily_brief(request: web.Request) -> web.Response:
 
     try:
         if engine.work_item_store:
-            priorities = await engine.work_item_store.get_priorities(user_id, org_id, position_id, status="active")
+            priorities = await engine.work_item_store.get_priorities(user_id, org_id, position_id, status="", limit=30)
             schedules = await engine.work_item_store.get_schedules(user_id, org_id)
             followups = await engine.work_item_store.get_followups(user_id, org_id)
             work_items = await engine.work_item_store.get_work_items(user_id, org_id, position_id)
