@@ -1,0 +1,486 @@
+{
+  "timestamp": 1775096550.2275457,
+  "model": "qwen3.5-plus",
+  "tools_count": 24,
+  "total": 30,
+  "passed": 14,
+  "accuracy": 0.4666666666666667,
+  "duration": 102.00735664367676,
+  "total_tokens": 89556,
+  "by_category": {
+    "calculator": {
+      "passed": 4,
+      "total": 4,
+      "accuracy": 1.0
+    },
+    "datetime": {
+      "passed": 3,
+      "total": 3,
+      "accuracy": 1.0
+    },
+    "web_search": {
+      "passed": 4,
+      "total": 4,
+      "accuracy": 1.0
+    },
+    "knowledge": {
+      "passed": 3,
+      "total": 3,
+      "accuracy": 1.0
+    },
+    "excel": {
+      "passed": 0,
+      "total": 4,
+      "accuracy": 0.0
+    },
+    "word": {
+      "passed": 0,
+      "total": 4,
+      "accuracy": 0.0
+    },
+    "ppt": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "pdf": {
+      "passed": 0,
+      "total": 2,
+      "accuracy": 0.0
+    },
+    "text_file": {
+      "passed": 0,
+      "total": 3,
+      "accuracy": 0.0
+    },
+    "converter": {
+      "passed": 0,
+      "total": 1,
+      "accuracy": 0.0
+    }
+  },
+  "failed_cases": [
+    {
+      "id": 15,
+      "input": "帮我创建一个Excel报表",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4651,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 16,
+      "input": "生成一个包含姓名和成绩的表格",
+      "expected": "excel_processor",
+      "actual": "word_processor",
+      "passed": false,
+      "category": "excel",
+      "tokens": 4556,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 17,
+      "input": "读取一下刚才上传的Excel文件",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4582,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 18,
+      "input": "帮我整理一下这些数据到表格里",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4529,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 19,
+      "input": "帮我写一份项目周报",
+      "expected": "word_processor",
+      "actual": null,
+      "passed": false,
+      "category": "word",
+      "tokens": 4418,
+      "model": "deepseek-chat"
+    },
+    {
+      "id": 20,
+      "input": "生成一份会议纪要文档",
+      "expected": "word_processor",
+      "actual": null,
+      "passed": false,
+      "category": "word",
+      "tokens": 4385,
+      "model": "deepseek-chat"
+    },
+    {
+      "id": 21,
+      "input": "写一个产品需求文档",
+      "expected": "word_processor",
+      "actual": "ERROR: 所有 Tier 均失败: tier2: Unterminated string starting at: line 1 column 33 (char 32); tier3: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZe9XZ6WT51L8UzQi3Sos'}",
+      "passed": false,
+      "category": "word"
+    },
+    {
+      "id": 22,
+      "input": "做一份竞品分析报告",
+      "expected": "word_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "word"
+    },
+    {
+      "id": 23,
+      "input": "帮我做一个PPT",
+      "expected": "ppt_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "ppt"
+    },
+    {
+      "id": 24,
+      "input": "创建一份项目汇报演示文稿",
+      "expected": "ppt_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "ppt"
+    },
+    {
+      "id": 25,
+      "input": "读取这个PDF的内容",
+      "expected": "pdf_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "pdf"
+    },
+    {
+      "id": 26,
+      "input": "这个PDF有多少页",
+      "expected": "pdf_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "pdf"
+    },
+    {
+      "id": 27,
+      "input": "帮我创建一个Markdown文件",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 28,
+      "input": "把结果保存为CSV",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 29,
+      "input": "生成一个JSON配置文件",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 30,
+      "input": "把这个Word文档转成PDF",
+      "expected": "document_converter",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "converter"
+    }
+  ],
+  "all_results": [
+    {
+      "id": 1,
+      "input": "帮我算一下 128.5 * 3.14",
+      "expected": "calculator",
+      "actual": "calculator",
+      "passed": true,
+      "category": "calculator",
+      "tokens": 4417,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 2,
+      "input": "项目预算人力15万、外包8万、设备3万，总成本多少",
+      "expected": "calculator",
+      "actual": "calculator",
+      "passed": true,
+      "category": "calculator",
+      "tokens": 4419,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 3,
+      "input": "这个月转化率从 2.3% 提升到 3.1%，提升了多少个百分点",
+      "expected": "calculator",
+      "actual": "calculator",
+      "passed": true,
+      "category": "calculator",
+      "tokens": 4453,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 4,
+      "input": "圆周率是多少",
+      "expected": null,
+      "actual": null,
+      "passed": true,
+      "category": "calculator",
+      "tokens": 4579,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 5,
+      "input": "今天几号",
+      "expected": "datetime",
+      "actual": "datetime",
+      "passed": true,
+      "category": "datetime",
+      "tokens": 4392,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 6,
+      "input": "距离国庆节还有几天",
+      "expected": "datetime",
+      "actual": "datetime",
+      "passed": true,
+      "category": "datetime",
+      "tokens": 4411,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 7,
+      "input": "中国的时区是什么",
+      "expected": null,
+      "actual": null,
+      "passed": true,
+      "category": "datetime",
+      "tokens": 4514,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 8,
+      "input": "搜一下最近的AI行业新闻",
+      "expected": "web_search",
+      "actual": "web_search",
+      "passed": true,
+      "category": "web_search",
+      "tokens": 4412,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 9,
+      "input": "华为最新发布了什么手机",
+      "expected": "web_search",
+      "actual": "web_search",
+      "passed": true,
+      "category": "web_search",
+      "tokens": 4421,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 10,
+      "input": "今天深圳天气怎么样",
+      "expected": "web_search",
+      "actual": "web_search",
+      "passed": true,
+      "category": "web_search",
+      "tokens": 4406,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 11,
+      "input": "什么是大语言模型",
+      "expected": null,
+      "actual": null,
+      "passed": true,
+      "category": "web_search",
+      "tokens": 4737,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 12,
+      "input": "查一下知识库里关于广告投放的文档",
+      "expected": "search_knowledge",
+      "actual": "search_knowledge",
+      "passed": true,
+      "category": "knowledge",
+      "tokens": 4406,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 13,
+      "input": "我们之前有没有做过竞品分析的报告",
+      "expected": "search_knowledge",
+      "actual": "search_knowledge",
+      "passed": true,
+      "category": "knowledge",
+      "tokens": 4426,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 14,
+      "input": "帮我搜一下公司内部的CPD定价策略",
+      "expected": "search_knowledge",
+      "actual": "search_knowledge",
+      "passed": true,
+      "category": "knowledge",
+      "tokens": 4442,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 15,
+      "input": "帮我创建一个Excel报表",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4651,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 16,
+      "input": "生成一个包含姓名和成绩的表格",
+      "expected": "excel_processor",
+      "actual": "word_processor",
+      "passed": false,
+      "category": "excel",
+      "tokens": 4556,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 17,
+      "input": "读取一下刚才上传的Excel文件",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4582,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 18,
+      "input": "帮我整理一下这些数据到表格里",
+      "expected": "excel_processor",
+      "actual": null,
+      "passed": false,
+      "category": "excel",
+      "tokens": 4529,
+      "model": "qwen3.5-plus"
+    },
+    {
+      "id": 19,
+      "input": "帮我写一份项目周报",
+      "expected": "word_processor",
+      "actual": null,
+      "passed": false,
+      "category": "word",
+      "tokens": 4418,
+      "model": "deepseek-chat"
+    },
+    {
+      "id": 20,
+      "input": "生成一份会议纪要文档",
+      "expected": "word_processor",
+      "actual": null,
+      "passed": false,
+      "category": "word",
+      "tokens": 4385,
+      "model": "deepseek-chat"
+    },
+    {
+      "id": 21,
+      "input": "写一个产品需求文档",
+      "expected": "word_processor",
+      "actual": "ERROR: 所有 Tier 均失败: tier2: Unterminated string starting at: line 1 column 33 (char 32); tier3: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZe9XZ6WT51L8UzQi3Sos'}",
+      "passed": false,
+      "category": "word"
+    },
+    {
+      "id": 22,
+      "input": "做一份竞品分析报告",
+      "expected": "word_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "word"
+    },
+    {
+      "id": 23,
+      "input": "帮我做一个PPT",
+      "expected": "ppt_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "ppt"
+    },
+    {
+      "id": 24,
+      "input": "创建一份项目汇报演示文稿",
+      "expected": "ppt_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "ppt"
+    },
+    {
+      "id": 25,
+      "input": "读取这个PDF的内容",
+      "expected": "pdf_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "pdf"
+    },
+    {
+      "id": 26,
+      "input": "这个PDF有多少页",
+      "expected": "pdf_processor",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "pdf"
+    },
+    {
+      "id": 27,
+      "input": "帮我创建一个Markdown文件",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 28,
+      "input": "把结果保存为CSV",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 29,
+      "input": "生成一个JSON配置文件",
+      "expected": "text_file_writer",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "text_file"
+    },
+    {
+      "id": 30,
+      "input": "把这个Word文档转成PDF",
+      "expected": "document_converter",
+      "actual": "ERROR: 所有 Tier 均失败: ",
+      "passed": false,
+      "category": "converter"
+    }
+  ]
+}
